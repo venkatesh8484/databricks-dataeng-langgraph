@@ -427,6 +427,26 @@ def _sanitize_and_heal_code(code: str) -> str:
             )
             code = re.sub(r"(?m)^(\s*)" + df_var + r"\s*=\s*" + df_var + r"\.applymap\s*\(.*\)\s*$", replacement, code)
 
+    # 1.11. Fix hallucinated loop-based string-to-boolean mapping that is not type-safe
+    if "dtypes" in code and "isin" in code:
+        import re
+        loop_pattern = r"(?m)^(\s*)for\s+(\w+),\s*(\w+)\s+in\s+(\w+)\.dtypes\s*:\s*\n\1\s+if\s+\3\s*==\s*['\"]string['\"]\s*:\s*\n\1\s+\s*\4\s*=\s*\4\.withColumn\(\s*\2\s*,\s*when\(col\(\s*\2\s*\)\.isin\(.*?\).*?\)"
+        loop_match = re.search(loop_pattern, code, re.DOTALL)
+        if loop_match:
+            indent = loop_match.group(1)
+            df_var = loop_match.group(4)
+            replacement = (
+                f"{indent}# Standardize boolean values safely (only for columns containing only boolean-like values)\n"
+                f"{indent}_str_cols = [__c for __c, __t in {df_var}.dtypes if __t == 'string']\n"
+                f"{indent}if _str_cols:\n"
+                f"{indent}    _aggs = [sum(when(~col(__c).isNull() & (col(__c) != '') & ~lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c) for __c in _str_cols]\n"
+                f"{indent}    _counts = {df_var}.select(*_aggs).collect()[0].asDict()\n"
+                f"{indent}    for __c, __count in _counts.items():\n"
+                f"{indent}        if __count == 0:\n"
+                f"{indent}            {df_var} = {df_var}.withColumn(__c, when(lower(col(__c)).isin('yes', 'y', 'true'), lit(True)).when(lower(col(__c)).isin('no', 'n', 'false'), lit(False)).otherwise(None))"
+            )
+            code = re.sub(loop_pattern, replacement, code, flags=re.DOTALL)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

@@ -417,6 +417,20 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     print(">>> [Orchestrator] Executing PySpark scripts on Databricks...")
     
     code_dir = "/tmp/generated/data_platform"
+    os.makedirs(code_dir, exist_ok=True)
+    
+    # Re-create script files on disk in case we are resuming from a checkpoint 
+    # where the DataEngineer node was already executed in a previous session
+    if state.get("bronze_code"):
+        with open(os.path.join(code_dir, "bronze.py"), "w") as f:
+            f.write(state["bronze_code"])
+    if state.get("silver_code"):
+        with open(os.path.join(code_dir, "silver.py"), "w") as f:
+            f.write(state["silver_code"])
+    if state.get("gold_code"):
+        with open(os.path.join(code_dir, "gold.py"), "w") as f:
+            f.write(state["gold_code"])
+
     scripts = ["bronze.py", "silver.py", "gold.py"]
     logs = {}
     

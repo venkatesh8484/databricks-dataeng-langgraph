@@ -130,7 +130,7 @@ Script Requirements:
    - Standardizes, trims string spaces, and applies the YAML contracts using `validate_table(df, contract, parent_dfs)`.
    - Runs validation in dependency order (parents before children) so child referential checks can query silver parent tables.
    - Writes clean rows to Silver (`write_full_overwrite(clean_df, "silver", table_name)`) and invalid rows to Quarantine (`write_full_overwrite(quarantine_df, "quarantine", table_name)`).
-   - Handles boolean mappings (standardizing Y/N indicators to booleans) AFTER contract validation checks.
+   - Handles boolean mappings (standardizing Y/N/Yes/No indicators to booleans) AFTER contract validation checks. Note: Do NOT use pandas `applymap` as it is not supported on PySpark DataFrames. Instead, use a loop over `df.dtypes` to find string columns and apply `when`/`otherwise` with PySpark's `col`, `lit`, and `isin` to map Yes/Y to True and No/N to False.
    - If a table's hard rule failure rate is exceeded, halts promotion.
    - **Crucial Requirement**: At the bottom of the script, write the execution summary to `/tmp/silver_summary.json` in this JSON format:
      `{"tables": {"table_name": {"row_count_in": int, "row_count_promoted": int, "row_count_quarantined": int, "promotion_blocked": bool}}, "halted_at": "table_name_or_null"}`

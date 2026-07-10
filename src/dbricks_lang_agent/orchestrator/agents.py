@@ -408,6 +408,20 @@ def _sanitize_and_heal_code(code: str) -> str:
     # 1.9. Fix spark.sql.functions hallucinations
     code = re.sub(r"\bspark\.sql\.functions\.", "", code)
 
+    # 1.10. Fix applymap call on Spark DataFrame (hallucinated Pandas applymap)
+    if "applymap" in code:
+        import re
+        applymap_match = re.search(r"(?m)^(\s*)(\w+)\s*=\s*\2\.applymap\s*\(.*\)\s*$", code)
+        if applymap_match:
+            indent = applymap_match.group(1)
+            df_var = applymap_match.group(2)
+            replacement = (
+                f"{indent}for _c, _t in {df_var}.dtypes:\n"
+                f"{indent}    if _t == 'string':\n"
+                f"{indent}        {df_var} = {df_var}.withColumn(_c, when(col(_c).isin('Yes', 'Y', 'yes', 'y'), lit(True)).when(col(_c).isin('No', 'N', 'no', 'n'), lit(False)).otherwise(col(_c)))"
+            )
+            code = re.sub(r"(?m)^(\s*)" + df_var + r"\s*=\s*" + df_var + r"\.applymap\s*\(.*\)\s*$", replacement, code)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

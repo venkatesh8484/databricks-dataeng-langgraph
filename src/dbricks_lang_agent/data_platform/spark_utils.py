@@ -130,8 +130,11 @@ def write_full_overwrite(df: DataFrame, schema: str, table: str, partition_by: O
     schemas = cfg.get("schemas", {})
     resolved_schema = schemas.get(schema, schema)
 
-    # Ensure schema exists in Unity Catalog
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{resolved_schema}`")
+    # Ensure schema exists in Unity Catalog (catch permission errors if catalog/schema is pre-created and restricted)
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{resolved_schema}`")
+    except Exception as e_schema:
+        print(f"[Warning] Could not run CREATE SCHEMA (might already exist or restricted): {e_schema}")
 
     fqn = get_fqn(schema, table)
     writer = df.write.format("delta").mode("overwrite")
@@ -151,7 +154,11 @@ def merge_upsert(new_df: DataFrame, schema: str, table: str, key_cols: List[str]
     schemas = cfg.get("schemas", {})
     resolved_schema = schemas.get(schema, schema)
 
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{resolved_schema}`")
+    # Ensure schema exists (catch permission errors)
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{resolved_schema}`")
+    except Exception as e_schema:
+        print(f"[Warning] Could not run CREATE SCHEMA (might already exist or restricted): {e_schema}")
     fqn = get_fqn(schema, table)
 
     if table_exists(schema, table):

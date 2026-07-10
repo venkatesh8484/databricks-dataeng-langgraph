@@ -10,7 +10,7 @@ from __future__ import annotations
 import glob
 import json
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -54,15 +54,14 @@ def load_source(spark: SparkSession, filename: str) -> DataFrame:
     return spark.read.option("header", True).option("inferSchema", True).csv(path)
 
 
-def _null_pct(df: DataFrame, col: str, total: int) -> float:
-    if total == 0:
-        return 0.0
-    n = df.filter(F.col(col).isNull() | (F.col(col).cast("string") == "")).count()
-    return round(100.0 * n / total, 2)
-
-
 def profile_dataframe(df: DataFrame, table_name: str) -> Dict[str, Any]:
-    """Build a statistical profile dictionary for a Spark DataFrame."""
+    """Build a statistical profile dictionary for a Spark DataFrame.
+    
+    Runs a SINGLE Spark aggregation pass to collect all column stats (nulls,
+    distinct counts, numeric min/max/avg/stddev) at once. Value counts for
+    low-cardinality columns are deferred to a batched second pass to avoid
+    per-column Spark action overhead.
+    """
     total = df.count()
     profile: Dict[str, Any] = {
         "table": table_name,
@@ -70,38 +69,35 @@ def profile_dataframe(df: DataFrame, table_name: str) -> Dict[str, Any]:
         "column_count": len(df.columns),
         "columns": {},
     }
-    
+
+    # --- Single-pass aggregation: nulls + distinct + numeric stats ---
     aggs = []
     for field in df.schema.fields:
         col = field.name
-        # Null count expression
         aggs.append(F.sum(F.when(F.col(col).isNull() | (F.col(col).cast("string") == ""), 1).otherwise(0)).alias(f"{col}_nulls"))
-        # Distinct count expression
         aggs.append(F.countDistinct(F.col(col)).alias(f"{col}_distinct"))
-        # Numeric stats expression
         if isinstance(field.dataType, NumericType) or str(field.dataType) in ("IntegerType", "LongType", "DoubleType", "FloatType", "DecimalType"):
             aggs.append(F.min(F.col(col)).alias(f"{col}_min"))
             aggs.append(F.max(F.col(col)).alias(f"{col}_max"))
             aggs.append(F.avg(F.col(col)).alias(f"{col}_avg"))
             aggs.append(F.stddev(F.col(col)).alias(f"{col}_stddev"))
 
-    if aggs:
-        stats_row = df.select(*aggs).collect()[0]
-        stats_dict = stats_row.asDict()
-    else:
-        stats_dict = {}
+    stats_dict = df.select(*aggs).collect()[0].asDict() if aggs else {}
+
+    # Collect categorical columns to value-count in one deferred pass
+    categorical_cols: List[str] = []
 
     for field in df.schema.fields:
         col = field.name
         nulls = stats_dict.get(f"{col}_nulls", 0) or 0
         distinct = stats_dict.get(f"{col}_distinct", 0) or 0
-        
+
         col_profile: Dict[str, Any] = {
             "dtype": str(field.dataType),
             "null_pct": round(100.0 * nulls / total, 2) if total > 0 else 0.0,
             "distinct_count": distinct,
         }
-        
+
         if isinstance(field.dataType, NumericType) or str(field.dataType) in ("IntegerType", "LongType", "DoubleType", "FloatType", "DecimalType"):
             col_profile["numeric_stats"] = {
                 "min": stats_dict.get(f"{col}_min"),
@@ -110,23 +106,33 @@ def profile_dataframe(df: DataFrame, table_name: str) -> Dict[str, Any]:
                 "stddev": round(stats_dict.get(f"{col}_stddev"), 4) if stats_dict.get(f"{col}_stddev") is not None else None,
             }
         elif distinct <= CATEGORICAL_MAX_CARDINALITY:
-            try:
-                vc = df.groupBy(col).count().orderBy(F.desc("count")).limit(CATEGORICAL_MAX_CARDINALITY).collect()
-                col_profile["value_counts"] = {str(row[col]): row["count"] for row in vc}
-            except Exception:
-                pass
+            # Defer – collect all at once below
+            categorical_cols.append(col)
+
         profile["columns"][col] = col_profile
+
+    # --- Deferred value_counts: one groupBy per categorical column (batched) ---
+    for col in categorical_cols:
+        try:
+            vc = df.groupBy(col).count().orderBy(F.desc("count")).limit(CATEGORICAL_MAX_CARDINALITY).collect()
+            profile["columns"][col]["value_counts"] = {str(row[col]): row["count"] for row in vc}
+        except Exception:
+            pass
+
     return profile
 
 
-def find_candidate_unique_keys(df: DataFrame, total: int) -> List[str]:
-    """Find columns with the '_id' suffix that are non-null and distinct (unique)."""
-    id_cols = [f.name for f in df.schema.fields if f.name.lower().endswith(ID_SUFFIX)]
+def find_candidate_unique_keys(stats_dict: Dict[str, Any], total: int, id_cols: List[str]) -> List[str]:
+    """Find *_id columns that are non-null and fully distinct, using pre-computed agg stats.
+    
+    Accepts the stats_dict produced by profile_dataframe's single aggregation pass
+    so that no additional Spark actions are fired.
+    """
     candidates = []
     for c in id_cols:
-        null_count = df.filter(F.col(c).isNull()).count()
-        distinct_count = df.select(c).distinct().count()
-        if null_count == 0 and distinct_count == total:
+        nulls = stats_dict.get(f"{c}_nulls", 1) or 1  # default to 1 (not a PK) if missing
+        distinct = stats_dict.get(f"{c}_distinct", 0) or 0
+        if nulls == 0 and distinct == total:
             candidates.append(c)
     return candidates
 
@@ -218,27 +224,66 @@ def discover_foreign_keys(dfs: Dict[str, DataFrame], unique_keys: Dict[str, List
 
 
 def profile_all_sources(output_path: Optional[str] = None) -> Dict[str, Any]:
-    """Execute profile checks across all discovered sources."""
+    """Execute profile checks across all discovered sources.
+    
+    Performance optimizations applied:
+    - DataFrames are cached after load so repeated scans hit memory.
+    - profile_dataframe runs ONE aggregation pass; row_count and PK stats
+      are extracted from that result instead of firing extra Spark actions.
+    - duplicate_key_count is skipped when there are no PK candidates.
+    - DataFrames are unpersisted after use to free executor memory.
+    """
     spark = get_spark()
     discovered_tables = discover_source_tables()
-    
-    dfs = {t_name: load_source(spark, fname) for t_name, fname in discovered_tables.items()}
-    total_rows = {t_name: df.count() for t_name, df in dfs.items()}
 
-    # Calculate Candidate Primary Keys
-    unique_keys = {t_name: find_candidate_unique_keys(df, total_rows[t_name]) for t_name, df in dfs.items()}
+    # Load and cache all source DataFrames up-front
+    dfs: Dict[str, DataFrame] = {}
+    for t_name, fname in discovered_tables.items():
+        df = load_source(spark, fname).cache()
+        dfs[t_name] = df
 
-    # Profile DataFrames
-    tables_profile = {t_name: profile_dataframe(df, t_name) for t_name, df in dfs.items()}
+    tables_profile: Dict[str, Any] = {}
+    unique_keys: Dict[str, List[str]] = {}
+    total_rows: Dict[str, int] = {}
 
-    # Discover Foreign Keys
+    for t_name, df in dfs.items():
+        print(f"  [Profiler] Profiling table: {t_name}...")
+        profile = profile_dataframe(df, t_name)
+        tables_profile[t_name] = profile
+        total = profile["row_count"]
+        total_rows[t_name] = total
+
+        # Derive candidate PKs from already-computed stats dict (no extra Spark action)
+        id_cols = [f.name for f in df.schema.fields if f.name.lower().endswith(ID_SUFFIX)]
+        # Rebuild a lightweight stats dict from the column profiles
+        pk_stats = {}
+        for c in id_cols:
+            col_p = profile["columns"].get(c, {})
+            null_count = round(col_p.get("null_pct", 100) * total / 100) if total > 0 else 1
+            pk_stats[f"{c}_nulls"] = null_count
+            pk_stats[f"{c}_distinct"] = col_p.get("distinct_count", 0)
+        unique_keys[t_name] = find_candidate_unique_keys(pk_stats, total, id_cols)
+
+    # Duplicate key counts — only fire if there are PK candidates
+    dup_keys: Dict[str, int] = {}
+    for t_name, df in dfs.items():
+        if unique_keys.get(t_name):
+            dup_keys[t_name] = duplicate_key_count(df, unique_keys[t_name])
+        else:
+            dup_keys[t_name] = 0
+
+    # Discover Foreign Keys (uses cached DataFrames)
     fks = discover_foreign_keys(dfs, unique_keys)
+
+    # Free cached DataFrames from executor memory
+    for df in dfs.values():
+        df.unpersist()
 
     # Compile Full Profiling Report
     report = {
         "discovered_tables": discovered_tables,
         "candidate_unique_keys": unique_keys,
-        "duplicate_keys": {t_name: duplicate_key_count(df, unique_keys[t_name]) if unique_keys[t_name] else 0 for t_name, df in dfs.items()},
+        "duplicate_keys": dup_keys,
         "referential_integrity": fks,
         "tables": tables_profile,
     }

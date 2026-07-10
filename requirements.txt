@@ -1,0 +1,10 @@
+langgraph>=0.1.0
+langchain>=0.2.0
+langchain-community>=0.2.0
+databricks-sdk>=0.28.0
+pyyaml>=6.0
+pandas>=2.0
+python-dotenv>=1.0
+databricks-langchain
+streamlit>=1.30.0
+typing-extensions>=4.13.0

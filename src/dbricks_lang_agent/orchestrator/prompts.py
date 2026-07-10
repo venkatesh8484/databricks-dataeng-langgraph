@@ -117,6 +117,8 @@ You MUST import and use the shared data platform libraries:
 - `from dbricks_lang_agent.data_platform.contracts import load_contract, validate_table`
 - `from dbricks_lang_agent.data_platform.profiling import discover_source_tables, load_source`
 
+You MUST explicitly import all PySpark SQL functions that you use (e.g., `from pyspark.sql.functions import current_timestamp, lit, col, expr, when, to_date, trim` etc.). Never reference a function like `current_timestamp()`, `lit()`, or `col()` without importing it first.
+
 Script Requirements:
 1. **bronze.py**:
    - Discovers raw source tables.

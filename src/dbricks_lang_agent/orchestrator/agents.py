@@ -365,6 +365,37 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
+def _auto_inject_pyspark_imports(code: str) -> str:
+    """Scan the code for commonly used pyspark.sql.functions and auto-inject their imports if missing."""
+    if not code:
+        return code
+
+    common_funcs = [
+        "current_timestamp", "lit", "col", "when", "expr", "coalesce", 
+        "to_date", "to_timestamp", "trim", "concat", "substring", 
+        "count", "sum", "avg", "min", "max", "year", "month", "dayofmonth", "desc", "asc"
+    ]
+
+    import re
+    needed = []
+    for func in common_funcs:
+        # Check if the function is called, e.g. current_timestamp()
+        if re.search(r"\b" + func + r"\s*\(", code):
+            # Check if it is already imported (e.g. import current_timestamp or from ... import current_timestamp)
+            # or defined locally (e.g. current_timestamp = ...)
+            is_imported = bool(re.search(r"\bimport\s+[^#\n]*\b" + func + r"\b", code)) or \
+                          bool(re.search(r"\b" + func + r"\s*=\s*", code))
+            if not is_imported:
+                needed.append(func)
+
+    if needed:
+        import_line = f"from pyspark.sql.functions import {', '.join(needed)}\n"
+        # Prepend the import line
+        code = import_line + code
+
+    return code
+
+
 def engineering_node(state: AgentState) -> Dict[str, Any]:
     """Data Engineer writes Bronze, Silver, Gold transformation scripts."""
     print(">>> [Data Engineer] Generates PySpark Medallion scripts...")
@@ -390,9 +421,9 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     response = llm.invoke(messages)
     
     parsed = parse_json_from_response(response.content)
-    bronze = parsed.get("bronze_code", "")
-    silver = parsed.get("silver_code", "")
-    gold = parsed.get("gold_code", "")
+    bronze = _auto_inject_pyspark_imports(parsed.get("bronze_code", ""))
+    silver = _auto_inject_pyspark_imports(parsed.get("silver_code", ""))
+    gold = _auto_inject_pyspark_imports(parsed.get("gold_code", ""))
 
     # Save code files to generated directory
     code_dir = "/tmp/generated/data_platform"

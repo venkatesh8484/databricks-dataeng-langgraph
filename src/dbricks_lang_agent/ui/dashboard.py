@@ -456,8 +456,18 @@ with tab2:
                 else:
                     st.error("Invalid state. Unable to route step mapping approvals.")
             except Exception as e_click:
-                st.error("Execution error during Submit & Resume:")
-                st.exception(e_click)
+                # Catch and ignore the LangGraph end-of-execution KeyError
+                if isinstance(e_click, KeyError) and "__end__" in str(e_click):
+                    # Sync state and rerun since the graph finished successfully
+                    try:
+                        sync_db_to_volume()
+                    except Exception:
+                        pass
+                    st.success("Pipeline successfully finished! Refreshing dashboard...")
+                    st.rerun()
+                else:
+                    st.error("Execution error during Submit & Resume:")
+                    st.exception(e_click)
 
 # ----------------- Tab 3: Agent Memories -----------------
 with tab3:

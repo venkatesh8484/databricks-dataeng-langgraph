@@ -34,6 +34,23 @@ def get_volume_db_path() -> str:
     except Exception:
         return "/Volumes/databricks_langgraph/raw/source_volume/checkpoint.db"
 
+def copy_file_binary(src, dst):
+    """Copy file contents chunk by chunk without copying metadata or permissions.
+    Deletes the target file if it already exists to bypass read-only attribute constraints.
+    """
+    if os.path.exists(dst):
+        try:
+            os.chmod(dst, 0o666)
+        except Exception:
+            pass
+        try:
+            os.remove(dst)
+        except Exception:
+            pass
+    with open(src, "rb") as f_src:
+        with open(dst, "wb") as f_dst:
+            f_dst.write(f_src.read())
+
 def sync_db_from_volume():
     """Sync checkpoint from Volume to local /tmp as a fallback for environments
     where the Volume POSIX path is not directly accessible.
@@ -46,19 +63,10 @@ def sync_db_from_volume():
     local_db = get_checkpoint_db_path()
     st.session_state["sync_logs"].append(f"Starting sync from volume: {volume_db} to local: {local_db}")
 
-    # Ensure writable permissions if file already exists locally
-    if os.path.exists(local_db):
-        try:
-            os.chmod(local_db, 0o666)
-        except Exception:
-            pass
-
     # Primary: POSIX copy (works when /Volumes/ is mounted)
     try:
         if os.path.exists(volume_db):
-            import shutil
-            # copy copies data but not metadata/permissions, copy2 copies both
-            shutil.copy(volume_db, local_db)
+            copy_file_binary(volume_db, local_db)
             try:
                 os.chmod(local_db, 0o666)
             except Exception:
@@ -77,10 +85,13 @@ def sync_db_from_volume():
     try:
         w = WorkspaceClient()
         response = w.files.download(volume_db)
-        # Attempt to make existing file writable before overwriting
         if os.path.exists(local_db):
             try:
                 os.chmod(local_db, 0o666)
+            except Exception:
+                pass
+            try:
+                os.remove(local_db)
             except Exception:
                 pass
         with open(local_db, "wb") as f:
@@ -111,9 +122,8 @@ def sync_db_to_volume():
 
     # Primary: POSIX copy
     try:
-        import shutil
         os.makedirs(os.path.dirname(volume_db), exist_ok=True)
-        shutil.copy2(local_db, volume_db)
+        copy_file_binary(local_db, volume_db)
         msg = f"Synced checkpoint to Volume (POSIX): {local_db} → {volume_db}"
         st.session_state["sync_logs"].append(msg)
         print(f"[Info] {msg}")

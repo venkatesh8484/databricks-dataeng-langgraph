@@ -122,28 +122,37 @@ def print_artifacts(state_values):
 
 # Get active state
 # Sync database from Unity Catalog Volume to local SSD (/tmp/checkpoint.db) to prevent network database locking errors
+def copy_file_binary(src, dst):
+    """Copy file contents chunk by chunk without copying metadata or permissions.
+    Deletes the target file if it already exists to bypass read-only attribute constraints.
+    """
+    if os.path.exists(dst):
+        try:
+            os.chmod(dst, 0o666)
+        except Exception:
+            pass
+        try:
+            os.remove(dst)
+        except Exception:
+            pass
+    with open(src, "rb") as f_src:
+        with open(dst, "wb") as f_dst:
+            f_dst.write(f_src.read())
+
 def sync_db_from_volume():
     """Copy checkpoint.db from UC Volume to local /tmp using Python native I/O.
     Avoids dbutils.fs.cp which is blocked for file:/tmp/ paths on Serverless compute.
     """
     try:
         from dbricks_lang_agent.data_platform.spark_utils import load_config
-        import shutil
         cfg = load_config()
         catalog = cfg.get("catalog", "hospitality_catalog")
         raw_volume = cfg.get("raw_volume", "raw/source_volume")
         volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
         local_db = "/tmp/checkpoint.db"
 
-        # Ensure writable permissions if file already exists locally
-        if os.path.exists(local_db):
-            try:
-                os.chmod(local_db, 0o666)
-            except Exception:
-                pass
-
         if os.path.exists(volume_db):
-            shutil.copy(volume_db, local_db)
+            copy_file_binary(volume_db, local_db)
             try:
                 os.chmod(local_db, 0o666)
             except Exception:
@@ -161,7 +170,6 @@ def sync_db_to_volume():
     """
     try:
         from dbricks_lang_agent.data_platform.spark_utils import load_config
-        import shutil
         cfg = load_config()
         catalog = cfg.get("catalog", "hospitality_catalog")
         raw_volume = cfg.get("raw_volume", "raw/source_volume")
@@ -175,8 +183,7 @@ def sync_db_to_volume():
         # Primary: direct POSIX copy to /Volumes/ mount (works on Notebooks)
         try:
             os.makedirs(os.path.dirname(volume_db), exist_ok=True)
-            # Use copy instead of copy2 to avoid metadata/permissions inheritance
-            shutil.copy(local_db, volume_db)
+            copy_file_binary(local_db, volume_db)
             print(f"[Info] Synced checkpoint database back to Volume: {volume_db}")
             return
         except Exception as e_posix:

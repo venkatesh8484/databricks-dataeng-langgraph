@@ -352,7 +352,10 @@ with tab3:
     try:
         catalog = catalog_config.get("catalog", "hospitality_catalog")
         # Try displaying from Delta table
-        is_local = spark.conf.get("spark.master", "").startswith("local")
+        try:
+            is_local = spark.conf.get("spark.master", "").startswith("local")
+        except Exception:
+            is_local = False
         
         if not is_local:
             fqn = f"{catalog}.gold.agent_fewshot_memory"

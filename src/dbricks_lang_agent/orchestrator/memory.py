@@ -20,7 +20,12 @@ LOCAL_MEMORY_PATH = "./generated/config/agent_fewshot_memory.json"
 
 def get_memory_table_fqn(spark: SparkSession) -> str:
     """Read the memory table path from Spark configuration or catalog settings."""
-    catalog = spark.conf.get("spark.databricks.data_platform.catalog", "hospitality_catalog")
+    try:
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "hospitality_catalog")
+    except Exception:
+        catalog = "hospitality_catalog"
     return f"{catalog}.gold.agent_fewshot_memory"
 
 
@@ -30,7 +35,11 @@ def init_memory_table(spark: SparkSession) -> bool:
     print(f"Initializing few-shot memory table at: {fqn}...")
     
     # Check if we are running locally/mock or on Databricks
-    is_local = spark.conf.get("spark.master", "").startswith("local")
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+        
     if is_local:
         # For local test environments, ensure directory exists
         os.makedirs(os.path.dirname(LOCAL_MEMORY_PATH), exist_ok=True)
@@ -97,7 +106,11 @@ def log_approval(
         print(f"[Warning] Failed to log approval to local JSON cache: {e}")
 
     # 2. Try Spark/Delta table log
-    is_local = spark.conf.get("spark.master", "").startswith("local")
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+        
     if is_local:
         return
         
@@ -126,7 +139,11 @@ def get_few_shot_context(spark: SparkSession, dataset_name: str, issue_type: str
     records: List[Dict[str, Any]] = []
     
     # Try reading from Delta table first
-    is_local = spark.conf.get("spark.master", "").startswith("local")
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+        
     read_success = False
     
     if not is_local:

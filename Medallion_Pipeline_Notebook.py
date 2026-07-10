@@ -1,4 +1,5 @@
-# Databricks Notebook: Medallion Pipeline Agent Runner
+# Databricks notebook source
+# Medallion Pipeline Agent Runner
 #
 # Click "Run All" to start the pipeline. The execution will pause at key breakpoints
 # for you to review agent outputs.

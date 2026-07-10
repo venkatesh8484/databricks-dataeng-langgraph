@@ -131,11 +131,11 @@ else:
     
     # Map next node to corresponding step approval flag
     step_mapping = {
-        "contracts": "profile",
-        "modeling": "contracts",
-        "engineering": "modeling",
-        "execution": "engineering",
-        "report": "report" # Final report approval
+        "profile_review_gate": "profile",
+        "contracts_review_gate": "contracts",
+        "modeling_review_gate": "modeling",
+        "engineering_review_gate": "engineering",
+        "execution_review_gate": "report"
     }
     
     step_key = step_mapping.get(current_node)

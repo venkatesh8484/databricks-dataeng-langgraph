@@ -3,6 +3,7 @@ graph.py
 ========
 Wires up the LangGraph StateGraph, defines conditional routing paths,
 and configures memory checkpointing to enable sequential breakpoints.
+Uses explicit review gate nodes to prevent tight infinite loop routing.
 """
 from __future__ import annotations
 
@@ -19,10 +20,32 @@ from .agents import (
     execution_node
 )
 
+# ---- Review Gate Nodes (Breakpoints are placed before these nodes) ----
+
+def profile_review_gate(state: AgentState) -> Dict[str, Any]:
+    return {"active_agent": "Profiler"}
+
+
+def contracts_review_gate(state: AgentState) -> Dict[str, Any]:
+    return {"active_agent": "ContractSteward"}
+
+
+def modeling_review_gate(state: AgentState) -> Dict[str, Any]:
+    return {"active_agent": "DimensionalModeler"}
+
+
+def engineering_review_gate(state: AgentState) -> Dict[str, Any]:
+    return {"active_agent": "DataEngineer"}
+
+
+def execution_review_gate(state: AgentState) -> Dict[str, Any]:
+    return {"active_agent": "Orchestrator"}
+
+
 # ---- Conditional Routing Functions ----
 
 def route_after_profiler(state: AgentState) -> str:
-    """Route after profiler node runs."""
+    """Route after profile_review_gate node runs."""
     approvals = state.get("approved_steps", {})
     if approvals.get("profile") is True:
         return "contracts"
@@ -30,7 +53,7 @@ def route_after_profiler(state: AgentState) -> str:
 
 
 def route_after_contracts(state: AgentState) -> str:
-    """Route after contract node runs."""
+    """Route after contracts_review_gate node runs."""
     approvals = state.get("approved_steps", {})
     if approvals.get("contracts") is True:
         return "modeling"
@@ -38,7 +61,7 @@ def route_after_contracts(state: AgentState) -> str:
 
 
 def route_after_modeling(state: AgentState) -> str:
-    """Route after modeling node runs."""
+    """Route after modeling_review_gate node runs."""
     approvals = state.get("approved_steps", {})
     if approvals.get("modeling") is True:
         return "engineering"
@@ -46,7 +69,7 @@ def route_after_modeling(state: AgentState) -> str:
 
 
 def route_after_engineering(state: AgentState) -> str:
-    """Route after engineering node runs."""
+    """Route after engineering_review_gate node runs."""
     approvals = state.get("approved_steps", {})
     if approvals.get("engineering") is True:
         return "execution"
@@ -54,7 +77,7 @@ def route_after_engineering(state: AgentState) -> str:
 
 
 def route_after_execution(state: AgentState) -> str:
-    """Route after execution node runs."""
+    """Route after execution_review_gate node runs."""
     approvals = state.get("approved_steps", {})
     if approvals.get("report") is True:
         return END
@@ -75,18 +98,27 @@ def create_pipeline_graph():
     """Compile the LangGraph state machine with memory checkpointers."""
     workflow = StateGraph(AgentState)
 
-    # Register Nodes
+    # Register Agent Nodes
     workflow.add_node("profiler", profiler_node)
     workflow.add_node("contracts", contract_node)
     workflow.add_node("modeling", modeling_node)
     workflow.add_node("engineering", engineering_node)
     workflow.add_node("execution", execution_node)
 
+    # Register Gate Nodes
+    workflow.add_node("profile_review_gate", profile_review_gate)
+    workflow.add_node("contracts_review_gate", contracts_review_gate)
+    workflow.add_node("modeling_review_gate", modeling_review_gate)
+    workflow.add_node("engineering_review_gate", engineering_review_gate)
+    workflow.add_node("execution_review_gate", execution_review_gate)
+
     # Wire Edges
     workflow.add_edge(START, "profiler")
-
+    
+    # Profiler -> Gate -> Contract
+    workflow.add_edge("profiler", "profile_review_gate")
     workflow.add_conditional_edges(
-        "profiler",
+        "profile_review_gate",
         route_after_profiler,
         {
             "contracts": "contracts",
@@ -94,8 +126,10 @@ def create_pipeline_graph():
         }
     )
 
+    # Contracts -> Gate -> Modeling
+    workflow.add_edge("contracts", "contracts_review_gate")
     workflow.add_conditional_edges(
-        "contracts",
+        "contracts_review_gate",
         route_after_contracts,
         {
             "modeling": "modeling",
@@ -103,8 +137,10 @@ def create_pipeline_graph():
         }
     )
 
+    # Modeling -> Gate -> Engineering
+    workflow.add_edge("modeling", "modeling_review_gate")
     workflow.add_conditional_edges(
-        "modeling",
+        "modeling_review_gate",
         route_after_modeling,
         {
             "engineering": "engineering",
@@ -112,8 +148,10 @@ def create_pipeline_graph():
         }
     )
 
+    # Engineering -> Gate -> Execution
+    workflow.add_edge("engineering", "engineering_review_gate")
     workflow.add_conditional_edges(
-        "engineering",
+        "engineering_review_gate",
         route_after_engineering,
         {
             "execution": "execution",
@@ -121,8 +159,10 @@ def create_pipeline_graph():
         }
     )
 
+    # Execution -> Gate -> End
+    workflow.add_edge("execution", "execution_review_gate")
     workflow.add_conditional_edges(
-        "execution",
+        "execution_review_gate",
         route_after_execution,
         {
             "engineering": "engineering",
@@ -133,11 +173,17 @@ def create_pipeline_graph():
     # Setup Memory for Human-In-The-Loop Checkpointing
     memory = MemorySaver()
 
-    # Compile the graph. Breakpoints are placed BEFORE each node transitions
-    # (except the first node) to allow review of the previous node's state additions.
+    # Compile the graph. Breakpoints are placed BEFORE each review gate node,
+    # forcing the graph to pause execution and yield control back to the notebook runner.
     app = workflow.compile(
         checkpointer=memory,
-        interrupt_before=["contracts", "modeling", "engineering", "execution"]
+        interrupt_before=[
+            "profile_review_gate", 
+            "contracts_review_gate", 
+            "modeling_review_gate", 
+            "engineering_review_gate", 
+            "execution_review_gate"
+        ]
     )
     
     return app

@@ -140,10 +140,31 @@ def get_spark_session():
 
 @st.cache_resource
 def get_graph():
-    sync_db_from_volume()
+    """Build the graph once and cache it. The SQLite connection is reused across reruns.
+    Call refresh_graph_db() after syncing from volume to ensure the checkpointer reads fresh data.
+    """
     return create_pipeline_graph()
 
+def refresh_graph_checkpoint():
+    """Close and reopen the SQLite connection so the cached graph reads the freshly synced file."""
+    try:
+        app_instance = get_graph()
+        # Access the underlying SQLite connection via the checkpointer
+        checkpointer = app_instance.checkpointer
+        if hasattr(checkpointer, 'conn'):
+            db_path = checkpointer.conn.database if hasattr(checkpointer.conn, 'database') else get_checkpoint_db_path()
+            checkpointer.conn.close()
+            import sqlite3
+            checkpointer.conn = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
+    except Exception as e:
+        print(f"[Warning] Could not refresh graph DB connection: {e}")
+
 spark = get_spark_session()
+
+# Always sync checkpoint from Volume on every page load so state is current
+sync_db_from_volume()
+refresh_graph_checkpoint()
+
 app = get_graph()
 thread_id = "medallion_pipeline_run"
 config = {"configurable": {"thread_id": thread_id}}
@@ -164,6 +185,7 @@ st.sidebar.info(f"**Unity Catalog**: {catalog_config.get('catalog', 'hospitality
 # Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
     sync_db_from_volume()
+    refresh_graph_checkpoint()
     st.rerun()
 
 # Layout Tabs

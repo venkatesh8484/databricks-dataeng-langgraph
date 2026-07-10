@@ -23,32 +23,39 @@ class PureSqliteSaver(BaseCheckpointSaver):
         self._create_tables()
 
     def _create_tables(self):
+        # Connection is in autocommit mode (isolation_level=None), so we
+        # manage the DDL transaction explicitly to keep it atomic.
         cursor = self.conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS checkpoints (
-                thread_id TEXT,
-                checkpoint_id TEXT,
-                parent_checkpoint_id TEXT,
-                checkpoint_format TEXT,
-                checkpoint_bytes BLOB,
-                metadata_format TEXT,
-                metadata_bytes BLOB,
-                PRIMARY KEY (thread_id, checkpoint_id)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS writes (
-                thread_id TEXT,
-                checkpoint_id TEXT,
-                task_id TEXT,
-                idx INTEGER,
-                channel TEXT,
-                value_format TEXT,
-                value_bytes BLOB,
-                PRIMARY KEY (thread_id, checkpoint_id, task_id, idx)
-            )
-        """)
-        self.conn.commit()
+        cursor.execute("BEGIN")
+        try:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS checkpoints (
+                    thread_id TEXT,
+                    checkpoint_id TEXT,
+                    parent_checkpoint_id TEXT,
+                    checkpoint_format TEXT,
+                    checkpoint_bytes BLOB,
+                    metadata_format TEXT,
+                    metadata_bytes BLOB,
+                    PRIMARY KEY (thread_id, checkpoint_id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS writes (
+                    thread_id TEXT,
+                    checkpoint_id TEXT,
+                    task_id TEXT,
+                    idx INTEGER,
+                    channel TEXT,
+                    value_format TEXT,
+                    value_bytes BLOB,
+                    PRIMARY KEY (thread_id, checkpoint_id, task_id, idx)
+                )
+            """)
+            cursor.execute("COMMIT")
+        except Exception:
+            cursor.execute("ROLLBACK")
+            raise
 
     def get_tuple(self, config: dict) -> Optional[CheckpointTuple]:
         cursor = self.conn.cursor()
@@ -121,11 +128,11 @@ class PureSqliteSaver(BaseCheckpointSaver):
         cp_fmt, cp_bytes = self.serde.dumps_typed(checkpoint)
         meta_fmt, meta_bytes = self.serde.dumps_typed(metadata)
         
+        # Connection is in autocommit mode — each statement commits immediately.
         cursor.execute(
             "INSERT OR REPLACE INTO checkpoints (thread_id, checkpoint_id, parent_checkpoint_id, checkpoint_format, checkpoint_bytes, metadata_format, metadata_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (thread_id, checkpoint_id, parent_id, cp_fmt, cp_bytes, meta_fmt, meta_bytes)
         )
-        self.conn.commit()
         
         return {
             "configurable": {
@@ -145,7 +152,7 @@ class PureSqliteSaver(BaseCheckpointSaver):
                 "INSERT OR REPLACE INTO writes (thread_id, checkpoint_id, task_id, idx, channel, value_format, value_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (thread_id, checkpoint_id, task_id, idx, channel, val_fmt, val_bytes)
             )
-        self.conn.commit()
+        # No explicit commit needed — autocommit mode is active.
 
     def list(self, config: dict, *, before: dict = None, limit: int = None) -> Iterator[CheckpointTuple]:
         cursor = self.conn.cursor()
@@ -377,7 +384,10 @@ def create_pipeline_graph():
     db_path = get_checkpoint_db_path()
 
     print(f"[Info] LangGraph Checkpointer using Sqlite database: {db_path}")
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    # isolation_level=None puts the connection in autocommit mode, which
+    # prevents 'cannot start a transaction within a transaction' errors when
+    # LangGraph calls put() and put_writes() back-to-back.
+    conn = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
     memory = PureSqliteSaver(conn)
 
     # Compile the graph. Breakpoints are placed BEFORE each review gate node,

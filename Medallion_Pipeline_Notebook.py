@@ -122,42 +122,64 @@ def print_artifacts(state_values):
 # Get active state
 # Sync database from Unity Catalog Volume to local SSD (/tmp/checkpoint.db) to prevent network database locking errors
 def sync_db_from_volume():
+    """Copy checkpoint.db from UC Volume to local /tmp using Python native I/O.
+    Avoids dbutils.fs.cp which is blocked for file:/tmp/ paths on Serverless compute.
+    """
     try:
         from dbricks_lang_agent.data_platform.spark_utils import load_config
+        import shutil
         cfg = load_config()
         catalog = cfg.get("catalog", "hospitality_catalog")
         raw_volume = cfg.get("raw_volume", "raw/source_volume")
         volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
         local_db = "/tmp/checkpoint.db"
-        
-        # Convert path to dbfs notation for dbutils
-        dbfs_volume_db = f"dbfs:{volume_db}" if not volume_db.startswith("dbfs:") else volume_db
-        dbfs_local_db = f"file:{local_db}"
-        
-        try:
-            dbutils.fs.ls(dbfs_volume_db)
-            dbutils.fs.cp(dbfs_volume_db, dbfs_local_db)
+
+        if os.path.exists(volume_db):
+            shutil.copy2(volume_db, local_db)
             print(f"[Info] Synced checkpoint database from Volume to local disk: {local_db}")
-        except Exception:
+        else:
             print("[Info] No existing checkpoint database found in volume. Starting fresh.")
     except Exception as e_sync:
         print(f"[Warning] Local checkpoint sync from volume failed: {e_sync}")
 
 def sync_db_to_volume():
+    """Copy checkpoint.db from local /tmp back to UC Volume using Python native I/O.
+    Avoids dbutils.fs.cp which is blocked for file:/tmp/ paths on Serverless compute.
+    Falls back to Databricks SDK files API if direct POSIX copy fails.
+    """
     try:
         from dbricks_lang_agent.data_platform.spark_utils import load_config
+        import shutil
         cfg = load_config()
         catalog = cfg.get("catalog", "hospitality_catalog")
         raw_volume = cfg.get("raw_volume", "raw/source_volume")
         volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
         local_db = "/tmp/checkpoint.db"
-        
-        dbfs_volume_db = f"dbfs:{volume_db}" if not volume_db.startswith("dbfs:") else volume_db
-        dbfs_local_db = f"file:{local_db}"
-        
-        if os.path.exists(local_db):
-            dbutils.fs.cp(dbfs_local_db, dbfs_volume_db)
+
+        if not os.path.exists(local_db):
+            print("[Info] No local checkpoint database to sync.")
+            return
+
+        # Primary: direct POSIX copy to /Volumes/ mount (works on Notebooks)
+        try:
+            os.makedirs(os.path.dirname(volume_db), exist_ok=True)
+            shutil.copy2(local_db, volume_db)
             print(f"[Info] Synced checkpoint database back to Volume: {volume_db}")
+            return
+        except Exception as e_posix:
+            print(f"[Info] Direct POSIX copy failed ({e_posix}), falling back to Databricks SDK...")
+
+        # Fallback: Databricks Files API (works in all environments)
+        try:
+            import io
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            with open(local_db, "rb") as f:
+                file_data = f.read()
+            w.files.upload(volume_db, io.BytesIO(file_data), overwrite=True)
+            print(f"[Info] Synced checkpoint database to Volume via SDK: {volume_db}")
+        except Exception as e_sdk:
+            print(f"[Warning] Checkpoint database sync to volume failed (SDK): {e_sdk}")
     except Exception as e_sync:
         print(f"[Warning] Checkpoint database sync to volume failed: {e_sync}")
 

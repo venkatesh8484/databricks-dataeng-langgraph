@@ -365,24 +365,25 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def _auto_inject_pyspark_imports(code: str) -> str:
-    """Scan the code for commonly used pyspark.sql.functions and auto-inject their imports if missing."""
+def _sanitize_and_heal_code(code: str) -> str:
+    """Auto-inject missing PySpark imports and heal line-continuation/indent issues."""
     if not code:
         return code
 
+    # 1. Replace literal backslash-n sequences with actual newlines
+    # (Since we do this first, we can clean up literal '\n' formatting artifacts)
+    code = code.replace("\\\\n", "\n").replace("\\n", "\n")
+
+    # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 
         "to_date", "to_timestamp", "trim", "concat", "substring", 
         "count", "sum", "avg", "min", "max", "year", "month", "dayofmonth", "desc", "asc"
     ]
-
     import re
     needed = []
     for func in common_funcs:
-        # Check if the function is called, e.g. current_timestamp()
         if re.search(r"\b" + func + r"\s*\(", code):
-            # Check if it is already imported (e.g. import current_timestamp or from ... import current_timestamp)
-            # or defined locally (e.g. current_timestamp = ...)
             is_imported = bool(re.search(r"\bimport\s+[^#\n]*\b" + func + r"\b", code)) or \
                           bool(re.search(r"\b" + func + r"\s*=\s*", code))
             if not is_imported:
@@ -390,8 +391,43 @@ def _auto_inject_pyspark_imports(code: str) -> str:
 
     if needed:
         import_line = f"from pyspark.sql.functions import {', '.join(needed)}\n"
-        # Prepend the import line
         code = import_line + code
+
+    # 3. Self-healing compiler loop (resolves line continuation and indentation errors)
+    for attempt in range(15):
+        try:
+            # Attempt to dry-run compile the code
+            compile(code, "<string>", "exec")
+            print(f"[Sanity Guard] Code compiled successfully on attempt {attempt}.")
+            return code
+        except SyntaxError as e:
+            lines = code.splitlines()
+            if e.lineno is None or e.lineno > len(lines):
+                break
+            err_line = lines[e.lineno - 1]
+
+            # Case A: Unexpected character after line continuation character
+            if "unexpected character after line continuation" in e.msg:
+                idx = err_line.rfind(chr(92))
+                if idx != -1:
+                    # Strip off everything after the backslash
+                    lines[e.lineno - 1] = err_line[:idx] + chr(92)
+                code = "\n".join(lines)
+                continue
+
+            # Case B: Unexpected indent (missing a line continuation backslash on the previous line)
+            if "unexpected indent" in e.msg:
+                if e.lineno > 1:
+                    prev_line = lines[e.lineno - 2]
+                    if not prev_line.strip().endswith(chr(92)):
+                        # Append a backslash line continuation to the previous line
+                        lines[e.lineno - 2] = prev_line + " " + chr(92)
+                        code = "\n".join(lines)
+                        continue
+            
+            # If we hit any other syntax error, log it and return the code as is to avoid infinite loop
+            print(f"[Sanity Guard] Unhandled SyntaxError during healing: {e.msg} at line {e.lineno}")
+            break
 
     return code
 
@@ -421,9 +457,9 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     response = llm.invoke(messages)
     
     parsed = parse_json_from_response(response.content)
-    bronze = _auto_inject_pyspark_imports(parsed.get("bronze_code", ""))
-    silver = _auto_inject_pyspark_imports(parsed.get("silver_code", ""))
-    gold = _auto_inject_pyspark_imports(parsed.get("gold_code", ""))
+    bronze = _sanitize_and_heal_code(parsed.get("bronze_code", ""))
+    silver = _sanitize_and_heal_code(parsed.get("silver_code", ""))
+    gold = _sanitize_and_heal_code(parsed.get("gold_code", ""))
 
     # Save code files to generated directory
     code_dir = "/tmp/generated/data_platform"

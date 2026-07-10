@@ -24,15 +24,51 @@ FK_OVERLAP_THRESHOLD = 0.5
 
 
 def discover_source_tables() -> Dict[str, str]:
-    """Discover all CSV source files in the configured Unity Catalog Volume."""
+    """Discover all CSV source files in the configured Unity Catalog Volume.
+    Avoids POSIX file system checks (glob/exists) on Databricks Serverless,
+    using DBUtils or Workspace Client instead.
+    """
     cfg = load_config()
     vol_path = cfg.get("volume_raw_path", "/Volumes/hospitality_catalog/raw/source_volume")
     
-    if not os.path.exists(vol_path):
-        # Fallback to local source path for unit testing
-        vol_path = os.environ.get("SOURCE_ROOT", "./Source")
+    # Check if we are running in Databricks (Notebook or App)
+    is_databricks = "DATABRICKS_RUNTIME_VERSION" in os.environ or os.environ.get("DATABRICKS_APP_NAME") is not None
+    
+    files = []
+    if is_databricks:
+        # Convert /Volumes/catalog/schema/volume to dbfs:/Volumes/catalog/schema/volume
+        dbfs_path = f"dbfs:{vol_path}" if not vol_path.startswith("dbfs:") else vol_path
+        
+        # 1. Try DBUtils (runs inside notebooks)
+        try:
+            from pyspark.dbutils import DBUtils
+            # Safely get spark session
+            spark = get_spark()
+            dbutils = DBUtils(spark)
+            files_list = dbutils.fs.ls(dbfs_path)
+            files = [f.path for f in files_list if f.name.endswith(".csv")]
+            print(f"[Info] Discovered {len(files)} CSV source files via DBUtils from {dbfs_path}")
+        except Exception as e_db:
+            # 2. Try Databricks SDK WorkspaceClient (runs inside App)
+            try:
+                from databricks.sdk import WorkspaceClient
+                w = WorkspaceClient()
+                files_list = list(w.files.list_directory_contents(vol_path))
+                files = [f.path for f in files_list if f.name.endswith(".csv")]
+                print(f"[Info] Discovered {len(files)} CSV source files via SDK from {vol_path}")
+            except Exception as e_sdk:
+                print(f"[Warning] Failed to list volume files via DBUtils ({e_db}) and SDK ({e_sdk})")
+                
+    # Fallback: standard POSIX glob (local runs or when POSIX mount works)
+    if not files:
+        if not os.path.exists(vol_path):
+            # Fallback to local source path for unit testing
+            vol_path = os.environ.get("SOURCE_ROOT", "./Source")
+        
+        import glob
+        files = sorted(glob.glob(os.path.join(vol_path, "*.csv")))
+        print(f"[Info] Discovered {len(files)} CSV source files via POSIX glob from {vol_path}")
 
-    files = sorted(glob.glob(os.path.join(vol_path, "*.csv")))
     tables = {}
     for f in files:
         stem = os.path.splitext(os.path.basename(f))[0]
@@ -43,14 +79,24 @@ def discover_source_tables() -> Dict[str, str]:
 
 
 def load_source(spark: SparkSession, filename: str) -> DataFrame:
-    """Read a CSV source file from the Unity Catalog Volume as a Spark DataFrame."""
+    """Read a CSV source file from the Unity Catalog Volume as a Spark DataFrame.
+    Bypasses POSIX checks on Databricks Serverless.
+    """
     cfg = load_config()
     vol_path = cfg.get("volume_raw_path", "/Volumes/hospitality_catalog/raw/source_volume")
     
-    if not os.path.exists(vol_path):
-        vol_path = os.environ.get("SOURCE_ROOT", "./Source")
+    is_databricks = "DATABRICKS_RUNTIME_VERSION" in os.environ or os.environ.get("DATABRICKS_APP_NAME") is not None
+    
+    if is_databricks:
+        # Use Volume path directly - Spark Connect resolves it natively
+        path = os.path.join(vol_path, filename)
+    else:
+        # Local fallback for unit testing
+        if not os.path.exists(vol_path):
+            vol_path = os.environ.get("SOURCE_ROOT", "./Source")
+        path = os.path.join(vol_path, filename)
 
-    path = os.path.join(vol_path, filename)
+    print(f"[Info] Loading Spark DataFrame from source path: {path}")
     return spark.read.option("header", True).option("inferSchema", True).csv(path)
 
 

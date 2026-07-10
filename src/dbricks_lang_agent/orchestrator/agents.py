@@ -416,9 +416,14 @@ def _sanitize_and_heal_code(code: str) -> str:
             indent = applymap_match.group(1)
             df_var = applymap_match.group(2)
             replacement = (
-                f"{indent}for _c, _t in {df_var}.dtypes:\n"
-                f"{indent}    if _t == 'string':\n"
-                f"{indent}        {df_var} = {df_var}.withColumn(_c, when(col(_c).isin('Yes', 'Y', 'yes', 'y'), lit(True)).when(col(_c).isin('No', 'N', 'no', 'n'), lit(False)).otherwise(col(_c)))"
+                f"{indent}# Standardize boolean values safely (only for columns containing only boolean-like values)\n"
+                f"{indent}_str_cols = [__c for __c, __t in {df_var}.dtypes if __t == 'string']\n"
+                f"{indent}if _str_cols:\n"
+                f"{indent}    _aggs = [sum(when(~col(__c).isNull() & (col(__c) != '') & ~lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c) for __c in _str_cols]\n"
+                f"{indent}    _counts = {df_var}.select(*_aggs).collect()[0].asDict()\n"
+                f"{indent}    for __c, __count in _counts.items():\n"
+                f"{indent}        if __count == 0:\n"
+                f"{indent}            {df_var} = {df_var}.withColumn(__c, when(lower(col(__c)).isin('yes', 'y', 'true'), lit(True)).when(lower(col(__c)).isin('no', 'n', 'false'), lit(False)).otherwise(None))"
             )
             code = re.sub(r"(?m)^(\s*)" + df_var + r"\s*=\s*" + df_var + r"\.applymap\s*\(.*\)\s*$", replacement, code)
 
@@ -426,7 +431,7 @@ def _sanitize_and_heal_code(code: str) -> str:
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 
         "to_date", "to_timestamp", "trim", "concat", "substring", 
-        "count", "sum", "avg", "min", "max", "year", "month", "dayofmonth", "desc", "asc"
+        "count", "sum", "avg", "min", "max", "year", "month", "dayofmonth", "desc", "asc", "lower"
     ]
     import re
     needed = []

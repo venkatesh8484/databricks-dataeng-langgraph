@@ -384,11 +384,29 @@ def create_pipeline_graph():
     db_path = get_checkpoint_db_path()
 
     print(f"[Info] LangGraph Checkpointer using Sqlite database: {db_path}")
-    # isolation_level=None puts the connection in autocommit mode, which
-    # prevents 'cannot start a transaction within a transaction' errors when
-    # LangGraph calls put() and put_writes() back-to-back.
-    conn = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
+
+    # Ensure the file is writable before opening (it may have been synced from
+    # Volume with restrictive permissions, causing "readonly database" errors).
+    if os.path.exists(db_path):
+        try:
+            os.chmod(db_path, 0o666)
+        except OSError:
+            pass
+
+    # Open in read-write-create mode via URI. isolation_level=None puts the
+    # connection in autocommit mode so LangGraph's put() + put_writes() calls
+    # never hit "cannot start a transaction within a transaction".
+    conn = sqlite3.connect(
+        f"file:{db_path}?mode=rwc",
+        uri=True,
+        check_same_thread=False,
+        isolation_level=None,
+    )
+    # WAL journal mode allows concurrent readers while a write is in progress,
+    # which is important when the notebook and dashboard share the same DB file.
+    conn.execute("PRAGMA journal_mode=WAL")
     memory = PureSqliteSaver(conn)
+
 
     # Compile the graph. Breakpoints are placed BEFORE each review gate node,
     # forcing the graph to pause execution and yield control back to the notebook runner.

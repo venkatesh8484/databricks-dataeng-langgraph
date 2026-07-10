@@ -761,21 +761,53 @@ with tab0:
                 try:
                     gate = pending.get("gate")
                     step = pending.get("step")
-                    current_approved = app.get_state(config).values.get("approved_steps", {})
-                    if step and gate:
-                        current_approved[step] = "approved"
-                        app.update_state(config, {"approved_steps": current_approved}, as_node=gate)
-                    with st.chat_message("assistant"):
-                        msg = f"✅ Done! I've approved the **{step}** step and the pipeline will now advance. Switch to the **Ingestion Monitoring** tab to track progress."
-                        st.markdown(msg)
+
+                    # Ensure the local SQLite file is writable before any write
+                    local_db = get_checkpoint_db_path()
+                    if os.path.exists(local_db):
+                        try:
+                            os.chmod(local_db, 0o666)
+                        except Exception:
+                            pass
+
+                    # Build updated approvals — use boolean True so routing
+                    # functions (which check `is True`) correctly advance
+                    current_state = app.get_state(config)
+                    current_approved = dict(current_state.values.get("approved_steps", {}))
+                    current_approved[step] = True  # Must be boolean, not string
+
+                    app.update_state(
+                        config,
+                        {"approved_steps": current_approved}
+                    )
+
+                    # Stream the graph forward (same as HITL Action Center)
+                    with st.spinner("Resuming pipeline… this may take a moment."):
+                        try:
+                            events = app.stream(None, config, stream_mode="values")
+                            for event in events:
+                                pass
+                        except KeyError as e_key:
+                            if "__end__" not in str(e_key):
+                                raise
+
+                    # Persist to Volume
+                    sync_db_to_volume()
+
+                    msg = (
+                        f"✅ The **{step.title()}** step is approved and the pipeline has resumed. "
+                        "Switch to the **Ingestion Monitoring** tab to track progress."
+                    )
                     st.session_state["chat_history"].append({
                         "role": "assistant", "content": msg, "profiling_triggered": False
                     })
                     st.session_state["pending_pipeline_action"] = None
                     refresh_graph_checkpoint()
+                    st.success(msg)
                     st.rerun()
                 except Exception as e_proceed:
                     st.error(f"Failed to trigger pipeline: {e_proceed}")
+                    st.exception(e_proceed)
         with cancel_col:
             if st.button("✕ Cancel", key="pipeline_cancel_btn"):
                 st.session_state["pending_pipeline_action"] = None

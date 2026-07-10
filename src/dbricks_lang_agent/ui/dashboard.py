@@ -23,46 +23,75 @@ from dbricks_lang_agent.orchestrator import memory
 from databricks.sdk import WorkspaceClient
 import io
 
+def get_volume_db_path() -> str:
+    """Return the Volume POSIX path for the checkpoint database.
+    Both the notebook and the app can access /Volumes/ paths directly.
+    """
+    try:
+        cfg = load_config()
+        volume_raw_path = cfg.get("volume_raw_path", "/Volumes/databricks_langgraph/raw/source_volume")
+        return os.path.join(volume_raw_path, "checkpoint.db")
+    except Exception:
+        return "/Volumes/databricks_langgraph/raw/source_volume/checkpoint.db"
+
 def sync_db_from_volume():
-    """Download checkpoint.db from the shared UC Volume using Databricks SDK (FUSE is not mounted in App container)."""
-    # Always sync if DATABRICKS_APP_NAME is set, meaning we are inside the App environment
-    if os.environ.get("DATABRICKS_APP_NAME"):
-        try:
-            cfg = load_config()
-            catalog = cfg.get("catalog", "hospitality_catalog")
-            raw_volume = cfg.get("raw_volume", "raw/source_volume")
-            # In Databricks, volume raw path can also be configured directly
-            volume_db_path = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
-            local_db_path = get_checkpoint_db_path()
-            
-            w = WorkspaceClient()
-            try:
-                response = w.files.download(volume_db_path)
-                with open(local_db_path, "wb") as f:
-                    f.write(response.contents.read())
-                print(f"[Debug] Successfully downloaded volume checkpoint to {local_db_path}")
-            except Exception as e_dl:
-                print(f"[Debug] Could not download checkpoint (might not exist yet): {e_dl}")
-        except Exception as e:
-            print(f"[Warning] Failed to sync db from volume: {e}")
+    """Sync checkpoint from Volume to local /tmp as a fallback for environments
+    where the Volume POSIX path is not directly accessible.
+    Tries POSIX access first; falls back to Databricks SDK download.
+    """
+    volume_db = get_volume_db_path()
+    local_db = get_checkpoint_db_path()
+
+    # Primary: POSIX copy (works when /Volumes/ is mounted)
+    try:
+        if os.path.exists(volume_db):
+            import shutil
+            shutil.copy2(volume_db, local_db)
+            print(f"[Info] Synced checkpoint from Volume (POSIX): {volume_db} → {local_db}")
+            return
+        else:
+            print("[Info] No checkpoint file found in Volume yet.")
+            return
+    except Exception as e_posix:
+        print(f"[Info] POSIX Volume access failed ({e_posix}), trying SDK...")
+
+    # Fallback: Databricks SDK Files API
+    try:
+        w = WorkspaceClient()
+        response = w.files.download(volume_db)
+        with open(local_db, "wb") as f:
+            f.write(response.contents.read())
+        print(f"[Info] Synced checkpoint via SDK to {local_db}")
+    except Exception as e_sdk:
+        print(f"[Warning] Could not sync checkpoint: {e_sdk}")
 
 def sync_db_to_volume():
-    """Upload checkpoint.db to the shared UC Volume using Databricks SDK."""
-    if os.environ.get("DATABRICKS_APP_NAME"):
-        try:
-            cfg = load_config()
-            catalog = cfg.get("catalog", "hospitality_catalog")
-            raw_volume = cfg.get("raw_volume", "raw/source_volume")
-            volume_db_path = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
-            local_db_path = get_checkpoint_db_path()
-            
-            w = WorkspaceClient()
-            with open(local_db_path, "rb") as f:
-                file_data = f.read()
-            w.files.upload(volume_db_path, io.BytesIO(file_data), overwrite=True)
-            print(f"[Debug] Successfully uploaded local checkpoint to volume.")
-        except Exception as e:
-            print(f"[Warning] Failed to sync db to volume: {e}")
+    """Upload local checkpoint back to Volume after app updates state."""
+    volume_db = get_volume_db_path()
+    local_db = get_checkpoint_db_path()
+
+    if not os.path.exists(local_db):
+        return
+
+    # Primary: POSIX copy
+    try:
+        import shutil
+        os.makedirs(os.path.dirname(volume_db), exist_ok=True)
+        shutil.copy2(local_db, volume_db)
+        print(f"[Info] Synced checkpoint to Volume (POSIX): {local_db} → {volume_db}")
+        return
+    except Exception as e_posix:
+        print(f"[Info] POSIX write failed ({e_posix}), trying SDK...")
+
+    # Fallback: SDK upload
+    try:
+        w = WorkspaceClient()
+        with open(local_db, "rb") as f:
+            file_data = f.read()
+        w.files.upload(volume_db, io.BytesIO(file_data), overwrite=True)
+        print("[Info] Synced checkpoint to Volume via SDK.")
+    except Exception as e_sdk:
+        print(f"[Warning] Could not upload checkpoint: {e_sdk}")
 
 # Page configuration for premium visuals
 st.set_page_config(
@@ -138,34 +167,26 @@ st.markdown("""
 def get_spark_session():
     return get_spark()
 
-@st.cache_resource
-def get_graph():
-    """Build the graph once and cache it. The SQLite connection is reused across reruns.
-    Call refresh_graph_db() after syncing from volume to ensure the checkpointer reads fresh data.
+def get_or_create_graph():
+    """Create a fresh LangGraph instance per Streamlit session, reading directly
+    from the Volume checkpoint file so state is always current.
+    Uses st.session_state to avoid recreating on every widget interaction.
     """
-    return create_pipeline_graph()
+    if "pipeline_app" not in st.session_state:
+        # Sync latest checkpoint from Volume to local /tmp first
+        sync_db_from_volume()
+        st.session_state["pipeline_app"] = create_pipeline_graph()
+    return st.session_state["pipeline_app"]
 
 def refresh_graph_checkpoint():
-    """Close and reopen the SQLite connection so the cached graph reads the freshly synced file."""
-    try:
-        app_instance = get_graph()
-        # Access the underlying SQLite connection via the checkpointer
-        checkpointer = app_instance.checkpointer
-        if hasattr(checkpointer, 'conn'):
-            db_path = checkpointer.conn.database if hasattr(checkpointer.conn, 'database') else get_checkpoint_db_path()
-            checkpointer.conn.close()
-            import sqlite3
-            checkpointer.conn = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
-    except Exception as e:
-        print(f"[Warning] Could not refresh graph DB connection: {e}")
+    """Force re-sync from Volume and recreate the graph connection."""
+    sync_db_from_volume()
+    # Clear cached graph so next call to get_or_create_graph() rebuilds with fresh DB
+    if "pipeline_app" in st.session_state:
+        del st.session_state["pipeline_app"]
 
 spark = get_spark_session()
-
-# Always sync checkpoint from Volume on every page load so state is current
-sync_db_from_volume()
-refresh_graph_checkpoint()
-
-app = get_graph()
+app = get_or_create_graph()
 thread_id = "medallion_pipeline_run"
 config = {"configurable": {"thread_id": thread_id}}
 

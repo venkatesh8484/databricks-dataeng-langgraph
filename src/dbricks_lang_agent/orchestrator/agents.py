@@ -430,8 +430,8 @@ def _sanitize_and_heal_code(code: str) -> str:
     # 1.11. Fix hallucinated loop-based string-to-boolean mapping that is not type-safe
     if "dtypes" in code and "isin" in code:
         import re
-        loop_pattern = r"(?m)^(\s*)for\s+(\w+),\s*(\w+)\s+in\s+(\w+)\.dtypes\s*:\s*\n\1\s+if\s+\3\s*==\s*['\"]string['\"]\s*:\s*\n\1\s+\s*\4\s*=\s*\4\.withColumn\(\s*\2\s*,\s*when\(col\(\s*\2\s*\)\.isin\(.*?\).*?\)"
-        loop_match = re.search(loop_pattern, code, re.DOTALL)
+        loop_pattern = r"(?m)^(\s*)for\s+(\w+),\s*(\w+)\s+in\s+(\w+)\.dtypes\s*:\s*\n\1\s+if\s+\3\s*==\s*['\"]string['\"]\s*:\s*\n(?:\1\s+.*\n?)+"
+        loop_match = re.search(loop_pattern, code)
         if loop_match:
             indent = loop_match.group(1)
             df_var = loop_match.group(4)
@@ -445,7 +445,7 @@ def _sanitize_and_heal_code(code: str) -> str:
                 f"{indent}        if __count == 0:\n"
                 f"{indent}            {df_var} = {df_var}.withColumn(__c, when(lower(col(__c)).isin('yes', 'y', 'true'), lit(True)).when(lower(col(__c)).isin('no', 'n', 'false'), lit(False)).otherwise(None))"
             )
-            code = re.sub(loop_pattern, replacement, code, flags=re.DOTALL)
+            code = re.sub(loop_pattern, replacement, code)
 
     # 1.12. Fix scd2_merge return assignment (it returns table name string instead of DataFrame)
     if "scd2_merge" in code:

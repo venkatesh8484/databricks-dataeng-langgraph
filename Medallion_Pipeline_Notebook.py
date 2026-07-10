@@ -236,7 +236,14 @@ else:
         sync_db_to_volume()
             
     else:
-        print("Pipeline is already finished or in an invalid state.")
+        if current_node != "FINISHED":
+            print(f"Resuming execution from node '{current_node}'...")
+            events = app.stream(None, config, stream_mode="values")
+            for event in events:
+                pass
+            sync_db_to_volume()
+        else:
+            print("Pipeline is already finished or in an invalid state.")
 
 # Re-read state after run/resume
 state = app.get_state(config)

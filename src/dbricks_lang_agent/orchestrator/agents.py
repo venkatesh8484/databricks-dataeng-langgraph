@@ -190,6 +190,10 @@ def dq_node(state: AgentState) -> Dict[str, Any]:
     dataset = list(state.get("discovered_tables", {}).keys())[0] if state.get("discovered_tables") else "generic"
     few_shot_context = memory.get_few_shot_context(spark, dataset, "data_quality")
     
+    profiling_report = state.get("profiling_report", {})
+    profiling_narration = profiling_report.get("profiler_narration", "")
+    profiling_metrics = {k: v for k, v in profiling_report.items() if k != "profiler_narration"}
+    
     prompt = (
         f"Data Profiler Report Narrative:\n{profiling_narration}\n\n"
         f"Raw Metrics JSON:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n\n"
@@ -221,6 +225,10 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
     spark = get_spark()
     dataset = list(state.get("discovered_tables", {}).keys())[0] if state.get("discovered_tables") else "generic"
     few_shot_context = memory.get_few_shot_context(spark, dataset, "contracts")
+    
+    profiling_report = state.get("profiling_report", {})
+    profiling_narration = profiling_report.get("profiler_narration", "")
+    profiling_metrics = {k: v for k, v in profiling_report.items() if k != "profiler_narration"}
     
     prompt = (
         f"Data Profiling Report:\n{profiling_narration}\n\n"

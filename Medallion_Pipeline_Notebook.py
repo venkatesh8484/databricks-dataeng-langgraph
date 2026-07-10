@@ -12,6 +12,10 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install langgraph>=0.1.0 langchain>=0.2.0 langchain-community>=0.2.0 databricks-sdk>=0.28.0 pyyaml>=6.0
+
+# COMMAND ----------
+
 import os
 import sys
 import json

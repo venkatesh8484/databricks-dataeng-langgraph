@@ -8,6 +8,7 @@ handles prompt templating, JSON parsing, and execution of generated Spark ETL co
 from __future__ import annotations
 
 import os
+import sys
 import json
 import yaml
 import subprocess
@@ -447,12 +448,12 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
         print(f"Executing {s}...")
         try:
             res = subprocess.run(
-                ["python3", path],
-                capture_output=True,
-                text=True,
-                env=env,
-                timeout=300
-            )
+                 [sys.executable, path],
+                 capture_output=True,
+                 text=True,
+                 env=env,
+                 timeout=300
+             )
             logs[s] = {
                 "exit_code": res.returncode,
                 "stdout": res.stdout[-4000:],

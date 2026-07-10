@@ -378,6 +378,12 @@ def _sanitize_and_heal_code(code: str) -> str:
     import re
     code = re.sub(r"\bdiscover_source_tables\s*\([^)]*\)", "discover_source_tables()", code)
 
+    # 1.6. Fix build_dim_date() argument signature dynamically (ensure spark is the first argument)
+    code = re.sub(r"\bbuild_dim_date\s*\(\s*(?!(?:spark\b))", "build_dim_date(spark, ", code)
+
+    # 1.7. Fix validate_table() unpacking signature dynamically (change clean_df, quarantine_df = validate_table(...) to include third discard)
+    code = re.sub(r"(?m)^(\s*)([a-zA-Z0-9_]+)\s*,\s*([a-zA-Z0-9_]+)\s*=\s*validate_table\s*\(", r"\1\2, \3, _ = validate_table(", code)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 
@@ -527,8 +533,8 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
              )
             logs[s] = {
                 "exit_code": res.returncode,
-                "stdout": res.stdout[-4000:],
-                "stderr": res.stderr[-4000:]
+                "stdout": res.stdout[:15000],
+                "stderr": res.stderr[:15000]
             }
             if res.returncode != 0:
                 print(f"!!! Script {s} failed with exit code {res.returncode}")

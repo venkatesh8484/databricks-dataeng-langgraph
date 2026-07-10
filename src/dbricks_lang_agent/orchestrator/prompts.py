@@ -132,6 +132,8 @@ Script Requirements:
    - Writes clean rows to Silver (`write_full_overwrite(clean_df, "silver", table_name)`) and invalid rows to Quarantine (`write_full_overwrite(quarantine_df, "quarantine", table_name)`).
    - Handles boolean mappings (standardizing Y/N indicators to booleans) AFTER contract validation checks.
    - If a table's hard rule failure rate is exceeded, halts promotion.
+   - **Crucial Requirement**: At the bottom of the script, write the execution summary to `/tmp/silver_summary.json` in this JSON format:
+     `{"tables": {"table_name": {"row_count_in": int, "row_count_promoted": int, "row_count_quarantined": int, "promotion_blocked": bool}}, "halted_at": "table_name_or_null"}`
 3. **gold.py**:
    - Reads silver tables.
    - Constructs Kimball dimensions and fact tables based on the dimensional model.
@@ -139,6 +141,9 @@ Script Requirements:
    - Joins facts to SCD Type 2 dimensions point-in-time:
      `dim.eff_start_ts <= fact.event_ts AND (dim.eff_end_ts IS NULL OR fact.event_ts < dim.eff_end_ts)`.
    - Overwrites facts and SCD1 dimensions.
+   - Generates calendar dimension using `build_dim_date(spark, "2022-01-01", "2025-12-31")`.
+   - **Crucial Requirement**: At the bottom of the script, write the execution summary to `/tmp/gold_summary.json` in this JSON format:
+     `{"row_counts": {"dim_date": int, "dim_channel": int, "dim_customer": int, "dim_accommodation": int, "dim_supplier": int, "fact_bookings": int, "fact_booking_components": int, "fact_availability": int}}`
 
 If a previous run failed, check the `execution_logs` in the state, fix any issues, and re-write the code.
 

@@ -70,26 +70,51 @@ def profile_dataframe(df: DataFrame, table_name: str) -> Dict[str, Any]:
         "column_count": len(df.columns),
         "columns": {},
     }
+    
+    aggs = []
     for field in df.schema.fields:
         col = field.name
+        # Null count expression
+        aggs.append(F.sum(F.when(F.col(col).isNull() | (F.col(col).cast("string") == ""), 1).otherwise(0)).alias(f"{col}_nulls"))
+        # Distinct count expression
+        aggs.append(F.countDistinct(F.col(col)).alias(f"{col}_distinct"))
+        # Numeric stats expression
+        if isinstance(field.dataType, NumericType) or str(field.dataType) in ("IntegerType", "LongType", "DoubleType", "FloatType", "DecimalType"):
+            aggs.append(F.min(F.col(col)).alias(f"{col}_min"))
+            aggs.append(F.max(F.col(col)).alias(f"{col}_max"))
+            aggs.append(F.avg(F.col(col)).alias(f"{col}_avg"))
+            aggs.append(F.stddev(F.col(col)).alias(f"{col}_stddev"))
+
+    if aggs:
+        stats_row = df.select(*aggs).collect()[0]
+        stats_dict = stats_row.asDict()
+    else:
+        stats_dict = {}
+
+    for field in df.schema.fields:
+        col = field.name
+        nulls = stats_dict.get(f"{col}_nulls", 0) or 0
+        distinct = stats_dict.get(f"{col}_distinct", 0) or 0
+        
         col_profile: Dict[str, Any] = {
             "dtype": str(field.dataType),
-            "null_pct": _null_pct(df, col, total),
-            "distinct_count": df.select(col).distinct().count(),
+            "null_pct": round(100.0 * nulls / total, 2) if total > 0 else 0.0,
+            "distinct_count": distinct,
         }
-        if isinstance(field.dataType, NumericType):
-            stats = df.select(
-                F.min(col).alias("min"), F.max(col).alias("max"),
-                F.avg(col).alias("avg"), F.stddev(col).alias("stddev"),
-            ).collect()[0]
+        
+        if isinstance(field.dataType, NumericType) or str(field.dataType) in ("IntegerType", "LongType", "DoubleType", "FloatType", "DecimalType"):
             col_profile["numeric_stats"] = {
-                "min": stats["min"], "max": stats["max"],
-                "avg": round(stats["avg"], 4) if stats["avg"] is not None else None,
-                "stddev": round(stats["stddev"], 4) if stats["stddev"] is not None else None,
+                "min": stats_dict.get(f"{col}_min"),
+                "max": stats_dict.get(f"{col}_max"),
+                "avg": round(stats_dict.get(f"{col}_avg"), 4) if stats_dict.get(f"{col}_avg") is not None else None,
+                "stddev": round(stats_dict.get(f"{col}_stddev"), 4) if stats_dict.get(f"{col}_stddev") is not None else None,
             }
-        elif col_profile["distinct_count"] <= CATEGORICAL_MAX_CARDINALITY:
-            vc = df.groupBy(col).count().orderBy(F.desc("count")).limit(CATEGORICAL_MAX_CARDINALITY).collect()
-            col_profile["value_counts"] = {str(row[col]): row["count"] for row in vc}
+        elif distinct <= CATEGORICAL_MAX_CARDINALITY:
+            try:
+                vc = df.groupBy(col).count().orderBy(F.desc("count")).limit(CATEGORICAL_MAX_CARDINALITY).collect()
+                col_profile["value_counts"] = {str(row[col]): row["count"] for row in vc}
+            except Exception:
+                pass
         profile["columns"][col] = col_profile
     return profile
 

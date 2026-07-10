@@ -12,7 +12,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install langgraph>=0.1.0 langchain>=0.2.0 langchain-community>=0.2.0 databricks-sdk>=0.28.0 pyyaml>=6.0 typing-extensions>=4.13.0 databricks-langchain langgraph-checkpoint-sqlite
+# MAGIC %pip install langgraph>=0.1.0 langchain>=0.2.0 langchain-community>=0.2.0 databricks-sdk>=0.28.0 pyyaml>=6.0 typing-extensions>=4.13.0 databricks-langchain
 
 # COMMAND ----------
 
@@ -116,6 +116,42 @@ def print_artifacts(state_values):
 # COMMAND ----------
 
 # Get active state
+# Sync database from Unity Catalog Volume to local SSD (/tmp/checkpoint.db) to prevent network database locking errors
+def sync_db_from_volume():
+    try:
+        import shutil
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "hospitality_catalog")
+        raw_volume = cfg.get("raw_volume", "raw/source_volume")
+        volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
+        local_db = "/tmp/checkpoint.db"
+        
+        if os.path.exists(volume_db):
+            shutil.copy2(volume_db, local_db)
+            print(f"[Info] Synced checkpoint database from Volume to local disk: {local_db}")
+    except Exception as e_sync:
+        print(f"[Warning] Local checkpoint sync from volume failed: {e_sync}")
+
+def sync_db_to_volume():
+    try:
+        import shutil
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "hospitality_catalog")
+        raw_volume = cfg.get("raw_volume", "raw/source_volume")
+        volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
+        local_db = "/tmp/checkpoint.db"
+        
+        if os.path.exists(local_db):
+            os.makedirs(os.path.dirname(volume_db), exist_ok=True)
+            shutil.copy2(local_db, volume_db)
+            print(f"[Info] Synced checkpoint database back to Volume: {volume_db}")
+    except Exception as e_sync:
+        print(f"[Warning] Checkpoint database sync to volume failed: {e_sync}")
+
+# Get active state
+sync_db_from_volume()
 state = app.get_state(config)
 
 if not state.values:
@@ -130,6 +166,7 @@ if not state.values:
     events = app.stream(initial_input, config, stream_mode="values")
     for event in events:
         state = app.get_state(config)
+    sync_db_to_volume()
 else:
     # Resume after human feedback
     action = dbutils.widgets.get("hitl_action")
@@ -189,6 +226,7 @@ else:
         events = app.stream(None, config, stream_mode="values")
         for event in events:
             pass
+        sync_db_to_volume()
             
     else:
         print("Pipeline is already finished or in an invalid state.")

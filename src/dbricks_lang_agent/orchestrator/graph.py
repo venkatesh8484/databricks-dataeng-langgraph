@@ -7,13 +7,181 @@ Uses explicit review gate nodes to prevent tight infinite loop routing.
 """
 from __future__ import annotations
 
-from typing import Dict, Any, Literal
+from typing import Dict, Any, Literal, Iterator, Optional
 import os
 import sqlite3
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.base import BaseCheckpointSaver, Checkpoint, CheckpointMetadata, CheckpointTuple
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from dbricks_lang_agent.data_platform.spark_utils import load_config
+
+class PureSqliteSaver(BaseCheckpointSaver):
+    """Pure Python SQLite Checkpointer with zero binary dependencies, safe for Databricks Apps containers."""
+    def __init__(self, conn: sqlite3.Connection):
+        super().__init__(serde=JsonPlusSerializer())
+        self.conn = conn
+        self._create_tables()
+
+    def _create_tables(self):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                thread_id TEXT,
+                checkpoint_id TEXT,
+                parent_checkpoint_id TEXT,
+                checkpoint_format TEXT,
+                checkpoint_bytes BLOB,
+                metadata_format TEXT,
+                metadata_bytes BLOB,
+                PRIMARY KEY (thread_id, checkpoint_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS writes (
+                thread_id TEXT,
+                checkpoint_id TEXT,
+                task_id TEXT,
+                idx INTEGER,
+                channel TEXT,
+                value_format TEXT,
+                value_bytes BLOB,
+                PRIMARY KEY (thread_id, checkpoint_id, task_id, idx)
+            )
+        """)
+        self.conn.commit()
+
+    def get_tuple(self, config: dict) -> Optional[CheckpointTuple]:
+        cursor = self.conn.cursor()
+        thread_id = config["configurable"]["thread_id"]
+        checkpoint_id = config["configurable"].get("checkpoint_id")
+        
+        if checkpoint_id:
+            cursor.execute(
+                "SELECT parent_checkpoint_id, checkpoint_format, checkpoint_bytes, metadata_format, metadata_bytes FROM checkpoints WHERE thread_id = ? AND checkpoint_id = ?",
+                (thread_id, checkpoint_id)
+            )
+        else:
+            cursor.execute(
+                "SELECT parent_checkpoint_id, checkpoint_format, checkpoint_bytes, metadata_format, metadata_bytes, checkpoint_id FROM checkpoints WHERE thread_id = ? ORDER BY checkpoint_id DESC LIMIT 1",
+                (thread_id,)
+            )
+            
+        row = cursor.fetchone()
+        if not row:
+            return None
+            
+        if checkpoint_id:
+            parent_id, cp_fmt, cp_bytes, meta_fmt, meta_bytes = row
+            curr_id = checkpoint_id
+        else:
+            parent_id, cp_fmt, cp_bytes, meta_fmt, meta_bytes, curr_id = row
+            
+        checkpoint = self.serde.loads_typed((cp_fmt, cp_bytes))
+        metadata = self.serde.loads_typed((meta_fmt, meta_bytes))
+        
+        cursor.execute(
+            "SELECT task_id, channel, value_format, value_bytes FROM writes WHERE thread_id = ? AND checkpoint_id = ?",
+            (thread_id, curr_id)
+        )
+        pending_writes = []
+        for task_id, channel, val_fmt, val_bytes in cursor.fetchall():
+            value = self.serde.loads_typed((val_fmt, val_bytes))
+            pending_writes.append((task_id, channel, value))
+            
+        config_out = {
+            "configurable": {
+                "thread_id": thread_id,
+                "checkpoint_id": curr_id
+            }
+        }
+        
+        parent_config = None
+        if parent_id:
+            parent_config = {
+                "configurable": {
+                    "thread_id": thread_id,
+                    "checkpoint_id": parent_id
+                }
+            }
+            
+        return CheckpointTuple(
+            config=config_out,
+            checkpoint=checkpoint,
+            metadata=metadata,
+            parent_config=parent_config,
+            pending_writes=pending_writes
+        )
+
+    def put(self, config: dict, checkpoint: Checkpoint, metadata: CheckpointMetadata, new_versions: dict) -> dict:
+        cursor = self.conn.cursor()
+        thread_id = config["configurable"]["thread_id"]
+        checkpoint_id = checkpoint["id"]
+        parent_id = config["configurable"].get("checkpoint_id")
+        
+        cp_fmt, cp_bytes = self.serde.dumps_typed(checkpoint)
+        meta_fmt, meta_bytes = self.serde.dumps_typed(metadata)
+        
+        cursor.execute(
+            "INSERT OR REPLACE INTO checkpoints (thread_id, checkpoint_id, parent_checkpoint_id, checkpoint_format, checkpoint_bytes, metadata_format, metadata_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (thread_id, checkpoint_id, parent_id, cp_fmt, cp_bytes, meta_fmt, meta_bytes)
+        )
+        self.conn.commit()
+        
+        return {
+            "configurable": {
+                "thread_id": thread_id,
+                "checkpoint_id": checkpoint_id
+            }
+        }
+
+    def put_writes(self, config: dict, writes: list, task_id: str) -> None:
+        cursor = self.conn.cursor()
+        thread_id = config["configurable"]["thread_id"]
+        checkpoint_id = config["configurable"]["checkpoint_id"]
+        
+        for idx, (channel, value) in enumerate(writes):
+            val_fmt, val_bytes = self.serde.dumps_typed(value)
+            cursor.execute(
+                "INSERT OR REPLACE INTO writes (thread_id, checkpoint_id, task_id, idx, channel, value_format, value_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (thread_id, checkpoint_id, task_id, idx, channel, val_fmt, val_bytes)
+            )
+        self.conn.commit()
+
+    def list(self, config: dict, *, before: dict = None, limit: int = None) -> Iterator[CheckpointTuple]:
+        cursor = self.conn.cursor()
+        thread_id = config["configurable"]["thread_id"]
+        query = "SELECT checkpoint_id, parent_checkpoint_id, checkpoint_format, checkpoint_bytes, metadata_format, metadata_bytes FROM checkpoints WHERE thread_id = ?"
+        params = [thread_id]
+        
+        if before:
+            query += " AND checkpoint_id < ?"
+            params.append(before["configurable"]["checkpoint_id"])
+            
+        query += " ORDER BY checkpoint_id DESC"
+        if limit:
+            query += f" LIMIT {limit}"
+            
+        cursor.execute(query, tuple(params))
+        for row in cursor.fetchall():
+            curr_id, parent_id, cp_fmt, cp_bytes, meta_fmt, meta_bytes = row
+            checkpoint = self.serde.loads_typed((cp_fmt, cp_bytes))
+            metadata = self.serde.loads_typed((meta_fmt, meta_bytes))
+            
+            parent_config = None
+            if parent_id:
+                parent_config = {
+                    "configurable": {
+                        "thread_id": thread_id,
+                        "checkpoint_id": parent_id
+                    }
+                }
+                
+            yield CheckpointTuple(
+                config={"configurable": {"thread_id": thread_id, "checkpoint_id": curr_id}},
+                checkpoint=checkpoint,
+                metadata=metadata,
+                parent_config=parent_config
+            )
 
 from .state import AgentState
 from .agents import (
@@ -110,20 +278,8 @@ def route_after_execution(state: AgentState) -> str:
 
 
 def get_checkpoint_db_path() -> str:
-    """Return the shared checkpoint database path, falling back to local path if Volumes are not mounted."""
-    try:
-        cfg = load_config()
-        catalog = cfg.get("catalog", "hospitality_catalog")
-        raw_volume = cfg.get("raw_volume", "raw/source_volume")
-        # In Databricks, volume raw path can also be configured directly
-        volume_dir = cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}")
-        
-        if os.path.exists(volume_dir):
-            return os.path.join(volume_dir, "checkpoint.db")
-    except Exception:
-        pass
-    os.makedirs("./generated/config", exist_ok=True)
-    return "./generated/config/checkpoint.db"
+    """Return the local checkpoint database path (using local disk to prevent SQLite network lock errors)."""
+    return "/tmp/checkpoint.db"
 
 
 # ---- Graph Compilation ----
@@ -222,7 +378,7 @@ def create_pipeline_graph():
 
     print(f"[Info] LangGraph Checkpointer using Sqlite database: {db_path}")
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    memory = SqliteSaver(conn)
+    memory = PureSqliteSaver(conn)
 
     # Compile the graph. Breakpoints are placed BEFORE each review gate node,
     # forcing the graph to pause execution and yield control back to the notebook runner.

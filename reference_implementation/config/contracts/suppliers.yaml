@@ -1,0 +1,57 @@
+table: suppliers
+source_file: raw_suppliers.csv
+business_key: [external_supplier_id]
+description: >
+  Supplier master data (contracted restaurants, transfer companies, etc). Small,
+  low-change reference table (~6 rows) — SCD Type 1 in gold.
+
+schema:
+  required_columns:
+    - raw_supplier_id
+    - source_system
+    - external_supplier_id
+    - supplier_ref
+    - abta_code
+    - name
+    - email
+    - country
+    - payment_method
+    - load_ts
+    - source_file
+  types:
+    raw_supplier_id: int
+    external_supplier_id: string
+    load_ts: timestamp
+
+rules:
+  not_null:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_supplier_id, external_supplier_id, name, abta_code, country, payment_method]
+
+  unique:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_supplier_id, external_supplier_id, abta_code]
+
+  allowed_values:
+    severity: soft
+    max_fail_rate: 0.0
+    checks:
+      payment_method: ["Invoice", "Card", "SWIFT", "SEPA"]
+
+  regex:
+    severity: soft
+    max_fail_rate: 0.0
+    checks:
+      abta_code: '^ABTA-\d{5}$'
+
+  referential_integrity: []
+
+  freshness:
+    severity: soft
+    column: load_ts
+    max_age_days: 1095   # suppliers change rarely; wide freshness window
+
+notes:
+  - "address2 is 100% null in source for suppliers — dropped in silver as a structurally empty column."

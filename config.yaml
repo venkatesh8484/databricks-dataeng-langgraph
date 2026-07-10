@@ -1,0 +1,20 @@
+# Global Configuration for Databricks + LangGraph Medallion Pipeline
+catalog: "hospitality_catalog"
+
+# Unity Catalog Schema names
+schemas:
+  raw: "raw"
+  bronze: "bronze"
+  silver: "silver"
+  gold: "gold"
+
+# Unity Catalog Volume path where raw source CSV files are placed
+# For example: /Volumes/hospitality_catalog/raw/source_volume/
+# (Make sure this directory contains the raw CSV files to profile and ingest)
+volume_raw_path: "/Volumes/hospitality_catalog/raw/source_volume"
+
+# Databricks Model Serving Endpoint configuration
+# Use foundation model endpoints or custom serving endpoints hosted on Databricks
+llm:
+  endpoint: "databricks-meta-llama-3-1-70b-instruct"
+  temperature: 0.0

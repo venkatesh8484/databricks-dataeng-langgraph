@@ -1,0 +1,79 @@
+table: accommodations
+source_file: raw_accommodations.csv
+business_key: [external_accommodation_id]
+description: >
+  Accommodation unit master. 60 units across 3 brands. Attributes (price_band,
+  commission_rate, rating, contract_type) change over time -> SCD Type 2 in gold.
+
+schema:
+  required_columns:
+    - raw_accommodation_id
+    - source_system
+    - external_accommodation_id
+    - accommodation_type
+    - brand
+    - name
+    - city
+    - country
+    - commission_rate
+    - price_band
+    - has_pool
+    - pets_allowed
+    - bedrooms
+    - max_occupancy
+    - rating
+    - contract_type
+    - date_created
+    - date_live
+    - load_ts
+    - source_file
+  types:
+    raw_accommodation_id: int
+    external_accommodation_id: string
+    commission_rate: double
+    rating: double
+    bedrooms: int
+    max_occupancy: int
+    load_ts: timestamp
+
+rules:
+  not_null:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_accommodation_id, external_accommodation_id, accommodation_type, brand, commission_rate, price_band, bedrooms, max_occupancy, rating]
+
+  unique:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_accommodation_id, external_accommodation_id]
+
+  allowed_values:
+    severity: soft
+    max_fail_rate: 0.02
+    checks:
+      has_pool: ["Y", "N"]
+      pets_allowed: ["Y", "N"]
+      price_band: ["Budget", "Standard", "Premium", "Luxury", "Ultra-Luxury"]
+      contract_type: ["Fixed Rate", "Revenue Share", "Management Contract", "Lease"]
+
+  range:
+    severity: soft
+    max_fail_rate: 0.02
+    checks:
+      commission_rate: {min: 0, max: 50}
+      rating: {min: 0, max: 5}
+      bedrooms: {min: 1, max: 20}
+      max_occupancy: {min: 1, max: 40}
+      miles_from_sea: {min: 0, max: 500}
+
+  referential_integrity: []
+
+  freshness:
+    severity: soft
+    column: load_ts
+    max_age_days: 1095
+
+notes:
+  - "address2/address3 are 100% null in source — dropped in silver."
+  - "withdrawn_date is null for ~97% of rows (still-active units) — null is the expected/majority state, not a defect."
+  - "date_created/date_live/withdrawn_date drive SCD2 change tracking on price_band, commission_rate, rating, contract_type in gold."

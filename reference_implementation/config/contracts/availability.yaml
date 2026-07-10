@@ -1,0 +1,77 @@
+table: availability
+source_file: raw_availability.csv
+business_key: [external_accommodation_id, availability_date]
+description: >
+  Daily availability snapshot per accommodation. Only a subset of accommodations
+  are present in any given extract — expected (rolling feed), not a completeness defect.
+
+schema:
+  required_columns:
+    - raw_availability_id
+    - external_accommodation_id
+    - availability_date
+    - is_closed
+    - allocation
+    - actual_available
+    - potential_available
+    - load_ts
+    - source_file
+  types:
+    raw_availability_id: int
+    external_accommodation_id: string
+    availability_date: timestamp
+    allocation: int
+    actual_available: int
+    potential_available: int
+
+rules:
+  not_null:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_availability_id, external_accommodation_id, availability_date, allocation, actual_available, potential_available]
+
+  unique:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_availability_id]
+  unique_composite:
+    severity: hard
+    max_fail_rate: 0.0
+    column_sets:
+      - [external_accommodation_id, availability_date]
+
+  allowed_values:
+    severity: soft
+    max_fail_rate: 0.01
+    checks:
+      is_closed: ["Y", "N"]
+
+  range:
+    severity: soft
+    max_fail_rate: 0.01
+    checks:
+      allocation: {min: 0, max: 50}
+      actual_available: {min: 0, max: 50}
+      potential_available: {min: 0, max: 50}
+
+  consistency:
+    severity: soft
+    max_fail_rate: 0.02
+    checks:
+      - name: available_not_greater_than_allocation
+        expression: "actual_available <= allocation"
+      - name: potential_gte_actual
+        expression: "potential_available >= actual_available"
+
+  referential_integrity:
+    severity: soft
+    max_fail_rate: 0.01
+    checks:
+      - column: external_accommodation_id
+        parent_table: accommodations
+        parent_column: external_accommodation_id
+
+  freshness:
+    severity: soft
+    column: load_ts
+    max_age_days: 400

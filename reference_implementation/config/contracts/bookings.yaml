@@ -1,0 +1,89 @@
+table: bookings
+source_file: raw_bookings.csv
+business_key: [external_booking_id]
+description: >
+  Booking header. Grain = one row per booking. Assumed EUR (see FX policy in
+  data_model/data_dictionary.md) since no currency column present at this grain.
+
+schema:
+  required_columns:
+    - raw_booking_id
+    - source_system
+    - external_booking_id
+    - booking_reference
+    - external_customer_id
+    - external_accommodation_id
+    - created_ts
+    - confirmed_ts
+    - accommodation_start
+    - accommodation_end
+    - total_price
+    - total_cost
+    - adults
+    - is_owner_booking
+    - booking_channel
+    - channel_group
+    - load_ts
+    - source_file
+  types:
+    raw_booking_id: int
+    external_booking_id: string
+    total_price: double
+    total_cost: double
+    created_ts: timestamp
+
+rules:
+  not_null:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_booking_id, external_booking_id, external_customer_id, external_accommodation_id, created_ts, total_price, total_cost, booking_channel]
+
+  unique:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_booking_id, external_booking_id, booking_reference]
+
+  allowed_values:
+    severity: soft
+    max_fail_rate: 0.01
+    checks:
+      is_owner_booking: ["Y", "N"]
+      booking_channel: ["Corporate", "Telephone", "GDS", "OTA", "Web", "Travel Agent"]
+      channel_group: ["Direct", "Indirect", "Corporate"]
+
+  range:
+    severity: soft
+    max_fail_rate: 0.01
+    checks:
+      total_price: {min: 0, max: 200000}
+      total_cost: {min: 0, max: 200000}
+      adults: {min: 1, max: 20}
+      children: {min: 0, max: 10}
+      infants: {min: 0, max: 10}
+
+  consistency:
+    severity: soft
+    max_fail_rate: 0.02
+    checks:
+      - name: cancelled_ts_implies_reason
+        expression: "(cancelled_ts IS NULL AND cancellation_reason IS NULL) OR (cancelled_ts IS NOT NULL AND cancellation_reason IS NOT NULL)"
+      - name: accommodation_dates_ordered
+        expression: "accommodation_end >= accommodation_start"
+      - name: cost_not_greater_than_price
+        expression: "total_cost <= total_price * 1.5"   # soft sanity guard, not a hard margin rule
+
+  referential_integrity:
+    severity: hard
+    max_fail_rate: 0.0
+    checks:
+      - column: external_customer_id
+        parent_table: customers
+        parent_column: external_customer_id
+      - column: external_accommodation_id
+        parent_table: accommodations
+        parent_column: external_accommodation_id
+
+  freshness:
+    severity: soft
+    column: load_ts
+    max_age_days: 400

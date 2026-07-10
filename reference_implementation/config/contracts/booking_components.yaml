@@ -1,0 +1,102 @@
+table: booking_components
+source_file: raw_booking_components.csv
+business_key: [component_reference]
+description: >
+  Booking line items (Accommodation, Restaurant, Spa, Parking, Laundry, Minibar,
+  Transfer). Finer grain than bookings. Multi-currency price with fx_rate to EUR;
+  cost is always in EUR already (cost_fx_rate == 1.0).
+
+schema:
+  required_columns:
+    - raw_component_id
+    - raw_booking_id
+    - external_booking_id
+    - component_type
+    - component_reference
+    - external_supplier_id
+    - start_date
+    - end_date
+    - duration_days
+    - price
+    - cost
+    - price_currency
+    - cost_currency
+    - price_fx_rate
+    - cost_fx_rate
+    - status
+    - load_ts
+    - source_file
+  types:
+    raw_component_id: int
+    price: double
+    cost: double
+    price_fx_rate: double
+    cost_fx_rate: double
+    duration_days: int
+
+rules:
+  not_null:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_component_id, external_booking_id, component_type, component_reference, external_supplier_id, price, cost, price_currency, cost_currency, price_fx_rate, cost_fx_rate, status]
+
+  not_null_conditional:
+    severity: soft
+    max_fail_rate: 0.0
+    # external_accommodation_id is only required when component_type == 'Accommodation'
+    checks:
+      - column: external_accommodation_id
+        when: "component_type = 'Accommodation'"
+
+  unique:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_component_id, component_reference]
+
+  allowed_values:
+    severity: soft
+    max_fail_rate: 0.01
+    checks:
+      component_type: ["Accommodation", "Restaurant", "Parking", "Spa", "Laundry", "Minibar", "Transfer"]
+      status: ["Confirmed", "Checked-In", "Checked-Out", "Cancelled"]
+      price_currency: ["EUR", "GBP", "USD"]
+      cost_currency: ["EUR"]
+
+  range:
+    severity: soft
+    max_fail_rate: 0.01
+    checks:
+      price: {min: 0, max: 100000}
+      cost: {min: 0, max: 100000}
+      price_fx_rate: {min: 0.5, max: 1.5}
+      cost_fx_rate: {min: 0.99, max: 1.01}
+      duration_days: {min: 0, max: 60}
+
+  consistency:
+    severity: soft
+    max_fail_rate: 0.02
+    checks:
+      - name: end_date_not_before_start_date
+        expression: "end_date >= start_date"
+      - name: cancelled_ts_implies_status_cancelled
+        expression: "(cancelled_ts IS NULL) OR (status = 'Cancelled')"
+
+  referential_integrity:
+    severity: hard
+    max_fail_rate: 0.0
+    checks:
+      - column: external_booking_id
+        parent_table: bookings
+        parent_column: external_booking_id
+      - column: external_supplier_id
+        parent_table: suppliers
+        parent_column: external_supplier_id
+      - column: external_accommodation_id
+        parent_table: accommodations
+        parent_column: external_accommodation_id
+        nullable: true   # non-accommodation component types legitimately have no accommodation link
+
+  freshness:
+    severity: soft
+    column: load_ts
+    max_age_days: 400

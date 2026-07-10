@@ -69,8 +69,13 @@ def get_spark(app_name: str = "databricks-langgraph-medallion") -> SparkSession:
     if _spark is None:
         try:
             from databricks.connect import DatabricksSession
-            _spark = DatabricksSession.builder.getOrCreate()
-            print("[Debug] Successfully established Databricks Connect session.")
+            try:
+                _spark = DatabricksSession.builder.serverless().getOrCreate()
+                print("[Debug] Successfully established serverless Databricks Connect session.")
+            except Exception as e1:
+                print(f"[Debug] Serverless connect failed: {e1}. Trying default getOrCreate...")
+                _spark = DatabricksSession.builder.getOrCreate()
+                print("[Debug] Successfully established default Databricks Connect session.")
         except Exception as e:
             print(f"[Debug] Databricks Connect not available or failed: {e}. Falling back to local PySpark.")
 

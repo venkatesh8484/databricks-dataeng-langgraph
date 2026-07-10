@@ -374,6 +374,10 @@ def _sanitize_and_heal_code(code: str) -> str:
     # (Since we do this first, we can clean up literal '\n' formatting artifacts)
     code = code.replace("\\\\n", "\n").replace("\\n", "\n")
 
+    # 1.5. Fix discover_source_tables() argument signature dynamically
+    import re
+    code = re.sub(r"\bdiscover_source_tables\s*\([^)]*\)", "discover_source_tables()", code)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

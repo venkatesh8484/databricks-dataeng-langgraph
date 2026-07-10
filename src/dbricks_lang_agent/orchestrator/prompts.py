@@ -121,7 +121,7 @@ You MUST explicitly import all PySpark SQL functions that you use (e.g., `from p
 
 Script Requirements:
 1. **bronze.py**:
-   - Discovers raw source tables.
+   - Discovers raw source tables using `discover_source_tables()` (which takes no arguments).
    - Loads files from the UC Volume using `load_source(spark, filename)`.
    - Appends ingestion metadata columns: `_ingestion_ts` (current timestamp), `_batch_id` (string batch code), and `_source_layer`.
    - Overwrites the tables into the Bronze schema: `write_full_overwrite(bronze_df, "bronze", table_name)`.

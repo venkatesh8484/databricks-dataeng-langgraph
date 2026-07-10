@@ -515,7 +515,51 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-# ---- Talk to Data Chatbot Agent ----
+# ---- Talk to Data Chatbot Prompts ----
+
+CHAT_INTENT_CLASSIFIER_PROMPT = """
+You are an intent classifier for a data-platform chatbot.
+Given the user's question, classify it into EXACTLY ONE of these intents (output only the intent word, nothing else):
+
+  data_stats        – asks for general statistical summaries of the dataset (e.g. averages, distributions, trends)
+  schema            – asks about table structures, column names, data types, or field definitions
+  quality           – asks about data quality, null rates, anomalies, or validation issues
+  count             – asks for row counts, record totals, or volume information
+  sample            – asks for sample values, example records, or value distributions / frequencies
+  pipeline_status   – asks about the current state of the pipeline, which agent ran last, or what step is next
+  pipeline_control  – user wants to START, RUN, RESUME, PROCEED with, APPROVE, CONFIRM, or TRIGGER the pipeline
+  general           – any other question about the dataset, contracts, DDL, reports, or anything not covered above
+
+Respond with ONLY the single intent word. No punctuation. No explanation.
+"""
+
+CHAT_ANSWER_PROMPT = """
+You are a friendly, expert Data Analyst assistant embedded in a Medallion Pipeline Control Center.
+Your only knowledge source is the context provided below — do NOT make up facts or numbers.
+
+IMPORTANT FORMATTING RULES:
+- Reply in plain Markdown only (bullet points, bold, tables).
+- Do NOT output any HTML tags, XML tags, or raw code.
+- Do NOT output </div>, <div>, or any other HTML.
+- Keep responses concise — under 300 words unless a table genuinely requires more space.
+
+CONTEXT:
+{context}
+
+CONVERSATION HISTORY:
+{history}
+
+USER QUESTION:
+{question}
+
+Instructions:
+- Answer the question conversationally and concisely using ONLY the data in the CONTEXT above.
+- Use bullet points or short tables where they improve clarity.
+- If the context does not contain enough information to fully answer the question, say so honestly
+  and suggest what the user can do (e.g. "Run the pipeline to generate profiling data first").
+- Never reveal raw JSON blobs or internal field names directly — translate them into plain English.
+- When citing numbers, be precise (use exact figures from the context, not approximations).
+"""
 
 # Module-level cache dict – keyed by a hash of the volume path + mtime so the
 # profile is automatically invalidated when new source files land in the Volume.
@@ -556,16 +600,19 @@ def _get_or_run_profiling() -> Dict[str, Any]:
 
 
 def _classify_intent(question: str) -> str:
-    """Use the LLM to classify the user's question into one of 7 intents."""
+    """Use the LLM to classify the user's question into one of 8 intents."""
     llm = get_llm("chat")
     messages = [
-        SystemMessage(content=prompts.CHAT_INTENT_CLASSIFIER_PROMPT),
+        SystemMessage(content=CHAT_INTENT_CLASSIFIER_PROMPT),
         HumanMessage(content=question)
     ]
     try:
         response = llm.invoke(messages)
         intent = response.content.strip().lower().split()[0]
-        valid_intents = {"data_stats", "schema", "quality", "count", "sample", "pipeline_status", "general"}
+        valid_intents = {
+            "data_stats", "schema", "quality", "count", "sample",
+            "pipeline_status", "pipeline_control", "general"
+        }
         return intent if intent in valid_intents else "general"
     except Exception as e:
         print(f"[Talk to Data] Intent classification failed ({e}), defaulting to 'general'.")
@@ -642,7 +689,33 @@ def _build_context(intent: str, state: AgentState, profiling_report: Dict[str, A
         if dq and intent == "quality":
             parts.append(f"DATA QUALITY REPORT:\n{dq[:2000]}")
 
-    # --- Pipeline-state context ---
+    # --- Pipeline control context ---
+    if intent == "pipeline_control":
+        active_agent = state.get("active_agent", "Not started")
+        approved = state.get("approved_steps", {})
+        next_gate = None
+        # Map active_agent to the gate it is waiting at
+        gate_map = {
+            "Profiler": ("profile_review_gate", "profile"),
+            "DataQuality": ("data_quality_review_gate", "dq"),
+            "Contracts": ("contracts_review_gate", "contracts"),
+            "DimensionalModeler": ("modeling_review_gate", "modeling"),
+            "DataEngineer": ("engineering_review_gate", "engineering"),
+            "Orchestrator": ("execution_review_gate", "execution"),
+        }
+        if active_agent and active_agent in gate_map:
+            gate, step = gate_map[active_agent]
+            already_approved = approved.get(step, "") == "approved"
+            next_gate = None if already_approved else {"gate": gate, "step": step}
+        parts.append(
+            f"PIPELINE CONTROL CONTEXT:\n"
+            f"  Last active agent: {active_agent}\n"
+            f"  Approved steps: {json.dumps(approved)}\n"
+            f"  Next pending gate: {next_gate}\n"
+            f"  To proceed: approve the gate listed in next_pending_gate."
+        )
+
+    # --- Pipeline-state context (status questions) ---
     if intent == "pipeline_status":
         active_agent = state.get("active_agent", "Not started")
         approved = state.get("approved_steps", {})
@@ -693,10 +766,13 @@ def chat_with_data_agent(
     Returns
     -------
     answer : str
-        The LLM-generated answer in plain text / Markdown.
+        The LLM-generated answer in plain Markdown.
     profiling_triggered : bool
-        ``True`` when a fresh Spark profiling job was triggered to answer this
-        question.
+        ``True`` when a fresh Spark profiling job was triggered.
+    pipeline_action : dict | None
+        When the user wants to start/approve a pipeline step, this dict contains
+        ``{"gate": ..., "step": ..., "description": ...}`` for the UI to surface
+        a confirmation button. ``None`` if no pipeline action is required.
     """
     # 1. Classify intent
     intent = _classify_intent(question)
@@ -710,20 +786,68 @@ def chat_with_data_agent(
     if intent in profiling_intents:
         cached_before = bool(_profiling_cache)
         profiling_report = _get_or_run_profiling()
-        profiling_triggered = not cached_before  # True only if this call actually ran Spark
+        profiling_triggered = not cached_before
 
-    # 3. Build context string
+    # 3. Handle pipeline_control intent directly — no LLM answer generation needed
+    if intent == "pipeline_control":
+        active_agent = state.get("active_agent", None)
+        approved = state.get("approved_steps", {})
+        gate_map = {
+            "Profiler":          ("profile_review_gate",      "profile"),
+            "DataQuality":       ("data_quality_review_gate", "dq"),
+            "Contracts":         ("contracts_review_gate",    "contracts"),
+            "DimensionalModeler":("modeling_review_gate",     "modeling"),
+            "DataEngineer":      ("engineering_review_gate",  "engineering"),
+            "Orchestrator":      ("execution_review_gate",    "execution"),
+        }
+        if not active_agent:
+            return (
+                "The pipeline hasn't been started yet. Please use the **Action Center** tab "
+                "to kick off the first run, or ask me to start it and I'll prompt you to confirm.",
+                False,
+                None
+            )
+        if active_agent not in gate_map:
+            return (
+                f"The pipeline is currently at agent **{active_agent}** but I don't know "
+                "which gate to approve. Please use the **Action Center (HITL)** tab directly.",
+                False,
+                None
+            )
+        gate, step = gate_map[active_agent]
+        if approved.get(step) == "approved":
+            return (
+                f"The **{step}** step has already been approved. "
+                "The pipeline should be advancing automatically. "
+                "Check the **Ingestion Monitoring** tab for live status.",
+                False,
+                None
+            )
+        # Surface a confirmation button in the UI
+        action = {
+            "gate": gate,
+            "step": step,
+            "description": f"Approve the **{step.title()}** step (current agent: {active_agent}) and advance the pipeline."
+        }
+        return (
+            f"I can approve the **{step.title()}** step and advance the pipeline from **{active_agent}**. "
+            f"A confirmation button will appear below — click **\u25b6 Yes, Proceed** to continue.",
+            False,
+            action
+        )
+
+    # 4. Build context string
     context = _build_context(intent, state, profiling_report)
 
-    # 4. Build history string (last 10 turns)
+    # 5. Build history string (last 10 turns)
     history_lines = []
     for turn in history[-10:]:
         role = "User" if turn["role"] == "user" else "Assistant"
         history_lines.append(f"{role}: {turn['content']}")
     history_str = "\n".join(history_lines) if history_lines else "No prior conversation."
 
-    # 5. Call answer LLM
-    answer_prompt = prompts.CHAT_ANSWER_PROMPT.format(
+    # 6. Call answer LLM
+    answer_prompt = CHAT_ANSWER_PROMPT.format(
         context=context,
         history=history_str,
         question=question,
@@ -734,7 +858,6 @@ def chat_with_data_agent(
         response = llm.invoke(messages)
         answer = response.content.strip()
     except Exception as e:
-        answer = f"⚠️ I encountered an error while generating your answer: {e}"
+        answer = f"\u26a0\ufe0f I encountered an error while generating your answer: {e}"
 
-
-    return answer, profiling_triggered
+    return answer, profiling_triggered, None

@@ -165,9 +165,25 @@ st.markdown("""
             background-color: #F8FAFC !important;
         }
 
-        html, body, [class*="css"], p, span, div {
+        html, body, [class*="css"] {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
             -webkit-font-smoothing: antialiased;
+        }
+
+        /* Text colors — DO NOT add div/span here; it breaks code blocks */
+        p, .stMarkdown p, label {
+            color: #334155 !important;
+            font-size: 0.925rem !important;
+            line-height: 1.6 !important;
+        }
+
+        /* Protect code blocks from global color overrides */
+        code, pre, [data-testid="stCode"],
+        [data-testid="stCode"] *,
+        .stCodeBlock, .stCodeBlock * {
+            color: unset !important;
+            background-color: unset !important;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace !important;
         }
 
         h1, h2, h3, h4, h5, h6 {
@@ -175,12 +191,6 @@ st.markdown("""
             color: #0F172A !important;
             font-weight: 600 !important;
             letter-spacing: -0.02em !important;
-        }
-
-        p, .stMarkdown p {
-            color: #334155 !important;
-            font-size: 0.925rem !important;
-            line-height: 1.6 !important;
         }
 
         /* ── Sidebar ─────────────────────────────────────────────── */
@@ -697,136 +707,145 @@ tab0, tab1, tab2, tab3 = st.tabs([
 
 # ----------------- Tab 0: Talk to Data Chatbot -----------------
 with tab0:
-    st.markdown("### 💬 Talk to Data")
-    st.markdown(
-        "Ask any question about your dataset — row counts, schemas, data quality, "
-        "relationships, pipeline status, contracts, and more. "
-        "The assistant will automatically run profiling if it needs fresh statistics."
-    )
-
     # Initialise session-state keys
     if "chat_history" not in st.session_state:
         st.session_state["chat_history"] = []
+    if "pending_pipeline_action" not in st.session_state:
+        st.session_state["pending_pipeline_action"] = None
 
-    # ---- Suggestion chips ----
-    suggestion_questions = [
+    # ---- Header ----
+    st.markdown("#### 💬 Talk to Data")
+    st.caption(
+        "Ask anything about your dataset — row counts, schemas, data quality, "
+        "pipeline status, and more. I can also start or advance the pipeline for you."
+    )
+
+    # ---- Quick-start suggestion buttons ----
+    suggestions = [
         "How many rows are in my dataset?",
         "What are the column names and data types?",
         "Are there any data quality issues?",
         "What is the current pipeline status?",
-        "Show me the top values for categorical columns.",
-        "Describe the referential integrity between tables.",
+        "Start the pipeline",
     ]
-    st.markdown('<div class="chat-suggestions">' +
-        "".join([f'<span>{q}</span>' for q in suggestion_questions]) +
-        "</div>", unsafe_allow_html=True)
+    btn_cols = st.columns(len(suggestions))
+    for idx, sug in enumerate(suggestions):
+        with btn_cols[idx]:
+            if st.button(sug, key=f"sug_{idx}", use_container_width=True):
+                st.session_state["_chat_prefill"] = sug
 
-    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    st.divider()
 
-    # ---- Chat history display ----
-    chat_html_parts = []
+    # ---- Render chat history using native st.chat_message ----
     history = st.session_state["chat_history"]
-
     if not history:
-        chat_html_parts.append("""
-        <div class="chat-empty-state">
-            <div class="chat-empty-icon">🤖</div>
-            <p>No conversation yet. Type a question below to get started!</p>
-        </div>""")
+        st.info("No conversation yet. Type a question below or click a suggestion above to get started!")
     else:
         for turn in history:
             role = turn["role"]
             content = turn["content"]
-            prof_triggered = turn.get("profiling_triggered", False)
+            with st.chat_message("user" if role == "user" else "assistant"):
+                st.markdown(content)
+                if turn.get("profiling_triggered"):
+                    st.caption("ℹ️ Fresh Spark profiling was run to answer this question.")
 
-            if role == "user":
-                chat_html_parts.append(f"""
-                <div class="chat-bubble-wrapper user">
-                    <div class="chat-avatar user">👤</div>
-                    <div class="chat-bubble user">{content}</div>
-                </div>""")
-            else:
-                # Convert newlines to <br> for HTML display and escape potential XSS
-                safe_content = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
-                prof_badge = (
-                    '<div class="chat-profiling-badge">ℹ️ Fresh profiling data was fetched from your dataset to answer this question.</div>'
-                    if prof_triggered else ""
-                )
-                chat_html_parts.append(f"""
-                <div class="chat-bubble-wrapper bot">
-                    <div class="chat-avatar bot">🤖</div>
-                    <div style="flex: 1">
-                        <div class="chat-bubble bot">{safe_content}</div>
-                        {prof_badge}
-                    </div>
-                </div>""")
+    # ---- Pipeline action confirmation button ----
+    pending = st.session_state.get("pending_pipeline_action")
+    if pending:
+        st.warning(
+            f"⚡ **Pipeline Action Ready:** {pending.get('description', 'Proceed with next pipeline step?')}"
+        )
+        proceed_col, cancel_col, _ = st.columns([1, 1, 4])
+        with proceed_col:
+            if st.button("▶ Yes, Proceed", key="pipeline_proceed_btn", type="primary"):
+                try:
+                    gate = pending.get("gate")
+                    step = pending.get("step")
+                    current_approved = app.get_state(config).values.get("approved_steps", {})
+                    if step and gate:
+                        current_approved[step] = "approved"
+                        app.update_state(config, {"approved_steps": current_approved}, as_node=gate)
+                    with st.chat_message("assistant"):
+                        msg = f"✅ Done! I've approved the **{step}** step and the pipeline will now advance. Switch to the **Ingestion Monitoring** tab to track progress."
+                        st.markdown(msg)
+                    st.session_state["chat_history"].append({
+                        "role": "assistant", "content": msg, "profiling_triggered": False
+                    })
+                    st.session_state["pending_pipeline_action"] = None
+                    refresh_graph_checkpoint()
+                    st.rerun()
+                except Exception as e_proceed:
+                    st.error(f"Failed to trigger pipeline: {e_proceed}")
+        with cancel_col:
+            if st.button("✕ Cancel", key="pipeline_cancel_btn"):
+                st.session_state["pending_pipeline_action"] = None
+                st.rerun()
 
-    st.markdown(
-        '<div class="chat-container">' + "".join(chat_html_parts) + "</div>",
-        unsafe_allow_html=True
+    # ---- Chat input (native — no HTML injection risk) ----
+    prefill = st.session_state.pop("_chat_prefill", None)
+    user_input = st.chat_input(
+        "Ask anything about your data, or say 'start the pipeline'…",
+        key="chat_input_native"
     )
+    # Use prefill if user clicked a suggestion button
+    question_to_process = prefill or user_input
 
-    # ---- Input area ----
-    st.markdown('<div class="chat-input-area">', unsafe_allow_html=True)
-    with st.form(key="chat_form", clear_on_submit=True):
-        col_input, col_send = st.columns([5, 1])
-        with col_input:
-            user_input = st.text_input(
-                "Your question",
-                placeholder="e.g. How many rows are in the bookings table?",
-                label_visibility="collapsed",
-                key="chat_input_field"
-            )
-        with col_send:
-            send_clicked = st.form_submit_button("Send ➤", use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    if question_to_process:
+        question = question_to_process.strip()
 
-    # ---- Handle submission ----
-    if send_clicked and user_input.strip():
-        question = user_input.strip()
-
-        # Append user turn
+        # Show user message immediately
+        with st.chat_message("user"):
+            st.markdown(question)
         st.session_state["chat_history"].append({
-            "role": "user",
-            "content": question,
-            "profiling_triggered": False
+            "role": "user", "content": question, "profiling_triggered": False
         })
 
-        # Call the agent with a spinner
-        with st.spinner("🤖 Thinking..."):
-            try:
-                # Pass a read-only copy of current state
-                current_state = app.get_state(config)
-                state_values = current_state.values if current_state.values else {}
+        # Call the agent
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking…"):
+                try:
+                    current_state = app.get_state(config)
+                    state_values = current_state.values if current_state.values else {}
 
-                answer, prof_triggered = chat_with_data_agent(
-                    question=question,
-                    state=state_values,
-                    history=st.session_state["chat_history"][:-1],  # exclude the just-appended user turn
-                )
-            except Exception as e_chat:
-                answer = f"⚠️ Sorry, I ran into an error: {e_chat}"
-                prof_triggered = False
+                    answer, prof_triggered, pipeline_action = chat_with_data_agent(
+                        question=question,
+                        state=state_values,
+                        history=st.session_state["chat_history"][:-1],
+                    )
+                except Exception as e_chat:
+                    answer = f"⚠️ Sorry, I ran into an error: {e_chat}"
+                    prof_triggered = False
+                    pipeline_action = None
 
-        # Append assistant turn
+            st.markdown(answer)
+            if prof_triggered:
+                st.caption("ℹ️ Fresh Spark profiling was run to answer this question.")
+
         st.session_state["chat_history"].append({
             "role": "assistant",
             "content": answer,
             "profiling_triggered": prof_triggered
         })
 
+        # Store any pipeline action for the confirmation button above
+        if pipeline_action:
+            st.session_state["pending_pipeline_action"] = pipeline_action
+
         st.rerun()
 
     # ---- Utility controls ----
+    st.markdown("---")
     ctrl_col1, ctrl_col2, _ = st.columns([1, 1, 4])
     with ctrl_col1:
         if st.button("🗑️ Clear Chat", key="clear_chat_btn"):
             st.session_state["chat_history"] = []
+            st.session_state["pending_pipeline_action"] = None
             st.rerun()
     with ctrl_col2:
         if st.button("♻️ Reset Profile Cache", key="reset_profile_cache_btn"):
             clear_profiling_cache()
-            st.success("Profiling cache cleared. Next data question will re-run Spark profiling.")
+            st.success("Profiling cache cleared.")
+
 
 # ----------------- Tab 1: Ingestion Monitoring -----------------
 with tab1:

@@ -20,6 +20,7 @@ sys.path.append(os.path.abspath("src"))
 from dbricks_lang_agent.data_platform.spark_utils import get_spark, load_config
 from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph, get_checkpoint_db_path
 from dbricks_lang_agent.orchestrator import memory
+from dbricks_lang_agent.orchestrator.agents import chat_with_data_agent, clear_profiling_cache
 from databricks.sdk import WorkspaceClient
 import io
 
@@ -275,6 +276,103 @@ st.markdown("""
             display: inline-block;
             font-size: 0.85rem;
         }
+
+        /* ---------- Talk to Data Chat UI ---------- */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 12px 0;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .chat-bubble-wrapper {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
+        .chat-bubble-wrapper.user {
+            flex-direction: row-reverse;
+        }
+
+        .chat-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .chat-avatar.bot  { background: linear-gradient(135deg, #1b3a4b, #2c5e7a); color: #fff; }
+        .chat-avatar.user { background: linear-gradient(135deg, #43a07a, #2e7d59); color: #fff; }
+
+        .chat-bubble {
+            max-width: 72%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 0.95rem;
+            line-height: 1.55;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        }
+
+        .chat-bubble.bot {
+            background: #f0f4f8;
+            border: 1px solid #d8e2ec;
+            border-bottom-left-radius: 4px;
+            color: #1a1a1a;
+        }
+
+        .chat-bubble.user {
+            background: linear-gradient(135deg, #1b3a4b, #2c5e7a);
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-profiling-badge {
+            font-size: 0.75rem;
+            color: #5a6b7c;
+            margin-top: 4px;
+            padding-left: 46px;
+        }
+
+        .chat-empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8a9ab0;
+        }
+
+        .chat-empty-state .chat-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+
+        .chat-empty-state p {
+            font-size: 1rem;
+            color: #8a9ab0 !important;
+        }
+
+        .chat-input-area {
+            border-top: 1px solid #e0e0e0;
+            padding-top: 16px;
+            margin-top: 8px;
+        }
+
+        .chat-suggestions span {
+            display: inline-block;
+            background: #f0f4f8;
+            border: 1px solid #d0dae5;
+            color: #2c3e50;
+            border-radius: 20px;
+            padding: 4px 14px;
+            margin: 4px 4px 4px 0;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -485,7 +583,145 @@ with st.sidebar.expander("🛠️ Diagnostics & Health Check"):
         st.text("No sync logs yet.")
 
 # Layout Tabs
-tab1, tab2, tab3 = st.tabs(["📊 Ingestion Monitoring", "📥 Action Center (HITL)", "🧠 Agent Memories"])
+tab0, tab1, tab2, tab3 = st.tabs([
+    "💬 Talk to Data",
+    "📊 Ingestion Monitoring",
+    "📥 Action Center (HITL)",
+    "🧠 Agent Memories"
+])
+
+# ----------------- Tab 0: Talk to Data Chatbot -----------------
+with tab0:
+    st.markdown("### 💬 Talk to Data")
+    st.markdown(
+        "Ask any question about your dataset — row counts, schemas, data quality, "
+        "relationships, pipeline status, contracts, and more. "
+        "The assistant will automatically run profiling if it needs fresh statistics."
+    )
+
+    # Initialise session-state keys
+    if "chat_history" not in st.session_state:
+        st.session_state["chat_history"] = []
+
+    # ---- Suggestion chips ----
+    suggestion_questions = [
+        "How many rows are in my dataset?",
+        "What are the column names and data types?",
+        "Are there any data quality issues?",
+        "What is the current pipeline status?",
+        "Show me the top values for categorical columns.",
+        "Describe the referential integrity between tables.",
+    ]
+    st.markdown('<div class="chat-suggestions">' +
+        "".join([f'<span>{q}</span>' for q in suggestion_questions]) +
+        "</div>", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+    # ---- Chat history display ----
+    chat_html_parts = []
+    history = st.session_state["chat_history"]
+
+    if not history:
+        chat_html_parts.append("""
+        <div class="chat-empty-state">
+            <div class="chat-empty-icon">🤖</div>
+            <p>No conversation yet. Type a question below to get started!</p>
+        </div>""")
+    else:
+        for turn in history:
+            role = turn["role"]
+            content = turn["content"]
+            prof_triggered = turn.get("profiling_triggered", False)
+
+            if role == "user":
+                chat_html_parts.append(f"""
+                <div class="chat-bubble-wrapper user">
+                    <div class="chat-avatar user">👤</div>
+                    <div class="chat-bubble user">{content}</div>
+                </div>""")
+            else:
+                # Convert newlines to <br> for HTML display and escape potential XSS
+                safe_content = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+                prof_badge = (
+                    '<div class="chat-profiling-badge">ℹ️ Fresh profiling data was fetched from your dataset to answer this question.</div>'
+                    if prof_triggered else ""
+                )
+                chat_html_parts.append(f"""
+                <div class="chat-bubble-wrapper bot">
+                    <div class="chat-avatar bot">🤖</div>
+                    <div style="flex: 1">
+                        <div class="chat-bubble bot">{safe_content}</div>
+                        {prof_badge}
+                    </div>
+                </div>""")
+
+    st.markdown(
+        '<div class="chat-container">' + "".join(chat_html_parts) + "</div>",
+        unsafe_allow_html=True
+    )
+
+    # ---- Input area ----
+    st.markdown('<div class="chat-input-area">', unsafe_allow_html=True)
+    with st.form(key="chat_form", clear_on_submit=True):
+        col_input, col_send = st.columns([5, 1])
+        with col_input:
+            user_input = st.text_input(
+                "Your question",
+                placeholder="e.g. How many rows are in the bookings table?",
+                label_visibility="collapsed",
+                key="chat_input_field"
+            )
+        with col_send:
+            send_clicked = st.form_submit_button("Send ➤", use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---- Handle submission ----
+    if send_clicked and user_input.strip():
+        question = user_input.strip()
+
+        # Append user turn
+        st.session_state["chat_history"].append({
+            "role": "user",
+            "content": question,
+            "profiling_triggered": False
+        })
+
+        # Call the agent with a spinner
+        with st.spinner("🤖 Thinking..."):
+            try:
+                # Pass a read-only copy of current state
+                current_state = app.get_state(config)
+                state_values = current_state.values if current_state.values else {}
+
+                answer, prof_triggered = chat_with_data_agent(
+                    question=question,
+                    state=state_values,
+                    history=st.session_state["chat_history"][:-1],  # exclude the just-appended user turn
+                )
+            except Exception as e_chat:
+                answer = f"⚠️ Sorry, I ran into an error: {e_chat}"
+                prof_triggered = False
+
+        # Append assistant turn
+        st.session_state["chat_history"].append({
+            "role": "assistant",
+            "content": answer,
+            "profiling_triggered": prof_triggered
+        })
+
+        st.rerun()
+
+    # ---- Utility controls ----
+    ctrl_col1, ctrl_col2, _ = st.columns([1, 1, 4])
+    with ctrl_col1:
+        if st.button("🗑️ Clear Chat", key="clear_chat_btn"):
+            st.session_state["chat_history"] = []
+            st.rerun()
+    with ctrl_col2:
+        if st.button("♻️ Reset Profile Cache", key="reset_profile_cache_btn"):
+            clear_profiling_cache()
+            st.success("Profiling cache cleared. Next data question will re-run Spark profiling.")
 
 # ----------------- Tab 1: Ingestion Monitoring -----------------
 with tab1:

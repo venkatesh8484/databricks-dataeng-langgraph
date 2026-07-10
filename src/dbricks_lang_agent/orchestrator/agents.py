@@ -513,3 +513,228 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
         "active_agent": "Orchestrator",
         "review_comments": ""
     }
+
+
+# ---- Talk to Data Chatbot Agent ----
+
+# Module-level cache dict – keyed by a hash of the volume path + mtime so the
+# profile is automatically invalidated when new source files land in the Volume.
+_profiling_cache: Dict[str, Any] = {}
+
+
+def _profiling_cache_key() -> str:
+    """Return a lightweight cache key for the profiling report.
+
+    Uses the volume path from config so that different environments naturally
+    produce different keys. A full file-mtime hash is avoided here because
+    listing the Volume inside a cache-key function would add Spark overhead
+    on every chat turn. Instead, the Streamlit UI offers a 'Clear Cache'
+    button that calls clear_profiling_cache() directly.
+    """
+    cfg = load_config()
+    return cfg.get("volume_raw_path", "default")
+
+
+def clear_profiling_cache() -> None:
+    """Evict the cached profiling report so the next chat query re-runs Spark."""
+    _profiling_cache.clear()
+
+
+def _get_or_run_profiling() -> Dict[str, Any]:
+    """Return a cached profiling report or run a fresh profiling pass.
+
+    Results are cached in the module-level ``_profiling_cache`` dict so that
+    repeated chat queries within the same Python process (i.e. the same
+    Streamlit app server instance) do not re-run Spark.
+    """
+    key = _profiling_cache_key()
+    if key not in _profiling_cache:
+        print("[Talk to Data] Running profiling to answer data query...")
+        report = profiling.profile_all_sources()
+        _profiling_cache[key] = report
+    return _profiling_cache[key]
+
+
+def _classify_intent(question: str) -> str:
+    """Use the LLM to classify the user's question into one of 7 intents."""
+    llm = get_llm("chat")
+    messages = [
+        SystemMessage(content=prompts.CHAT_INTENT_CLASSIFIER_PROMPT),
+        HumanMessage(content=question)
+    ]
+    try:
+        response = llm.invoke(messages)
+        intent = response.content.strip().lower().split()[0]
+        valid_intents = {"data_stats", "schema", "quality", "count", "sample", "pipeline_status", "general"}
+        return intent if intent in valid_intents else "general"
+    except Exception as e:
+        print(f"[Talk to Data] Intent classification failed ({e}), defaulting to 'general'.")
+        return "general"
+
+
+def _build_context(intent: str, state: AgentState, profiling_report: Dict[str, Any]) -> str:
+    """Build a rich natural-language context string for the answer LLM.
+
+    The context is tailored to the classified intent so the LLM only receives
+    data that is actually relevant to the question, keeping the prompt lean.
+    """
+    parts: List[str] = []
+
+    # --- Profiling-backed context (data_stats / schema / quality / count / sample) ---
+    profiling_intents = {"data_stats", "schema", "quality", "count", "sample"}
+    if intent in profiling_intents and profiling_report:
+        discovered = profiling_report.get("discovered_tables", {})
+        tables_profile = profiling_report.get("tables", {})
+        unique_keys = profiling_report.get("candidate_unique_keys", {})
+        dup_keys = profiling_report.get("duplicate_keys", {})
+        ri = profiling_report.get("referential_integrity", [])
+
+        # Discovered tables summary
+        if discovered:
+            lines = [f"  • {tbl} ← {fname}" for tbl, fname in discovered.items()]
+            parts.append("DISCOVERED TABLES:\n" + "\n".join(lines))
+
+        # Per-table stats
+        for tbl, profile in tables_profile.items():
+            row_count = profile.get("row_count", "N/A")
+            col_count = profile.get("column_count", "N/A")
+            cols_info = []
+            for col_name, col_stat in profile.get("columns", {}).items():
+                dtype = col_stat.get("dtype", "unknown")
+                null_pct = col_stat.get("null_pct", 0)
+                distinct = col_stat.get("distinct_count", "N/A")
+                num_stats = col_stat.get("numeric_stats")
+                val_counts = col_stat.get("value_counts")
+
+                col_line = f"    - {col_name} ({dtype}): {null_pct}% null, {distinct} distinct values"
+                if num_stats:
+                    col_line += f" | min={num_stats.get('min')}, max={num_stats.get('max')}, avg={num_stats.get('avg')}"
+                if val_counts:
+                    top_vals = ", ".join([f"'{k}' ({v})" for k, v in list(val_counts.items())[:5]])
+                    col_line += f" | top values: {top_vals}"
+                cols_info.append(col_line)
+
+            tbl_summary = (
+                f"TABLE: {tbl}\n"
+                f"  Rows: {row_count} | Columns: {col_count}\n"
+                f"  Primary key candidates: {unique_keys.get(tbl, 'none found')}\n"
+                f"  Duplicate key count: {dup_keys.get(tbl, 0)}\n"
+                f"  Column details:\n" + "\n".join(cols_info)
+            )
+            parts.append(tbl_summary)
+
+        # Referential integrity
+        if ri:
+            ri_lines = [
+                f"  • {r['table']}.{r['column']} → {r['parent_table']}.{r['parent_column']} "
+                f"(overlap: {r['overlap_pct']}%, orphans: {r['orphan_count']})"
+                for r in ri
+            ]
+            parts.append("REFERENTIAL INTEGRITY:\n" + "\n".join(ri_lines))
+
+        # Profiler narrative (if already available from a prior pipeline run)
+        narration = state.get("profiling_report", {}).get("profiler_narration", "")
+        if narration:
+            parts.append(f"PROFILER NARRATIVE:\n{narration[:1500]}")
+
+        # DQ report if available
+        dq = state.get("dq_report", "")
+        if dq and intent == "quality":
+            parts.append(f"DATA QUALITY REPORT:\n{dq[:2000]}")
+
+    # --- Pipeline-state context ---
+    if intent == "pipeline_status":
+        active_agent = state.get("active_agent", "Not started")
+        approved = state.get("approved_steps", {})
+        parts.append(
+            f"PIPELINE STATUS:\n"
+            f"  Last active agent: {active_agent}\n"
+            f"  Approved steps: {json.dumps(approved)}\n"
+            f"  Review comments: {state.get('review_comments', 'None')}"
+        )
+
+    # --- General / contracts / DDL context ---
+    if intent == "general":
+        if state.get("contracts"):
+            contracts_summary = "\n".join(
+                [f"  {tbl}:\n{yaml_str[:400]}" for tbl, yaml_str in state["contracts"].items()]
+            )
+            parts.append(f"DATA CONTRACTS (YAML):\n{contracts_summary}")
+        if state.get("gold_ddl"):
+            parts.append(f"GOLD STAR SCHEMA DDL:\n{state['gold_ddl'][:1000]}")
+        if state.get("data_dictionary"):
+            parts.append(f"DATA DICTIONARY:\n{state['data_dictionary'][:1000]}")
+        if state.get("final_report"):
+            parts.append(f"FINAL PIPELINE REPORT:\n{state['final_report'][:1500]}")
+
+    if not parts:
+        parts.append("No pipeline data available yet. The pipeline has not been run or has not produced output for this query type.")
+
+    return "\n\n".join(parts)
+
+
+def chat_with_data_agent(
+    question: str,
+    state: AgentState,
+    history: List[Dict[str, str]],
+) -> tuple:
+    """Answer a natural-language question about the dataset.
+
+    Parameters
+    ----------
+    question:
+        The user's latest question.
+    state:
+        Current LangGraph AgentState (read-only).
+    history:
+        List of previous ``{"role": "user"|"assistant", "content": str}`` dicts
+        (most recent last). Used to provide few-shot conversational context.
+
+    Returns
+    -------
+    answer : str
+        The LLM-generated answer in plain text / Markdown.
+    profiling_triggered : bool
+        ``True`` when a fresh Spark profiling job was triggered to answer this
+        question.
+    """
+    # 1. Classify intent
+    intent = _classify_intent(question)
+    print(f"[Talk to Data] Classified intent: '{intent}' for question: {question[:80]}")
+
+    # 2. Conditionally run profiling
+    profiling_report: Dict[str, Any] = {}
+    profiling_triggered = False
+    profiling_intents = {"data_stats", "schema", "quality", "count", "sample"}
+
+    if intent in profiling_intents:
+        cached_before = bool(_profiling_cache)
+        profiling_report = _get_or_run_profiling()
+        profiling_triggered = not cached_before  # True only if this call actually ran Spark
+
+    # 3. Build context string
+    context = _build_context(intent, state, profiling_report)
+
+    # 4. Build history string (last 10 turns)
+    history_lines = []
+    for turn in history[-10:]:
+        role = "User" if turn["role"] == "user" else "Assistant"
+        history_lines.append(f"{role}: {turn['content']}")
+    history_str = "\n".join(history_lines) if history_lines else "No prior conversation."
+
+    # 5. Call answer LLM
+    answer_prompt = prompts.CHAT_ANSWER_PROMPT.format(
+        context=context,
+        history=history_str,
+        question=question,
+    )
+    llm = get_llm("chat")
+    messages = [HumanMessage(content=answer_prompt)]
+    try:
+        response = llm.invoke(messages)
+        answer = response.content.strip()
+    except Exception as e:
+        answer = f"⚠️ I encountered an error while generating your answer: {e}"
+
+
+    return answer, profiling_triggered

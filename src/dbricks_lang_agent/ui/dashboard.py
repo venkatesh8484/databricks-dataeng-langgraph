@@ -39,20 +39,26 @@ def sync_db_from_volume():
     where the Volume POSIX path is not directly accessible.
     Tries POSIX access first; falls back to Databricks SDK download.
     """
+    if "sync_logs" not in st.session_state:
+        st.session_state["sync_logs"] = []
+    
     volume_db = get_volume_db_path()
     local_db = get_checkpoint_db_path()
+    st.session_state["sync_logs"].append(f"Starting sync from volume: {volume_db} to local: {local_db}")
 
     # Primary: POSIX copy (works when /Volumes/ is mounted)
     try:
         if os.path.exists(volume_db):
             import shutil
             shutil.copy2(volume_db, local_db)
-            print(f"[Info] Synced checkpoint from Volume (POSIX): {volume_db} → {local_db}")
+            msg = f"Synced checkpoint from Volume (POSIX): {volume_db} → {local_db} (Size: {os.path.getsize(local_db)} bytes)"
+            st.session_state["sync_logs"].append(msg)
+            print(f"[Info] {msg}")
             return
         else:
-            print("[Info] No checkpoint file found in Volume yet.")
-            return
+            st.session_state["sync_logs"].append(f"POSIX file does not exist: {volume_db}")
     except Exception as e_posix:
+        st.session_state["sync_logs"].append(f"POSIX Volume access failed: {e_posix}")
         print(f"[Info] POSIX Volume access failed ({e_posix}), trying SDK...")
 
     # Fallback: Databricks SDK Files API
@@ -61,16 +67,24 @@ def sync_db_from_volume():
         response = w.files.download(volume_db)
         with open(local_db, "wb") as f:
             f.write(response.contents.read())
-        print(f"[Info] Synced checkpoint via SDK to {local_db}")
+        msg = f"Synced checkpoint via SDK to {local_db} (Size: {os.path.getsize(local_db)} bytes)"
+        st.session_state["sync_logs"].append(msg)
+        print(f"[Info] {msg}")
     except Exception as e_sdk:
+        st.session_state["sync_logs"].append(f"SDK sync failed: {e_sdk}")
         print(f"[Warning] Could not sync checkpoint: {e_sdk}")
 
 def sync_db_to_volume():
     """Upload local checkpoint back to Volume after app updates state."""
+    if "sync_logs" not in st.session_state:
+        st.session_state["sync_logs"] = []
+        
     volume_db = get_volume_db_path()
     local_db = get_checkpoint_db_path()
+    st.session_state["sync_logs"].append(f"Starting sync to volume: {local_db} to {volume_db}")
 
     if not os.path.exists(local_db):
+        st.session_state["sync_logs"].append(f"Local DB does not exist: {local_db}")
         return
 
     # Primary: POSIX copy
@@ -78,9 +92,12 @@ def sync_db_to_volume():
         import shutil
         os.makedirs(os.path.dirname(volume_db), exist_ok=True)
         shutil.copy2(local_db, volume_db)
-        print(f"[Info] Synced checkpoint to Volume (POSIX): {local_db} → {volume_db}")
+        msg = f"Synced checkpoint to Volume (POSIX): {local_db} → {volume_db}"
+        st.session_state["sync_logs"].append(msg)
+        print(f"[Info] {msg}")
         return
     except Exception as e_posix:
+        st.session_state["sync_logs"].append(f"POSIX write failed: {e_posix}")
         print(f"[Info] POSIX write failed ({e_posix}), trying SDK...")
 
     # Fallback: SDK upload
@@ -89,8 +106,10 @@ def sync_db_to_volume():
         with open(local_db, "rb") as f:
             file_data = f.read()
         w.files.upload(volume_db, io.BytesIO(file_data), overwrite=True)
+        st.session_state["sync_logs"].append("Synced checkpoint to Volume via SDK.")
         print("[Info] Synced checkpoint to Volume via SDK.")
     except Exception as e_sdk:
+        st.session_state["sync_logs"].append(f"SDK upload failed: {e_sdk}")
         print(f"[Warning] Could not upload checkpoint: {e_sdk}")
 
 # Page configuration for premium visuals
@@ -208,6 +227,55 @@ if st.sidebar.button("🔄 Refresh Data"):
     sync_db_from_volume()
     refresh_graph_checkpoint()
     st.rerun()
+
+# Diagnostics & Health check in sidebar
+with st.sidebar.expander("🛠️ Diagnostics & Health Check"):
+    local_db = get_checkpoint_db_path()
+    volume_db = get_volume_db_path()
+    
+    st.markdown("**Checkpoints Sync Status:**")
+    st.write(f"Volume file exists: `{os.path.exists(volume_db)}`")
+    if os.path.exists(volume_db):
+        st.write(f"Volume size: `{os.path.getsize(volume_db)} bytes`")
+        
+    st.write(f"Local file exists: `{os.path.exists(local_db)}`")
+    if os.path.exists(local_db):
+        st.write(f"Local size: `{os.path.getsize(local_db)} bytes`")
+        
+        # Query local SQLite
+        try:
+            import sqlite3
+            conn = sqlite3.connect(local_db)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [r[0] for r in cursor.fetchall()]
+            st.write(f"Tables: `{tables}`")
+            if "checkpoints" in tables:
+                cursor.execute("SELECT thread_id, checkpoint_id, parent_checkpoint_id FROM checkpoints")
+                cps = cursor.fetchall()
+                st.write(f"Checkpoints count: `{len(cps)}`")
+                if cps:
+                    st.write("Latest checkpoints:")
+                    st.dataframe(pd.DataFrame(cps, columns=["thread_id", "checkpoint_id", "parent_id"]))
+            conn.close()
+        except Exception as e_db:
+            st.error(f"SQLite check failed: {e_db}")
+
+    st.markdown("**Graph state debug:**")
+    try:
+        st.write(f"State Pointer `state.next`: `{state.next}`")
+        st.write(f"Values present: `{bool(state.values)}`")
+        if state.values:
+            st.write(f"Active Agent: `{state.values.get('active_agent')}`")
+    except Exception as e_state:
+        st.error(f"State fetch failed: {e_state}")
+
+    st.markdown("**Sync Logs:**")
+    if "sync_logs" in st.session_state:
+        for log in st.session_state["sync_logs"][-15:]:
+            st.text(log)
+    else:
+        st.text("No sync logs yet.")
 
 # Layout Tabs
 tab1, tab2, tab3 = st.tabs(["📊 Ingestion Monitoring", "📥 Action Center (HITL)", "🧠 Agent Memories"])

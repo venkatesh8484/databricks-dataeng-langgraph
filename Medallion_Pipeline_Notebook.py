@@ -45,6 +45,7 @@ from dbricks_lang_agent.orchestrator.state import AgentState
 
 dbutils.widgets.dropdown("hitl_action", "Approve", ["Approve", "Reject"], "Human Action")
 dbutils.widgets.text("hitl_feedback", "", "Review Feedback")
+dbutils.widgets.dropdown("reset_pipeline", "False", ["True", "False"], "Reset Pipeline (Start Fresh)")
 
 # COMMAND ----------
 
@@ -182,6 +183,38 @@ def sync_db_to_volume():
             print(f"[Warning] Checkpoint database sync to volume failed (SDK): {e_sdk}")
     except Exception as e_sync:
         print(f"[Warning] Checkpoint database sync to volume failed: {e_sync}")
+
+# Check if reset is requested
+try:
+    reset_requested = dbutils.widgets.get("reset_pipeline") == "True"
+    if reset_requested:
+        print("[Reset] Wiping out local and Volume checkpoint databases to start a fresh run...")
+        local_db = "/tmp/checkpoint.db"
+        if os.path.exists(local_db):
+            os.remove(local_db)
+            
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "hospitality_catalog")
+        raw_volume = cfg.get("raw_volume", "raw/source_volume")
+        volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
+        if os.path.exists(volume_db):
+            os.remove(volume_db)
+            print(f"[Reset] Deleted Volume database file: {volume_db}")
+            
+        # Try deleting via Workspace SDK as fallback
+        try:
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            w.files.delete(volume_db)
+        except Exception:
+            pass
+            
+        # Reset widget back to False for safety
+        dbutils.widgets.remove("reset_pipeline")
+        dbutils.widgets.dropdown("reset_pipeline", "False", ["True", "False"], "Reset Pipeline (Start Fresh)")
+except Exception as e_reset:
+    print(f"[Warning] Reset check skipped: {e_reset}")
 
 # Get active state
 sync_db_from_volume()

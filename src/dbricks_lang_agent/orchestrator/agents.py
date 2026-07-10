@@ -447,6 +447,14 @@ def _sanitize_and_heal_code(code: str) -> str:
             )
             code = re.sub(loop_pattern, replacement, code, flags=re.DOTALL)
 
+    # 1.12. Fix scd2_merge return assignment (it returns table name string instead of DataFrame)
+    if "scd2_merge" in code:
+        import re
+        scd2_pattern = r"(?m)^(\s*)(\w+)\s*=\s*scd2_merge\s*\(([^,]+),\s*(['\"][^'\"]+['\"]),\s*(['\"][^'\"]+['\"]),\s*(.*?)\)"
+        if re.search(scd2_pattern, code):
+            replacement = r"\1scd2_merge(\3, \4, \5, \6)\n\1\2 = read_table(\4, \5)"
+            code = re.sub(scd2_pattern, replacement, code)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

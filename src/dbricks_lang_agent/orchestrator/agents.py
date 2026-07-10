@@ -126,7 +126,27 @@ def get_llm(node_name: str) -> Any:
 
 def parse_json_from_response(content: str) -> dict:
     """Safely extract and parse JSON block from model response."""
-    cleaned = content.strip()
+    import re
+    content_str = content.strip()
+    
+    # 1. Try to find json code block first
+    code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content_str, re.DOTALL)
+    if code_block_match:
+        try:
+            return json.loads(code_block_match.group(1).strip())
+        except Exception:
+            pass
+            
+    # 2. Find the first '{' and the last '}' (greedy match)
+    brace_match = re.search(r"(\{.*\})", content_str, re.DOTALL)
+    if brace_match:
+        try:
+            return json.loads(brace_match.group(1).strip())
+        except Exception:
+            pass
+            
+    # 3. Fallback to parsing the stripped content directly
+    cleaned = content_str
     if cleaned.startswith("```json"):
         cleaned = cleaned[7:]
     if cleaned.endswith("```"):

@@ -307,7 +307,7 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
     contracts = parsed.get("contracts", {})
     
     # Write the YAML contracts to disk so that they are visible in generated/config/contracts
-    contracts_dir = "./generated/config/contracts"
+    contracts_dir = "/tmp/generated/config/contracts"
     os.makedirs(contracts_dir, exist_ok=True)
     for table, yaml_str in contracts.items():
         with open(os.path.join(contracts_dir, f"{table}.yaml"), "w") as f:
@@ -349,7 +349,7 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
     data_dictionary = parsed.get("data_dictionary", "")
     
     # Write SQL and Markdown DDL files
-    ddl_dir = "./generated/data_model"
+    ddl_dir = "/tmp/generated/data_model"
     os.makedirs(ddl_dir, exist_ok=True)
     with open(os.path.join(ddl_dir, "gold_ddl.sql"), "w") as f:
         f.write(gold_ddl)
@@ -394,7 +394,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     gold = parsed.get("gold_code", "")
 
     # Save code files to generated directory
-    code_dir = "./generated/data_platform"
+    code_dir = "/tmp/generated/data_platform"
     os.makedirs(code_dir, exist_ok=True)
     with open(os.path.join(code_dir, "bronze.py"), "w") as f:
         f.write(bronze)
@@ -416,7 +416,7 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     """Runs the generated scripts and compiles the final orchestrator report."""
     print(">>> [Orchestrator] Executing PySpark scripts on Databricks...")
     
-    code_dir = "./generated/data_platform"
+    code_dir = "/tmp/generated/data_platform"
     scripts = ["bronze.py", "silver.py", "gold.py"]
     logs = {}
     

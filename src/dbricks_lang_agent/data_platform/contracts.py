@@ -19,7 +19,12 @@ from .spark_utils import load_config
 
 def get_contracts_dir() -> str:
     """Find the directory containing the YAML contracts."""
-    # We store them in the 'generated/config/contracts' folder under project root
+    # 1. Check the /tmp/generated path first (always used in Databricks environments)
+    tmp_candidate = "/tmp/generated/config/contracts"
+    if os.path.exists(tmp_candidate):
+        return tmp_candidate
+
+    # 2. Fallback: Search workspace directory structures
     cur_dir = os.path.dirname(os.path.abspath(__file__))
     for _ in range(5):
         candidate = os.path.join(cur_dir, "generated", "config", "contracts")

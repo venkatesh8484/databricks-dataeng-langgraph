@@ -455,6 +455,15 @@ def _sanitize_and_heal_code(code: str) -> str:
             replacement = r"\1scd2_merge(\3, \4, \5, \6)\n\1\2 = read_table(\4, \5)"
             code = re.sub(scd2_pattern, replacement, code)
 
+    # 1.13. Fix typeName() hallucination on string tuple from dtypes
+    if "typeName" in code:
+        import re
+        code = re.sub(
+            r"(\w+(?:\[\d+\])?)\.typeName\(\)\s*==\s*['\"](?:StringType|string)['\"]",
+            r"\1 == 'string'",
+            code
+        )
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

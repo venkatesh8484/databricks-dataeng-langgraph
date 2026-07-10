@@ -194,8 +194,6 @@ def validate_table(df: DataFrame, contract: Dict[str, Any], parent_dfs: Dict[str
             any_fail = F.col(c) if any_fail is None else (any_fail | F.col(c))
         work = work.withColumn("_any_fail", any_fail)
         
-        # Cache for performance during metric counts
-        work = work.cache()
 
         agg_exprs = [F.count(F.lit(1)).alias("_total"), F.sum(F.col("_any_fail").cast("long")).alias("_total_bad")]
         agg_exprs += [F.sum(F.col(c).cast("long")).alias(c) for c in bad_masks]

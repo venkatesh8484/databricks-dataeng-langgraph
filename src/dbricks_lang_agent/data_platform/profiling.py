@@ -227,20 +227,20 @@ def profile_all_sources(output_path: Optional[str] = None) -> Dict[str, Any]:
     """Execute profile checks across all discovered sources.
     
     Performance optimizations applied:
-    - DataFrames are cached after load so repeated scans hit memory.
     - profile_dataframe runs ONE aggregation pass; row_count and PK stats
       are extracted from that result instead of firing extra Spark actions.
     - duplicate_key_count is skipped when there are no PK candidates.
-    - DataFrames are unpersisted after use to free executor memory.
+    Note: .cache()/.unpersist() are intentionally omitted — PERSIST TABLE is
+    not supported on Databricks Serverless compute (SQLSTATE: 0A000).
     """
     spark = get_spark()
     discovered_tables = discover_source_tables()
 
-    # Load and cache all source DataFrames up-front
-    dfs: Dict[str, DataFrame] = {}
-    for t_name, fname in discovered_tables.items():
-        df = load_source(spark, fname).cache()
-        dfs[t_name] = df
+    # Load all source DataFrames
+    dfs: Dict[str, DataFrame] = {
+        t_name: load_source(spark, fname)
+        for t_name, fname in discovered_tables.items()
+    }
 
     tables_profile: Dict[str, Any] = {}
     unique_keys: Dict[str, List[str]] = {}
@@ -272,12 +272,8 @@ def profile_all_sources(output_path: Optional[str] = None) -> Dict[str, Any]:
         else:
             dup_keys[t_name] = 0
 
-    # Discover Foreign Keys (uses cached DataFrames)
+    # Discover Foreign Keys
     fks = discover_foreign_keys(dfs, unique_keys)
-
-    # Free cached DataFrames from executor memory
-    for df in dfs.values():
-        df.unpersist()
 
     # Compile Full Profiling Report
     report = {

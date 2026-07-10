@@ -163,9 +163,12 @@ st.markdown("""
             color: #1a1a1a !important;
         }
         
-        /* Style the sidebar */
-        [data-testid="stSidebar"] {
+        /* Style the sidebar container and sidebar elements */
+        [data-testid="stSidebar"], [data-testid="stSidebar"] div, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
             background-color: #f7f9fa !important;
+            color: #2c3e50 !important;
+        }
+        [data-testid="stSidebar"] {
             border-right: 1px solid #e0e0e0 !important;
         }
 
@@ -175,7 +178,7 @@ st.markdown("""
         }
         
         /* Headers styling */
-        h1, h2, h3, h4, h5, h6, .stMarkdown p {
+        h1, h2, h3, h4, h5, h6, .stMarkdown p, p {
             color: #2c3e50 !important;
         }
         
@@ -192,6 +195,49 @@ st.markdown("""
             color: #5a6b7c;
             font-size: 1.1rem;
             margin-bottom: 1.5rem;
+        }
+        
+        /* Streamlit Tabs styling with high contrast inactive tabs */
+        button[data-baseweb="tab"] {
+            color: #5a6b7c !important;
+            font-size: 1.05rem !important;
+            font-weight: 600 !important;
+            opacity: 0.75 !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            color: #1b3a4b !important;
+            border-bottom-color: #1b3a4b !important;
+            opacity: 1.0 !important;
+        }
+        button[data-baseweb="tab"]:hover {
+            color: #1b3a4b !important;
+            opacity: 1.0 !important;
+        }
+        
+        /* Streamlit Alerts / Info Notifications styling with dark text */
+        .stAlert, [data-testid="stNotification"], [data-testid="stAlert"] {
+            background-color: #e3f2fd !important;
+            border: 1px solid #bbdefb !important;
+            border-radius: 8px !important;
+        }
+        .stAlert p, [data-testid="stNotification"] p, [data-testid="stAlert"] p, .stAlert div, [data-testid="stNotification"] div {
+            color: #0d47a1 !important;
+            font-weight: 500 !important;
+        }
+        
+        /* High contrast styled Streamlit Buttons */
+        div[data-testid="stButton"] button {
+            background-color: #ffffff !important;
+            color: #2c3e50 !important;
+            border: 1px solid #c0c0c0 !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+        }
+        div[data-testid="stButton"] button:hover {
+            background-color: #f0f4f8 !important;
+            border-color: #1b3a4b !important;
+            color: #1b3a4b !important;
         }
         
         /* Light themed metric cards */

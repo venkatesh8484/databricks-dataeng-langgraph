@@ -228,6 +228,37 @@ if st.sidebar.button("🔄 Refresh Data"):
     refresh_graph_checkpoint()
     st.rerun()
 
+# Reset button
+if st.sidebar.button("🗑️ Reset Pipeline / Start Fresh", type="secondary"):
+    local_db = get_checkpoint_db_path()
+    volume_db = get_volume_db_path()
+    
+    # 1. Delete local checkpoint DB
+    if os.path.exists(local_db):
+        try:
+            os.remove(local_db)
+        except Exception:
+            pass
+            
+    # 2. Delete Volume checkpoint DB
+    if os.path.exists(volume_db):
+        try:
+            os.remove(volume_db)
+        except Exception:
+            pass
+            
+    # 3. Try deleting via Workspace SDK
+    try:
+        from databricks.sdk import WorkspaceClient
+        w = WorkspaceClient(profile="venkatesh8484")
+        w.files.delete(volume_db)
+    except Exception:
+        pass
+        
+    st.session_state["sync_logs"] = ["Pipeline reset. Database deleted from local disk and UC Volume."]
+    refresh_graph_checkpoint()
+    st.rerun()
+
 # Diagnostics & Health check in sidebar
 with st.sidebar.expander("🛠️ Diagnostics & Health Check"):
     local_db = get_checkpoint_db_path()

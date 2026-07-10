@@ -157,52 +157,72 @@ st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
         
+        /* Force light theme colors on Streamlit main container */
+        [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
+            background-color: #ffffff !important;
+            color: #1a1a1a !important;
+        }
+        
+        /* Style the sidebar */
+        [data-testid="stSidebar"] {
+            background-color: #f7f9fa !important;
+            border-right: 1px solid #e0e0e0 !important;
+        }
+
         html, body, [class*="css"] {
             font-family: 'Outfit', sans-serif;
+            color: #1a1a1a !important;
+        }
+        
+        /* Headers styling */
+        h1, h2, h3, h4, h5, h6, .stMarkdown p {
+            color: #2c3e50 !important;
         }
         
         .main-title {
-            font-size: 3rem;
+            font-size: 2.8rem;
             font-weight: 800;
-            background: linear-gradient(135deg, #FF4B4B 0%, #FF8F8F 100%);
+            background: linear-gradient(135deg, #1b3a4b 0%, #2c5e7a 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 0.5rem;
         }
         
         .subtitle {
-            color: #888888;
-            font-size: 1.2rem;
-            margin-bottom: 2rem;
+            color: #5a6b7c;
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
         }
         
+        /* Light themed metric cards */
         .metric-card {
-            background-color: #1e1e1e;
+            background-color: #ffffff;
             padding: 1.5rem;
             border-radius: 12px;
-            border: 1px solid #333333;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.03);
             text-align: center;
         }
         
         .metric-value {
-            font-size: 2.2rem;
-            font-weight: 700;
-            color: #FF4B4B;
+            font-size: 2.4rem;
+            font-weight: 800;
+            color: #1b3a4b;
         }
         
         .metric-label {
-            font-size: 0.9rem;
-            color: #888888;
+            font-size: 0.85rem;
+            color: #5a6b7c;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
             margin-top: 0.5rem;
+            font-weight: 600;
         }
         
         .agent-badge {
-            background-color: #2e2e2e;
-            border: 1px solid #FF4B4B;
-            color: #FF8F8F;
+            background-color: #f0f4f8;
+            border: 1px solid #2c3e50;
+            color: #2c3e50;
             padding: 0.3rem 0.8rem;
             border-radius: 20px;
             font-weight: 600;
@@ -248,6 +268,84 @@ st.markdown('<p class="subtitle">Unity Catalog Governed Multi-Agent Data Enginee
 
 # Fetch Current Graph State
 state = app.get_state(config)
+
+# ----------------- Pipeline Lineage Status Bar -----------------
+stages = [
+    {"name": "1. Profiler", "gate": "profile_review_gate"},
+    {"name": "2. Data Quality", "gate": "data_quality_review_gate"},
+    {"name": "3. Contracts", "gate": "contracts_review_gate"},
+    {"name": "4. Modeler", "gate": "modeling_review_gate"},
+    {"name": "5. Engineer", "gate": "engineering_review_gate"},
+    {"name": "6. Orchestrator", "gate": "execution_review_gate"}
+]
+
+# Calculate stage statuses: completed (Green), review (Amber), pending (Grey)
+stage_statuses = []
+if not state.values:
+    stage_statuses = ["pending"] * len(stages)
+else:
+    current_gate = state.next[0] if state.next else None
+    if not current_gate:
+        # Check if the pipeline has finished
+        if "final_report" in state.values:
+            stage_statuses = ["completed"] * len(stages)
+        else:
+            stage_statuses = ["pending"] * len(stages)
+    else:
+        # Find index of current gate
+        gate_idx = -1
+        for idx, s in enumerate(stages):
+            if s["gate"] == current_gate:
+                gate_idx = idx
+                break
+        for idx, s in enumerate(stages):
+            if idx < gate_idx:
+                stage_statuses.append("completed")
+            elif idx == gate_idx:
+                stage_statuses.append("review")
+            else:
+                stage_statuses.append("pending")
+
+# Render progress lineage columns
+st.markdown("<h4 style='color: #2c3e50; margin-bottom: 12px;'>🗺️ Agent Lineage & Progress Flow</h4>", unsafe_allow_html=True)
+cols = st.columns(len(stages))
+for i, stage in enumerate(stages):
+    status = stage_statuses[i]
+    if status == "completed":
+        bg_color = "#e8f5e9"
+        border_color = "#81c784"
+        text_color = "#2e7d32"
+        badge = "🟢 Completed"
+    elif status == "review":
+        bg_color = "#fff8e1"
+        border_color = "#ffb74d"
+        text_color = "#ef6c00"
+        badge = "🟡 In Review"
+    else:
+        bg_color = "#f5f5f5"
+        border_color = "#e0e0e0"
+        text_color = "#757575"
+        badge = "⚪ Pending"
+
+    with cols[i]:
+        st.markdown(f"""
+            <div style="
+                background-color: {bg_color};
+                border: 2px solid {border_color};
+                border-radius: 10px;
+                padding: 12px;
+                text-align: center;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+                margin-bottom: 20px;
+            ">
+                <div style="font-size: 0.75rem; font-weight: bold; color: {text_color}; text-transform: uppercase; margin-bottom: 6px;">
+                    {badge}
+                </div>
+                <div style="font-size: 0.95rem; font-weight: 700; color: #2c3e50;">
+                    {stage["name"]}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
 # Sidebar with Status Overview
 st.sidebar.markdown("### Ingestion Settings")

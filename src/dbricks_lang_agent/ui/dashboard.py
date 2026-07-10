@@ -411,49 +411,53 @@ with tab2:
         feedback = st.text_area("Review Feedback / Comments", placeholder="Enter comments or instructions if rejecting, or additional context...")
         
         if st.button("Submit & Resume Pipeline"):
-            if step_key:
-                approvals = dict(state.values.get("approved_steps", {}))
-                
-                if action == "Approve":
-                    st.success(f"Approving step '{step_key}'...")
-                    approvals[step_key] = True
-                    comments = ""
+            try:
+                if step_key:
+                    approvals = dict(state.values.get("approved_steps", {}))
                     
-                    # Log approval to memory Delta Table
-                    try:
-                        dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
-                        issue_type = "data_quality" if step_key == "dq" else step_key
-                        resolution = f"Approved {step_key} design"
-                        memory.log_approval(spark, dataset, issue_type, [], resolution, feedback)
-                    except Exception as e:
-                        st.warning(f"Unable to log memory to table: {e}")
+                    if action == "Approve":
+                        st.success(f"Approving step '{step_key}'...")
+                        approvals[step_key] = True
+                        comments = ""
+                        
+                        # Log approval to memory Delta Table
+                        try:
+                            dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
+                            issue_type = "data_quality" if step_key == "dq" else step_key
+                            resolution = f"Approved {step_key} design"
+                            memory.log_approval(spark, dataset, issue_type, [], resolution, feedback)
+                        except Exception as e:
+                            st.warning(f"Unable to log memory to table: {e}")
+                    else:
+                        st.error(f"Rejecting step '{step_key}'...")
+                        approvals[step_key] = False
+                        comments = feedback
+                        
+                    # Update graph checkpointer state
+                    app.update_state(
+                        config,
+                        {
+                            "approved_steps": approvals,
+                            "review_comments": comments
+                        }
+                    )
+                    
+                    # Resume execution in background thread / stream
+                    with st.spinner("Resuming pipeline execution with new state context... Please wait..."):
+                        events = app.stream(None, config, stream_mode="values")
+                        for event in events:
+                            pass
+                    
+                    # Sync state back to Unity Catalog Volume
+                    sync_db_to_volume()
+                    
+                    st.success("Pipeline resumed! Refreshing dashboard...")
+                    st.rerun()
                 else:
-                    st.error(f"Rejecting step '{step_key}'...")
-                    approvals[step_key] = False
-                    comments = feedback
-                    
-                # Update graph checkpointer state
-                app.update_state(
-                    config,
-                    {
-                        "approved_steps": approvals,
-                        "review_comments": comments
-                    }
-                )
-                
-                # Resume execution in background thread / stream
-                with st.spinner("Resuming pipeline execution with new state context... Please wait..."):
-                    events = app.stream(None, config, stream_mode="values")
-                    for event in events:
-                        pass
-                
-                # Sync state back to Unity Catalog Volume
-                sync_db_to_volume()
-                
-                st.success("Pipeline resumed! Refreshing dashboard...")
-                st.rerun()
-            else:
-                st.error("Invalid state. Unable to route step mapping approvals.")
+                    st.error("Invalid state. Unable to route step mapping approvals.")
+            except Exception as e_click:
+                st.error("Execution error during Submit & Resume:")
+                st.exception(e_click)
 
 # ----------------- Tab 3: Agent Memories -----------------
 with tab3:

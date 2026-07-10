@@ -10,8 +10,7 @@
 # MAGIC # Databricks + LangGraph Medallion Pipeline
 # MAGIC This notebook runs the multi-agent Medallion pipeline using LangGraph, governed by Unity Catalog.
 # MAGIC Execution runs sequentially and halts for Human-in-the-Loop review before each layer promotion.
-
-# MAGIC %pip install langgraph>=0.1.0 langchain>=0.2.0 langchain-community>=0.2.0 databricks-sdk>=0.28.0 pyyaml>=6.0 typing-extensions>=4.13.0
+# MAGIC %pip install langgraph>=0.1.0 langchain>=0.2.0 langchain-community>=0.2.0 databricks-sdk>=0.28.0 pyyaml>=6.0 typing-extensions>=4.13.0 databricks-langchain
 
 # COMMAND ----------
 

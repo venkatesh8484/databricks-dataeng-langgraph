@@ -13,7 +13,7 @@ import yaml
 import subprocess
 from typing import Dict, Any, List
 
-from langchain_community.chat_models import ChatDatabricks
+from databricks_langchain import ChatDatabricks
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from dbricks_lang_agent.data_platform.spark_utils import load_config

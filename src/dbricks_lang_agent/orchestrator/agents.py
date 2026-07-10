@@ -152,7 +152,16 @@ def parse_json_from_response(content: str) -> dict:
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3]
     cleaned = cleaned.strip()
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except Exception as e_direct:
+        raise ValueError(
+            f"Failed to parse JSON from LLM response.\n"
+            f"Parser error: {e_direct}\n"
+            f"Response content length: {len(content_str)}\n"
+            f"Response content snippet (first 1000 chars):\n"
+            f"{content_str[:1000]}"
+        ) from e_direct
 
 
 # ---- Node Functions ----

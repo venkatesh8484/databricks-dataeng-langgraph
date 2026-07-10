@@ -32,7 +32,9 @@ class MockChatModel:
                 self.content = content
         
         # Determine node name and return dummy but valid structured outputs
-        if self.node_name == "contracts":
+        if self.node_name == "dq":
+            return MockResponse("# Mock Data Quality Report\nNo critical anomalies found. Schema profiles look stable.")
+        elif self.node_name == "contracts":
             contracts_data = {
                 "contracts": {
                     "dummy_table": (
@@ -177,6 +179,35 @@ def profiler_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
+def dq_node(state: AgentState) -> Dict[str, Any]:
+    """Data Quality Agent Node: Checks for logical and physical data anomalies."""
+    print(">>> [Data Quality Agent] Assessing raw source data quality...")
+    
+    profiling_narration = state["profiling_report"].get("profiler_narration", "")
+    profiling_metrics = state["profiling_report"]
+    
+    prompt = (
+        f"Data Profiler Report Narrative:\n{profiling_narration}\n\n"
+        f"Raw Metrics JSON:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}"
+    )
+    if state.get("review_comments"):
+        prompt += f"\n\nHuman feedback on previous DQ assessment:\n{state['review_comments']}"
+        
+    messages = [
+        SystemMessage(content=prompts.DQ_SYSTEM_PROMPT),
+        HumanMessage(content=prompt)
+    ]
+    
+    llm = get_llm("dq")
+    response = llm.invoke(messages)
+    
+    return {
+        "dq_report": response.content,
+        "active_agent": "DataQualityAgent",
+        "review_comments": ""
+    }
+
+
 def contract_node(state: AgentState) -> Dict[str, Any]:
     """Steward designs and authors YAML schema data contracts."""
     print(">>> [Contract Steward] Authoring YAML schema data contracts...")
@@ -186,6 +217,7 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
     
     prompt = (
         f"Data Profiling Report:\n{profiling_narration}\n\n"
+        f"Data Quality Assessment Report:\n{state.get('dq_report', '')}\n\n"
         f"Raw Metrics:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n"
     )
     if state.get("review_comments"):

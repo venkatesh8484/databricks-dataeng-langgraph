@@ -68,6 +68,10 @@ def print_artifacts(state_values):
         print("\n### Inferred Schemas & Table Grains:")
         print(json.dumps(state_values.get("discovered_tables", {}), indent=2))
         
+    elif agent == "DataQualityAgent":
+        print("### Data Quality Assessment Report:")
+        print(state_values.get("dq_report", "No DQ report found."))
+        
     elif agent == "ContractSteward":
         print("### Authored YAML Data Contracts:")
         contracts = state_values.get("contracts", {})
@@ -132,6 +136,7 @@ else:
     # Map next node to corresponding step approval flag
     step_mapping = {
         "profile_review_gate": "profile",
+        "data_quality_review_gate": "dq",
         "contracts_review_gate": "contracts",
         "modeling_review_gate": "modeling",
         "engineering_review_gate": "engineering",

@@ -28,11 +28,12 @@ class AgentState(TypedDict):
     silver_summary: Dict[str, Any]      # promoting/quarantine counts from silver
     gold_summary: Dict[str, Any]        # gold loading details
     final_report: str                   # Executive run report (markdown)
+    dq_report: str                      # Data Quality Assessment report (markdown)
     
     # Human-in-the-Loop review and orchestration state
     active_agent: str                   # Name of the currently executing agent node
     review_comments: str                # Human feedback entered during rejection
-    approved_steps: Dict[str, bool]     # Step approvals: 'profile', 'contracts', 'modeling', 'engineering', 'report'
+    approved_steps: Dict[str, bool]     # Step approvals: 'profile', 'dq', 'contracts', 'modeling', 'engineering', 'report'
     
     # LangGraph routing variables
     loop_count: int                     # Tracking recursion/retries for fixing script failures

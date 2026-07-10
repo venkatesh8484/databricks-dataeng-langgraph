@@ -14,6 +14,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from .state import AgentState
 from .agents import (
     profiler_node,
+    dq_node,
     contract_node,
     modeling_node,
     engineering_node,
@@ -24,6 +25,10 @@ from .agents import (
 
 def profile_review_gate(state: AgentState) -> Dict[str, Any]:
     return {"active_agent": "Profiler"}
+
+
+def data_quality_review_gate(state: AgentState) -> Dict[str, Any]:
+    return {"active_agent": "DataQualityAgent"}
 
 
 def contracts_review_gate(state: AgentState) -> Dict[str, Any]:
@@ -48,8 +53,16 @@ def route_after_profiler(state: AgentState) -> str:
     """Route after profile_review_gate node runs."""
     approvals = state.get("approved_steps", {})
     if approvals.get("profile") is True:
-        return "contracts"
+        return "data_quality"
     return "profiler"  # Route back to profiler if rejected/unapproved
+
+
+def route_after_dq(state: AgentState) -> str:
+    """Route after data_quality_review_gate node runs."""
+    approvals = state.get("approved_steps", {})
+    if approvals.get("dq") is True:
+        return "contracts"
+    return "data_quality"  # Route back to data_quality node if rejected
 
 
 def route_after_contracts(state: AgentState) -> str:
@@ -100,6 +113,7 @@ def create_pipeline_graph():
 
     # Register Agent Nodes
     workflow.add_node("profiler", profiler_node)
+    workflow.add_node("data_quality", dq_node)
     workflow.add_node("contracts", contract_node)
     workflow.add_node("modeling", modeling_node)
     workflow.add_node("engineering", engineering_node)
@@ -107,6 +121,7 @@ def create_pipeline_graph():
 
     # Register Gate Nodes
     workflow.add_node("profile_review_gate", profile_review_gate)
+    workflow.add_node("data_quality_review_gate", data_quality_review_gate)
     workflow.add_node("contracts_review_gate", contracts_review_gate)
     workflow.add_node("modeling_review_gate", modeling_review_gate)
     workflow.add_node("engineering_review_gate", engineering_review_gate)
@@ -115,14 +130,25 @@ def create_pipeline_graph():
     # Wire Edges
     workflow.add_edge(START, "profiler")
     
-    # Profiler -> Gate -> Contract
+    # Profiler -> Gate -> Data Quality
     workflow.add_edge("profiler", "profile_review_gate")
     workflow.add_conditional_edges(
         "profile_review_gate",
         route_after_profiler,
         {
-            "contracts": "contracts",
+            "data_quality": "data_quality",
             "profiler": "profiler"
+        }
+    )
+
+    # Data Quality -> Gate -> Contracts
+    workflow.add_edge("data_quality", "data_quality_review_gate")
+    workflow.add_conditional_edges(
+        "data_quality_review_gate",
+        route_after_dq,
+        {
+            "contracts": "contracts",
+            "data_quality": "data_quality"
         }
     )
 
@@ -179,6 +205,7 @@ def create_pipeline_graph():
         checkpointer=memory,
         interrupt_before=[
             "profile_review_gate", 
+            "data_quality_review_gate",
             "contracts_review_gate", 
             "modeling_review_gate", 
             "engineering_review_gate", 

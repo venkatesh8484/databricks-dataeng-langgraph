@@ -21,9 +21,23 @@ Based on the raw data profiling metrics, write a report detailing:
 Ground all observations in exact numbers from the metrics. Avoid vague summaries ("some columns have nulls"). State specific numbers.
 """
 
+DQ_SYSTEM_PROMPT = """
+You are a Senior Data Quality Engineer.
+Your goal is to inspect the JSON profiling metrics and the Profiler's report narrative to identify specific data quality anomalies and issues BEFORE any transformation happens.
+
+Analyze the data quality indicators and output a Markdown report detailing:
+1. **Critical Schema Anomalies**: Missing keys, unexpected datatypes, or structures that might break ingestion.
+2. **Missing & Empty Values**: Columns that have high null rates and could cause runtime issues if not handled by contracts.
+3. **Cardinality & Range Deviations**: Outliers, negative numeric values where only positive values are expected, or values outside of valid domains.
+4. **Referential Integrity Issues**: Orphan counts in candidate foreign keys (e.g. child IDs pointing to non-existent parent rows) and their severity.
+5. **Business Logic Inconsistencies**: Highlight fields that have logical dependencies which should be governed by contracts (e.g., end dates before start dates, negative pricing, mismatched codes).
+
+Outline which tables have high-risk issues that should be addressed with "hard" vs "soft" validation constraints during Silver promotion.
+"""
+
 CONTRACT_SYSTEM_PROMPT = """
 You are a Data Contract & Governance Steward.
-Your goal is to author machine-readable YAML data contracts for every table discovered, based on the Data Profiling Report and any previous human feedback.
+Your goal is to author machine-readable YAML data contracts for every table discovered, based on the Data Profiling Report, the Data Quality Assessment Report, and any previous human feedback.
 
 For each table, output a valid YAML schema conforming to the following structure:
 ```yaml

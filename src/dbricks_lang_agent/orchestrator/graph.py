@@ -8,8 +8,12 @@ Uses explicit review gate nodes to prevent tight infinite loop routing.
 from __future__ import annotations
 
 from typing import Dict, Any, Literal
+import os
+import sqlite3
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+from dbricks_lang_agent.data_platform.spark_utils import load_config
 
 from .state import AgentState
 from .agents import (
@@ -105,6 +109,23 @@ def route_after_execution(state: AgentState) -> str:
     return END
 
 
+def get_checkpoint_db_path() -> str:
+    """Return the shared checkpoint database path, falling back to local path if Volumes are not mounted."""
+    try:
+        cfg = load_config()
+        catalog = cfg.get("catalog", "hospitality_catalog")
+        raw_volume = cfg.get("raw_volume", "raw/source_volume")
+        # In Databricks, volume raw path can also be configured directly
+        volume_dir = cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}")
+        
+        if os.path.exists(volume_dir):
+            return os.path.join(volume_dir, "checkpoint.db")
+    except Exception:
+        pass
+    os.makedirs("./generated/config", exist_ok=True)
+    return "./generated/config/checkpoint.db"
+
+
 # ---- Graph Compilation ----
 
 def create_pipeline_graph():
@@ -196,8 +217,12 @@ def create_pipeline_graph():
         }
     )
 
-    # Setup Memory for Human-In-The-Loop Checkpointing
-    memory = MemorySaver()
+    # Setup Persistent Sqlite Checkpointer for sharing state between notebook and dashboard app
+    db_path = get_checkpoint_db_path()
+
+    print(f"[Info] LangGraph Checkpointer using Sqlite database: {db_path}")
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    memory = SqliteSaver(conn)
 
     # Compile the graph. Breakpoints are placed BEFORE each review gate node,
     # forcing the graph to pause execution and yield control back to the notebook runner.

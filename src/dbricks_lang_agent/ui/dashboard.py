@@ -18,8 +18,51 @@ from datetime import datetime
 sys.path.append(os.path.abspath("src"))
 
 from dbricks_lang_agent.data_platform.spark_utils import get_spark, load_config
-from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph
+from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph, get_checkpoint_db_path
 from dbricks_lang_agent.orchestrator import memory
+from databricks.sdk import WorkspaceClient
+import io
+
+def sync_db_from_volume():
+    """Download checkpoint.db from the shared UC Volume using Databricks SDK (FUSE is not mounted in App container)."""
+    # Always sync if DATABRICKS_APP_NAME is set, meaning we are inside the App environment
+    if os.environ.get("DATABRICKS_APP_NAME"):
+        try:
+            cfg = load_config()
+            catalog = cfg.get("catalog", "hospitality_catalog")
+            raw_volume = cfg.get("raw_volume", "raw/source_volume")
+            # In Databricks, volume raw path can also be configured directly
+            volume_db_path = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
+            local_db_path = get_checkpoint_db_path()
+            
+            w = WorkspaceClient()
+            try:
+                response = w.files.download(volume_db_path)
+                with open(local_db_path, "wb") as f:
+                    f.write(response.contents.read())
+                print(f"[Debug] Successfully downloaded volume checkpoint to {local_db_path}")
+            except Exception as e_dl:
+                print(f"[Debug] Could not download checkpoint (might not exist yet): {e_dl}")
+        except Exception as e:
+            print(f"[Warning] Failed to sync db from volume: {e}")
+
+def sync_db_to_volume():
+    """Upload checkpoint.db to the shared UC Volume using Databricks SDK."""
+    if os.environ.get("DATABRICKS_APP_NAME"):
+        try:
+            cfg = load_config()
+            catalog = cfg.get("catalog", "hospitality_catalog")
+            raw_volume = cfg.get("raw_volume", "raw/source_volume")
+            volume_db_path = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
+            local_db_path = get_checkpoint_db_path()
+            
+            w = WorkspaceClient()
+            with open(local_db_path, "rb") as f:
+                file_data = f.read()
+            w.files.upload(volume_db_path, io.BytesIO(file_data), overwrite=True)
+            print(f"[Debug] Successfully uploaded local checkpoint to volume.")
+        except Exception as e:
+            print(f"[Warning] Failed to sync db to volume: {e}")
 
 # Page configuration for premium visuals
 st.set_page_config(
@@ -97,6 +140,7 @@ def get_spark_session():
 
 @st.cache_resource
 def get_graph():
+    sync_db_from_volume()
     return create_pipeline_graph()
 
 spark = get_spark_session()
@@ -119,6 +163,7 @@ st.sidebar.info(f"**Unity Catalog**: {catalog_config.get('catalog', 'hospitality
 
 # Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
+    sync_db_from_volume()
     st.rerun()
 
 # Layout Tabs
@@ -290,6 +335,9 @@ with tab2:
                     events = app.stream(None, config, stream_mode="values")
                     for event in events:
                         pass
+                
+                # Sync state back to Unity Catalog Volume
+                sync_db_to_volume()
                 
                 st.success("Pipeline resumed! Refreshing dashboard...")
                 st.rerun()

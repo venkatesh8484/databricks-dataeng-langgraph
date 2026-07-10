@@ -23,6 +23,11 @@ import json
 # Ensure project root is on Python path
 sys.path.append(os.path.abspath("src"))
 
+# Force reload custom package modules to prevent Databricks caching old code in memory
+for mod in list(sys.modules.keys()):
+    if mod.startswith("dbricks_lang_agent"):
+        del sys.modules[mod]
+
 from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph
 from dbricks_lang_agent.orchestrator.state import AgentState
 

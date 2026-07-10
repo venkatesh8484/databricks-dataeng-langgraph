@@ -436,8 +436,11 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     
     # Set PYTHONPATH relative to execution
     env = os.environ.copy()
-    project_root = os.path.abspath(os.getcwd())
-    env["PYTHONPATH"] = project_root + os.pathsep + env.get("PYTHONPATH", "")
+    # Resolve the src directory relative to this file's location to be robust across environments
+    current_file_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.abspath(os.path.join(current_file_dir, "..", ".."))
+    project_root = os.path.abspath(os.path.join(src_dir, ".."))
+    env["PYTHONPATH"] = src_dir + os.pathsep + project_root + os.pathsep + env.get("PYTHONPATH", "")
 
     for s in scripts:
         path = os.path.join(code_dir, s)

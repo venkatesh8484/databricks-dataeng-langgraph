@@ -22,3 +22,5 @@ spark-warehouse/
 .DS_Store?
 ehthumbs.db
 Thumbs.db
+
+.databricks

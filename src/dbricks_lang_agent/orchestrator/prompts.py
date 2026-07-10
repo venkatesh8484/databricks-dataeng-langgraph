@@ -137,7 +137,7 @@ Script Requirements:
 3. **gold.py**:
    - Reads silver tables.
    - Constructs Kimball dimensions and fact tables based on the dimensional model.
-   - Uses `scd2_merge` for SCD Type 2 dimensions to track changes.
+   - Uses `scd2_merge` for SCD Type 2 dimensions to track changes. Note that `scd2_merge` has the signature: `scd2_merge(new_df: DataFrame, schema: str, table: str, business_key: str, tracked_cols: List[str], surrogate_key_col: str) -> str`. Make sure you pass all 6 arguments: `schema` is always `"gold"`, `table` is the gold dimension table name (e.g. `'dim_customer'`), `business_key` is the natural key column name (e.g. `'customer_id'`), `tracked_cols` is a list of column names to track changes for (e.g. `['first_name', 'last_name', 'email']`), and `surrogate_key_col` is the gold surrogate key name to generate (e.g. `'customer_key'`).
    - Joins facts to SCD Type 2 dimensions point-in-time:
      `dim.eff_start_ts <= fact.event_ts AND (dim.eff_end_ts IS NULL OR fact.event_ts < dim.eff_end_ts)`.
    - Overwrites facts and SCD1 dimensions.

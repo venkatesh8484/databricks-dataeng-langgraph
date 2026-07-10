@@ -177,13 +177,21 @@ st.markdown("""
             line-height: 1.6 !important;
         }
 
-        /* Protect code blocks from global color overrides */
-        code, pre, [data-testid="stCode"],
-        [data-testid="stCode"] *,
-        .stCodeBlock, .stCodeBlock * {
-            color: unset !important;
-            background-color: unset !important;
+        /* Code blocks: let Streamlit's own theme handle colours/background.
+           Only set the monospace font; do NOT override color or background-color
+           or syntax highlighting will be stripped and it renders as plain text. */
+        code, pre,
+        [data-testid="stCode"] code,
+        .stCodeBlock code {
             font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace !important;
+        }
+
+        /* Ensure horizontal + vertical scroll on code blocks */
+        [data-testid="stCode"] pre,
+        .stCodeBlock pre {
+            overflow: auto !important;
+            max-height: 600px !important;
+            white-space: pre !important;
         }
 
         h1, h2, h3, h4, h5, h6 {
@@ -985,16 +993,30 @@ with tab2:
             
         elif active_agent == "DataEngineer":
             st.markdown("### Generated PySpark Code Blocks:")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown("**Bronze Ingest (`bronze.py`)**")
-                st.code(state.values.get("bronze_code", ""), language="python")
-            with col2:
-                st.markdown("**Silver Validate (`silver.py`)**")
-                st.code(state.values.get("silver_code", ""), language="python")
-            with col3:
-                st.markdown("**Gold Load (`gold.py`)**")
-                st.code(state.values.get("gold_code", ""), language="python")
+            st.caption("Each tab shows the full generated script. Scroll horizontally/vertically inside the code block.")
+            bronze_code = state.values.get("bronze_code", "")
+            silver_code = state.values.get("silver_code", "")
+            gold_code   = state.values.get("gold_code", "")
+            code_tab1, code_tab2, code_tab3 = st.tabs([
+                "🥉 Bronze — bronze.py",
+                "🥈 Silver — silver.py",
+                "🥇 Gold — gold.py",
+            ])
+            with code_tab1:
+                if bronze_code:
+                    st.code(bronze_code, language="python", line_numbers=True)
+                else:
+                    st.info("Bronze code not yet generated.")
+            with code_tab2:
+                if silver_code:
+                    st.code(silver_code, language="python", line_numbers=True)
+                else:
+                    st.info("Silver code not yet generated.")
+            with code_tab3:
+                if gold_code:
+                    st.code(gold_code, language="python", line_numbers=True)
+                else:
+                    st.info("Gold code not yet generated.")
                 
         elif active_agent == "Orchestrator":
             st.markdown("### Executed Script Logs:")

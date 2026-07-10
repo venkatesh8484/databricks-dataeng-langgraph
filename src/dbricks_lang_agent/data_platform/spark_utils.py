@@ -78,7 +78,10 @@ def get_spark(app_name: str = "databricks-langgraph-medallion") -> SparkSession:
         )
         _spark = builder.getOrCreate()
 
-    _spark.sparkContext.setLogLevel("ERROR")
+    try:
+        _spark.sparkContext.setLogLevel("ERROR")
+    except Exception:
+        pass
     return _spark
 
 
@@ -204,7 +207,7 @@ def scd2_merge(
         F.col("cur.row_hash").isNull() | (F.col("inc.row_hash") != F.col("cur.row_hash"))
     ).select("inc.*")
 
-    if changed_or_new.rdd.isEmpty():
+    if not changed_or_new.head(1):
         return fqn  # No updates to process
 
     keys_changed = changed_or_new.select(business_key).distinct()

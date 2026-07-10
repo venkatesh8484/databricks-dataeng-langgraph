@@ -135,8 +135,19 @@ def sync_db_from_volume():
         volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
         local_db = "/tmp/checkpoint.db"
 
+        # Ensure writable permissions if file already exists locally
+        if os.path.exists(local_db):
+            try:
+                os.chmod(local_db, 0o666)
+            except Exception:
+                pass
+
         if os.path.exists(volume_db):
-            shutil.copy2(volume_db, local_db)
+            shutil.copy(volume_db, local_db)
+            try:
+                os.chmod(local_db, 0o666)
+            except Exception:
+                pass
             print(f"[Info] Synced checkpoint database from Volume to local disk: {local_db}")
         else:
             print("[Info] No existing checkpoint database found in volume. Starting fresh.")
@@ -164,7 +175,8 @@ def sync_db_to_volume():
         # Primary: direct POSIX copy to /Volumes/ mount (works on Notebooks)
         try:
             os.makedirs(os.path.dirname(volume_db), exist_ok=True)
-            shutil.copy2(local_db, volume_db)
+            # Use copy instead of copy2 to avoid metadata/permissions inheritance
+            shutil.copy(local_db, volume_db)
             print(f"[Info] Synced checkpoint database back to Volume: {volume_db}")
             return
         except Exception as e_posix:

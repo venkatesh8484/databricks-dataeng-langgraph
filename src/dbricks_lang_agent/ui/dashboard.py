@@ -46,11 +46,23 @@ def sync_db_from_volume():
     local_db = get_checkpoint_db_path()
     st.session_state["sync_logs"].append(f"Starting sync from volume: {volume_db} to local: {local_db}")
 
+    # Ensure writable permissions if file already exists locally
+    if os.path.exists(local_db):
+        try:
+            os.chmod(local_db, 0o666)
+        except Exception:
+            pass
+
     # Primary: POSIX copy (works when /Volumes/ is mounted)
     try:
         if os.path.exists(volume_db):
             import shutil
-            shutil.copy2(volume_db, local_db)
+            # copy copies data but not metadata/permissions, copy2 copies both
+            shutil.copy(volume_db, local_db)
+            try:
+                os.chmod(local_db, 0o666)
+            except Exception:
+                pass
             msg = f"Synced checkpoint from Volume (POSIX): {volume_db} → {local_db} (Size: {os.path.getsize(local_db)} bytes)"
             st.session_state["sync_logs"].append(msg)
             print(f"[Info] {msg}")
@@ -65,8 +77,18 @@ def sync_db_from_volume():
     try:
         w = WorkspaceClient()
         response = w.files.download(volume_db)
+        # Attempt to make existing file writable before overwriting
+        if os.path.exists(local_db):
+            try:
+                os.chmod(local_db, 0o666)
+            except Exception:
+                pass
         with open(local_db, "wb") as f:
             f.write(response.contents.read())
+        try:
+            os.chmod(local_db, 0o666)
+        except Exception:
+            pass
         msg = f"Synced checkpoint via SDK to {local_db} (Size: {os.path.getsize(local_db)} bytes)"
         st.session_state["sync_logs"].append(msg)
         print(f"[Info] {msg}")

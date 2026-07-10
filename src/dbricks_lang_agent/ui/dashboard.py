@@ -153,226 +153,304 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Premium Custom CSS
+# Enterprise Design System CSS
 st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
-        
-        /* Force light theme colors on Streamlit main container */
-        [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
-            background-color: #ffffff !important;
-            color: #1a1a1a !important;
-        }
-        
-        /* Style the sidebar container and sidebar elements */
-        [data-testid="stSidebar"], [data-testid="stSidebar"] div, [data-testid="stSidebar"] span, [data-testid="stSidebar"] label {
-            background-color: #f7f9fa !important;
-            color: #2c3e50 !important;
-        }
-        [data-testid="stSidebar"] {
-            border-right: 1px solid #e0e0e0 !important;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap');
+
+        /* ── Base ────────────────────────────────────────────────── */
+        [data-testid="stAppViewContainer"],
+        [data-testid="stAppViewBlockContainer"],
+        [data-testid="stMain"] {
+            background-color: #F8FAFC !important;
         }
 
-        html, body, [class*="css"] {
-            font-family: 'Outfit', sans-serif;
-            color: #1a1a1a !important;
+        html, body, [class*="css"], p, span, div {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+            -webkit-font-smoothing: antialiased;
         }
-        
-        /* Headers styling */
-        h1, h2, h3, h4, h5, h6, .stMarkdown p, p {
-            color: #2c3e50 !important;
-        }
-        
-        .main-title {
-            font-size: 2.8rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #1b3a4b 0%, #2c5e7a 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
-        }
-        
-        .subtitle {
-            color: #5a6b7c;
-            font-size: 1.1rem;
-            margin-bottom: 1.5rem;
-        }
-        
-        /* Streamlit Tabs styling with high contrast inactive tabs */
-        button[data-baseweb="tab"] {
-            color: #5a6b7c !important;
-            font-size: 1.05rem !important;
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Inter', sans-serif !important;
+            color: #0F172A !important;
             font-weight: 600 !important;
-            opacity: 0.75 !important;
+            letter-spacing: -0.02em !important;
+        }
+
+        p, .stMarkdown p {
+            color: #334155 !important;
+            font-size: 0.925rem !important;
+            line-height: 1.6 !important;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────────── */
+        [data-testid="stSidebar"] {
+            background-color: #FFFFFF !important;
+            border-right: 1px solid #E2E8F0 !important;
+        }
+        [data-testid="stSidebar"] *,
+        [data-testid="stSidebar"] div,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] p {
+            background-color: transparent !important;
+            color: #334155 !important;
+            font-size: 0.875rem !important;
+        }
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            color: #0F172A !important;
+            font-size: 0.875rem !important;
+            font-weight: 600 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.06em !important;
+        }
+
+        /* ── Page header ─────────────────────────────────────────── */
+        .main-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #0F172A;
+            letter-spacing: -0.03em;
+            margin-bottom: 2px;
+            line-height: 1.2;
+        }
+        .subtitle {
+            font-size: 0.875rem;
+            color: #64748B;
+            font-weight: 400;
+            margin-bottom: 1.25rem;
+            letter-spacing: 0;
+        }
+
+        /* ── Tabs ────────────────────────────────────────────────── */
+        button[data-baseweb="tab"] {
+            color: #64748B !important;
+            font-size: 0.875rem !important;
+            font-weight: 500 !important;
+            opacity: 1 !important;
+            letter-spacing: 0 !important;
+            padding: 10px 16px !important;
         }
         button[data-baseweb="tab"][aria-selected="true"] {
-            color: #1b3a4b !important;
-            border-bottom-color: #1b3a4b !important;
-            opacity: 1.0 !important;
+            color: #4F46E5 !important;
+            border-bottom: 2px solid #4F46E5 !important;
+            font-weight: 600 !important;
         }
         button[data-baseweb="tab"]:hover {
-            color: #1b3a4b !important;
-            opacity: 1.0 !important;
-        }
-        
-        /* Streamlit Alerts / Info Notifications styling with dark text */
-        .stAlert, [data-testid="stNotification"], [data-testid="stAlert"] {
-            background-color: #e3f2fd !important;
-            border: 1px solid #bbdefb !important;
-            border-radius: 8px !important;
-        }
-        .stAlert p, [data-testid="stNotification"] p, [data-testid="stAlert"] p, .stAlert div, [data-testid="stNotification"] div {
-            color: #0d47a1 !important;
-            font-weight: 500 !important;
-        }
-        
-        /* High contrast styled Streamlit Buttons */
-        div[data-testid="stButton"] button {
-            background-color: #ffffff !important;
-            color: #2c3e50 !important;
-            border: 1px solid #c0c0c0 !important;
-            border-radius: 6px !important;
-            font-weight: 600 !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
-        }
-        div[data-testid="stButton"] button:hover {
-            background-color: #f0f4f8 !important;
-            border-color: #1b3a4b !important;
-            color: #1b3a4b !important;
-        }
-        
-        /* Light themed metric cards */
-        .metric-card {
-            background-color: #ffffff;
-            padding: 1.5rem;
-            border-radius: 12px;
-            border: 1px solid #e0e0e0;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.03);
-            text-align: center;
-        }
-        
-        .metric-value {
-            font-size: 2.4rem;
-            font-weight: 800;
-            color: #1b3a4b;
-        }
-        
-        .metric-label {
-            font-size: 0.85rem;
-            color: #5a6b7c;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 0.5rem;
-            font-weight: 600;
-        }
-        
-        .agent-badge {
-            background-color: #f0f4f8;
-            border: 1px solid #2c3e50;
-            color: #2c3e50;
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-weight: 600;
-            display: inline-block;
-            font-size: 0.85rem;
+            color: #1E293B !important;
+            background: #F1F5F9 !important;
         }
 
-        /* ---------- Talk to Data Chat UI ---------- */
+        /* ── Alerts ──────────────────────────────────────────────── */
+        .stAlert, [data-testid="stNotification"], [data-testid="stAlert"] {
+            background-color: #EFF6FF !important;
+            border: 1px solid #BFDBFE !important;
+            border-left: 3px solid #3B82F6 !important;
+            border-radius: 6px !important;
+        }
+        .stAlert p, [data-testid="stNotification"] p, [data-testid="stAlert"] p,
+        .stAlert div, [data-testid="stNotification"] div {
+            color: #1E40AF !important;
+            font-weight: 500 !important;
+            font-size: 0.875rem !important;
+        }
+
+        /* ── Buttons ─────────────────────────────────────────────── */
+        div[data-testid="stButton"] button {
+            background-color: #FFFFFF !important;
+            color: #374151 !important;
+            border: 1px solid #D1D5DB !important;
+            border-radius: 6px !important;
+            font-weight: 500 !important;
+            font-size: 0.85rem !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+            transition: all 0.15s ease !important;
+            letter-spacing: 0 !important;
+        }
+        div[data-testid="stButton"] button:hover {
+            background-color: #F9FAFB !important;
+            border-color: #9CA3AF !important;
+            color: #111827 !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+        }
+
+        /* ── Metric cards ────────────────────────────────────────── */
+        .metric-card {
+            background: #FFFFFF;
+            padding: 1.25rem 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #0F172A;
+            letter-spacing: -0.03em;
+            line-height: 1.2;
+        }
+        .metric-label {
+            font-size: 0.7rem;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin-top: 6px;
+            font-weight: 600;
+        }
+
+        /* ── Agent badge ─────────────────────────────────────────── */
+        .agent-badge {
+            background-color: #F1F5F9;
+            border: 1px solid #CBD5E1;
+            color: #475569;
+            padding: 2px 10px;
+            border-radius: 100px;
+            font-weight: 500;
+            display: inline-block;
+            font-size: 0.78rem;
+            letter-spacing: 0.01em;
+        }
+
+        /* ── Talk to Data Chat UI ────────────────────────────────── */
         .chat-container {
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            padding: 12px 0;
+            gap: 20px;
+            padding: 16px 4px;
             max-height: 520px;
             overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .chat-container::-webkit-scrollbar { width: 4px; }
+        .chat-container::-webkit-scrollbar-track { background: transparent; }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 4px;
         }
 
         .chat-bubble-wrapper {
             display: flex;
-            align-items: flex-end;
-            gap: 10px;
+            align-items: flex-start;
+            gap: 12px;
         }
-
-        .chat-bubble-wrapper.user {
-            flex-direction: row-reverse;
-        }
+        .chat-bubble-wrapper.user { flex-direction: row-reverse; }
 
         .chat-avatar {
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.1rem;
+            font-size: 0.95rem;
             flex-shrink: 0;
+            margin-top: 2px;
         }
-
-        .chat-avatar.bot  { background: linear-gradient(135deg, #1b3a4b, #2c5e7a); color: #fff; }
-        .chat-avatar.user { background: linear-gradient(135deg, #43a07a, #2e7d59); color: #fff; }
+        .chat-avatar.bot {
+            background: #4F46E5;
+            color: #fff;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+        .chat-avatar.user {
+            background: #0F172A;
+            color: #fff;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
 
         .chat-bubble {
             max-width: 72%;
-            padding: 12px 16px;
-            border-radius: 16px;
-            font-size: 0.95rem;
-            line-height: 1.55;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            padding: 11px 15px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            line-height: 1.6;
         }
-
         .chat-bubble.bot {
-            background: #f0f4f8;
-            border: 1px solid #d8e2ec;
-            border-bottom-left-radius: 4px;
-            color: #1a1a1a;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-bottom-left-radius: 3px;
+            color: #1E293B;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
-
         .chat-bubble.user {
-            background: linear-gradient(135deg, #1b3a4b, #2c5e7a);
-            color: #ffffff;
-            border-bottom-right-radius: 4px;
+            background: #4F46E5;
+            color: #FFFFFF;
+            border-bottom-right-radius: 3px;
         }
 
         .chat-profiling-badge {
-            font-size: 0.75rem;
-            color: #5a6b7c;
-            margin-top: 4px;
-            padding-left: 46px;
+            font-size: 0.72rem;
+            color: #64748B;
+            margin-top: 5px;
+            padding-left: 44px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .chat-empty-state {
             text-align: center;
-            padding: 40px 20px;
-            color: #8a9ab0;
+            padding: 48px 24px;
         }
-
         .chat-empty-state .chat-empty-icon {
-            font-size: 3rem;
-            margin-bottom: 12px;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            opacity: 0.4;
         }
-
         .chat-empty-state p {
-            font-size: 1rem;
-            color: #8a9ab0 !important;
+            font-size: 0.9rem !important;
+            color: #94A3B8 !important;
         }
 
         .chat-input-area {
-            border-top: 1px solid #e0e0e0;
+            border-top: 1px solid #E2E8F0;
             padding-top: 16px;
-            margin-top: 8px;
+            margin-top: 4px;
         }
 
+        .chat-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
         .chat-suggestions span {
             display: inline-block;
-            background: #f0f4f8;
-            border: 1px solid #d0dae5;
-            color: #2c3e50;
-            border-radius: 20px;
-            padding: 4px 14px;
-            margin: 4px 4px 4px 0;
-            font-size: 0.82rem;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            color: #475569;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
             cursor: pointer;
+            transition: border-color 0.15s, color 0.15s;
         }
+        .chat-suggestions span:hover {
+            border-color: #4F46E5;
+            color: #4F46E5;
+        }
+
+        /* ── Streamlit form input override ───────────────────────── */
+        [data-testid="stTextInput"] input {
+            border-radius: 6px !important;
+            border: 1px solid #D1D5DB !important;
+            font-size: 0.9rem !important;
+            color: #0F172A !important;
+            background: #FFFFFF !important;
+            padding: 10px 14px !important;
+        }
+        [data-testid="stTextInput"] input:focus {
+            border-color: #4F46E5 !important;
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.12) !important;
+            outline: none !important;
+        }
+        [data-testid="stTextInput"] input::placeholder { color: #94A3B8 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -407,8 +485,14 @@ config = {"configurable": {"thread_id": thread_id}}
 
 # ----------------- Dashboard Layout -----------------
 
-st.markdown('<p class="main-title">🤖 Medallion Agent Control Center</p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">Unity Catalog Governed Multi-Agent Data Engineering Ingestion & Transformation</p>', unsafe_allow_html=True)
+st.markdown("""
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:2px;">
+  <div style="width:36px; height:36px; background:#4F46E5; border-radius:8px; display:flex;
+              align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0;">🤖</div>
+  <p class="main-title" style="margin:0;">Medallion Agent Control Center</p>
+</div>
+<p class="subtitle" style="padding-left:48px;">Unity Catalog · Multi-Agent Data Engineering · LangGraph Orchestration</p>
+""", unsafe_allow_html=True)
 
 # Fetch Current Graph State
 state = app.get_state(config)
@@ -451,41 +535,62 @@ else:
                 stage_statuses.append("pending")
 
 # Render progress lineage columns
-st.markdown("<h4 style='color: #2c3e50; margin-bottom: 12px;'>🗺️ Agent Lineage & Progress Flow</h4>", unsafe_allow_html=True)
+st.markdown("""
+<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+  <span style="font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;
+               color:#64748B;">Pipeline Progress</span>
+  <div style="flex:1; height:1px; background:#E2E8F0;"></div>
+</div>
+""", unsafe_allow_html=True)
 cols = st.columns(len(stages))
 for i, stage in enumerate(stages):
     status = stage_statuses[i]
     if status == "completed":
-        bg_color = "#e8f5e9"
-        border_color = "#81c784"
-        text_color = "#2e7d32"
-        badge = "🟢 Completed"
+        accent      = "#059669"   # emerald
+        badge_bg    = "#ECFDF5"
+        badge_color = "#065F46"
+        badge_text  = "Completed"
+        dot         = "&#9679;"   # filled circle
+        name_color  = "#0F172A"
     elif status == "review":
-        bg_color = "#fff8e1"
-        border_color = "#ffb74d"
-        text_color = "#ef6c00"
-        badge = "🟡 In Review"
+        accent      = "#D97706"   # amber
+        badge_bg    = "#FFFBEB"
+        badge_color = "#92400E"
+        badge_text  = "In Review"
+        dot         = "&#9679;"
+        name_color  = "#0F172A"
     else:
-        bg_color = "#f5f5f5"
-        border_color = "#e0e0e0"
-        text_color = "#757575"
-        badge = "⚪ Pending"
+        accent      = "#CBD5E1"   # slate
+        badge_bg    = "#F8FAFC"
+        badge_color = "#94A3B8"
+        badge_text  = "Pending"
+        dot         = "&#9675;"   # open circle
+        name_color  = "#94A3B8"
 
     with cols[i]:
         st.markdown(f"""
             <div style="
-                background-color: {bg_color};
-                border: 2px solid {border_color};
-                border-radius: 10px;
-                padding: 12px;
+                background: #FFFFFF;
+                border: 1px solid #E2E8F0;
+                border-top: 3px solid {accent};
+                border-radius: 8px;
+                padding: 12px 10px 10px;
                 text-align: center;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-                margin-bottom: 20px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                margin-bottom: 16px;
             ">
-                <div style="font-size: 0.75rem; font-weight: bold; color: {text_color}; text-transform: uppercase; margin-bottom: 6px;">
-                    {badge}
+                <div style="
+                    display:inline-flex; align-items:center; gap:4px;
+                    background:{badge_bg}; color:{badge_color};
+                    font-size:0.65rem; font-weight:600;
+                    text-transform:uppercase; letter-spacing:0.06em;
+                    padding:2px 7px; border-radius:100px;
+                    margin-bottom:7px;
+                ">
+                    <span style="color:{accent}; font-size:0.55rem;">{dot}</span>
+                    {badge_text}
                 </div>
-                <div style="font-size: 0.95rem; font-weight: 700; color: #2c3e50;">
+                <div style="font-size:0.82rem; font-weight:600; color:{name_color}; letter-spacing:-0.01em;">
                     {stage["name"]}
                 </div>
             </div>

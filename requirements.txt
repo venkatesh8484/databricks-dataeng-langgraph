@@ -8,3 +8,4 @@ python-dotenv>=1.0
 databricks-langchain
 streamlit>=1.30.0
 typing-extensions>=4.13.0
+databricks-connect

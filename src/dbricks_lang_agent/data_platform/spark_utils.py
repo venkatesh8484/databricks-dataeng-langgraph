@@ -59,14 +59,23 @@ def get_spark(app_name: str = "databricks-langgraph-medallion") -> SparkSession:
     if _spark is not None:
         return _spark
 
+    # 1. Try active session (standard notebook or job context)
     try:
-        # Check if running in a Databricks Notebook or job
         _spark = SparkSession.getActiveSession()
     except Exception:
         pass
 
+    # 2. Try Databricks Connect session builder (standard for Databricks Apps)
     if _spark is None:
-        # Fallback for local development or unit testing
+        try:
+            from databricks.connect import DatabricksSession
+            _spark = DatabricksSession.builder.getOrCreate()
+            print("[Debug] Successfully established Databricks Connect session.")
+        except Exception as e:
+            print(f"[Debug] Databricks Connect not available or failed: {e}. Falling back to local PySpark.")
+
+    # 3. Local fallback for development/sandbox
+    if _spark is None:
         builder = (
             SparkSession.builder.appName(app_name)
             .master("local[*]")

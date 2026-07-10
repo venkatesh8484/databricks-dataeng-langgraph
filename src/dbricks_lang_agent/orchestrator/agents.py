@@ -124,6 +124,30 @@ def get_llm(node_name: str) -> Any:
         return MockChatModel(node_name)
 
 
+def sanitize_json_string(s: str) -> str:
+    """Escape raw newlines, tabs, and carriage returns inside double-quoted string values."""
+    chars = []
+    in_string = False
+    escaped = False
+    for char in s:
+        if char == '"' and not escaped:
+            in_string = not in_string
+            chars.append(char)
+        elif char == '\\' and in_string:
+            escaped = not escaped
+            chars.append(char)
+        else:
+            if char == '\n' and in_string:
+                chars.append('\\n')
+            elif char == '\r' and in_string:
+                chars.append('\\r')
+            elif char == '\t' and in_string:
+                chars.append('\\t')
+            else:
+                chars.append(char)
+            escaped = False
+    return "".join(chars)
+
 def parse_json_from_response(content: str) -> dict:
     """Safely extract and parse JSON block from model response."""
     import re
@@ -133,7 +157,8 @@ def parse_json_from_response(content: str) -> dict:
     code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content_str, re.DOTALL)
     if code_block_match:
         try:
-            return json.loads(code_block_match.group(1).strip())
+            sanitized = sanitize_json_string(code_block_match.group(1).strip())
+            return json.loads(sanitized)
         except Exception:
             pass
             
@@ -141,7 +166,8 @@ def parse_json_from_response(content: str) -> dict:
     brace_match = re.search(r"(\{.*\})", content_str, re.DOTALL)
     if brace_match:
         try:
-            return json.loads(brace_match.group(1).strip())
+            sanitized = sanitize_json_string(brace_match.group(1).strip())
+            return json.loads(sanitized)
         except Exception:
             pass
             
@@ -153,7 +179,8 @@ def parse_json_from_response(content: str) -> dict:
         cleaned = cleaned[:-3]
     cleaned = cleaned.strip()
     try:
-        return json.loads(cleaned)
+        sanitized = sanitize_json_string(cleaned)
+        return json.loads(sanitized)
     except Exception as e_direct:
         raise ValueError(
             f"Failed to parse JSON from LLM response.\n"

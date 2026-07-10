@@ -157,6 +157,16 @@ else:
             print(f"Review APPROVED for step '{step_key}'. Resuming pipeline execution...")
             approvals[step_key] = True
             comments = ""
+            try:
+                from dbricks_lang_agent.orchestrator import memory
+                from dbricks_lang_agent.data_platform.spark_utils import get_spark
+                spark = get_spark()
+                dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
+                issue_type = "data_quality" if step_key == "dq" else step_key
+                resolution = f"Approved {step_key} design"
+                memory.log_approval(spark, dataset, issue_type, [], resolution, feedback)
+            except Exception as e:
+                print(f"[Warning] Failed to log approval to few-shot memory: {e}")
         else:
             print(f"Review REJECTED with comments. Re-routing back to agent...")
             approvals[step_key] = False

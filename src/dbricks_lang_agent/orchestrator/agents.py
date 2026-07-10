@@ -16,8 +16,9 @@ from typing import Dict, Any, List
 from databricks_langchain import ChatDatabricks
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from dbricks_lang_agent.data_platform.spark_utils import load_config
+from dbricks_lang_agent.data_platform.spark_utils import load_config, get_spark
 from dbricks_lang_agent.data_platform import profiling
+from dbricks_lang_agent.orchestrator import memory
 from .state import AgentState
 from . import prompts
 
@@ -183,12 +184,16 @@ def dq_node(state: AgentState) -> Dict[str, Any]:
     """Data Quality Agent Node: Checks for logical and physical data anomalies."""
     print(">>> [Data Quality Agent] Assessing raw source data quality...")
     
-    profiling_narration = state["profiling_report"].get("profiler_narration", "")
-    profiling_metrics = state["profiling_report"]
+    # Query few-shot memory database
+    spark = get_spark()
+    memory.init_memory_table(spark)
+    dataset = list(state.get("discovered_tables", {}).keys())[0] if state.get("discovered_tables") else "generic"
+    few_shot_context = memory.get_few_shot_context(spark, dataset, "data_quality")
     
     prompt = (
         f"Data Profiler Report Narrative:\n{profiling_narration}\n\n"
-        f"Raw Metrics JSON:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}"
+        f"Raw Metrics JSON:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n\n"
+        f"{few_shot_context}"
     )
     if state.get("review_comments"):
         prompt += f"\n\nHuman feedback on previous DQ assessment:\n{state['review_comments']}"
@@ -212,13 +217,16 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
     """Steward designs and authors YAML schema data contracts."""
     print(">>> [Contract Steward] Authoring YAML schema data contracts...")
     
-    profiling_narration = state["profiling_report"].get("profiler_narration", "")
-    profiling_metrics = state["profiling_report"]
+    # Query few-shot memory database
+    spark = get_spark()
+    dataset = list(state.get("discovered_tables", {}).keys())[0] if state.get("discovered_tables") else "generic"
+    few_shot_context = memory.get_few_shot_context(spark, dataset, "contracts")
     
     prompt = (
         f"Data Profiling Report:\n{profiling_narration}\n\n"
         f"Data Quality Assessment Report:\n{state.get('dq_report', '')}\n\n"
-        f"Raw Metrics:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n"
+        f"Raw Metrics:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n\n"
+        f"{few_shot_context}"
     )
     if state.get("review_comments"):
         prompt += f"\n\nHuman feedback on previous contracts draft:\n{state['review_comments']}"

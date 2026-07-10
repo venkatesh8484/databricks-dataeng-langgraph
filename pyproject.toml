@@ -15,6 +15,7 @@ dependencies = [
     "pandas>=2.0",
     "python-dotenv>=1.0",
     "databricks-langchain",
+    "streamlit>=1.30.0",
 ]
 
 [build-system]

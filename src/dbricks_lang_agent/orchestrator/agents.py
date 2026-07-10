@@ -384,6 +384,30 @@ def _sanitize_and_heal_code(code: str) -> str:
     # 1.7. Fix validate_table() unpacking signature dynamically (change clean_df, quarantine_df = validate_table(...) to include third discard)
     code = re.sub(r"(?m)^(\s*)([a-zA-Z0-9_]+)\s*,\s*([a-zA-Z0-9_]+)\s*=\s*validate_table\s*\(", r"\1\2, \3, _ = validate_table(", code)
 
+    # 1.8. Fix load_source with dict key from discover_source_tables
+    if "discover_source_tables" in code and "load_source" in code:
+        var_match = re.search(r"(\w+)\s*=\s*discover_source_tables\(\)", code)
+        if var_match:
+            dict_var = var_match.group(1)
+            loop_match = re.search(r"for\s+(\w+)\s+in\s+" + dict_var + r"(?:\.keys\(\))?\s*:", code)
+            if loop_match:
+                loop_var = loop_match.group(1)
+                load_pattern = r"\bload_source\(\s*([^,]+)\s*,\s*" + loop_var + r"\s*\)"
+                if re.search(load_pattern, code):
+                    code = re.sub(
+                        r"for\s+" + loop_var + r"\s+in\s+" + dict_var + r"(?:\.keys\(\))?\s*:",
+                        f"for {loop_var}, {loop_var}_file in {dict_var}.items():",
+                        code
+                    )
+                    code = re.sub(
+                        r"\bload_source\(\s*([^,]+)\s*,\s*" + loop_var + r"\s*\)",
+                        r"load_source(\1, " + f"{loop_var}_file)",
+                        code
+                    )
+
+    # 1.9. Fix spark.sql.functions hallucinations
+    code = re.sub(r"\bspark\.sql\.functions\.", "", code)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

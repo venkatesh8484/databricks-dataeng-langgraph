@@ -121,7 +121,8 @@ You must output two components:
    - Identifies the SCD Type (SCD Type 1 vs SCD Type 2) of every dimension with explicit business justifications.
    - Details surrogate key generation rules.
    - Explains point-in-time join criteria: fact tables MUST resolve SCD2 dimension foreign keys using an as-of event timestamp condition:
-     `dim.eff_start_ts <= fact.event_ts AND (dim.eff_end_ts IS NULL OR fact.event_ts < dim.eff_end_ts)`.
+     `dim.eff_start_ts <= fact.<event_ts_column> AND (dim.eff_end_ts IS NULL OR fact.<event_ts_column> < dim.eff_end_ts)`,
+     where `<event_ts_column>` is a placeholder — call out explicitly, per fact table, which real column plays this role (e.g. `created_ts` for bookings, `availability_date` for availability). Never use the literal name `event_ts`; it does not exist in any source table.
 
 Format your output as a JSON object:
 {
@@ -140,6 +141,8 @@ You MUST import and use the shared data platform libraries:
 - `from dbricks_lang_agent.data_platform.profiling import discover_source_tables, load_source`
 
 You MUST explicitly import all PySpark SQL functions that you use (e.g., `from pyspark.sql.functions import current_timestamp, lit, col, expr, when, to_date, trim` etc.). Never reference a function like `current_timestamp()`, `lit()`, or `col()` without importing it first.
+
+You MUST reference DataFrame columns using bracket/functional syntax — `df["column_name"]` or `F.col("column_name")` — and NEVER attribute-style dot access like `df.column_name`. The Spark Connect client (used here) raises `PySparkAttributeError` for dot access on any column name it does not recognize as a DataFrame attribute, so this is not just a style preference.
 
 Script Requirements:
 1. **bronze.py**:
@@ -160,8 +163,8 @@ Script Requirements:
    - Reads silver tables.
    - Constructs Kimball dimensions and fact tables based on the dimensional model.
    - Uses `scd2_merge` for SCD Type 2 dimensions to track changes. Note that `scd2_merge` has the signature: `scd2_merge(new_df: DataFrame, schema: str, table: str, business_key: str, tracked_cols: List[str], surrogate_key_col: str) -> str`. Make sure you pass all 6 arguments: `schema` is always `"gold"`, `table` is the gold dimension table name (e.g. `'dim_customer'`), `business_key` is the natural key column name (e.g. `'customer_id'`), `tracked_cols` is a list of column names to track changes for (e.g. `['first_name', 'last_name', 'email']`), and `surrogate_key_col` is the gold surrogate key name to generate (e.g. `'customer_key'`).
-   - Joins facts to SCD Type 2 dimensions point-in-time:
-     `dim.eff_start_ts <= fact.event_ts AND (dim.eff_end_ts IS NULL OR fact.event_ts < dim.eff_end_ts)`.
+   - Joins facts to SCD Type 2 dimensions point-in-time using each fact table's OWN real event timestamp column (e.g. `created_ts` for bookings/booking_components, `availability_date` for availability) — never a literal column named `event_ts`, which does not exist in any table:
+     `dim.eff_start_ts <= fact[event_ts_column] AND (dim.eff_end_ts IS NULL OR fact[event_ts_column] < dim.eff_end_ts)`.
    - Overwrites facts and SCD1 dimensions.
    - Generates calendar dimension using `build_dim_date(spark, "2022-01-01", "2025-12-31")`.
    - **Crucial Requirement**: At the bottom of the script, write the execution summary to `/tmp/gold_summary.json` in this JSON format:

@@ -29,6 +29,7 @@ class AgentState(TypedDict):
     gold_summary: Dict[str, Any]        # gold loading details
     final_report: str                   # Executive run report (markdown)
     dq_report: str                      # Data Quality Assessment report (markdown)
+    last_run_id: str                    # ID of the most recent execution_node attempt, for audit lookup in gold.agent_run_history
 
     # Human-in-the-Loop review and orchestration state
     active_agent: str                   # Name of the currently executing agent node

@@ -1052,12 +1052,40 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     response = llm.invoke(messages)
     
     final_report = response.content
-    
+
     # Save final report to generated directory
     reports_dir = "./generated/reports"
     os.makedirs(reports_dir, exist_ok=True)
     with open(os.path.join(reports_dir, "final_run_report.md"), "w") as f:
         f.write(final_report)
+
+    # Append this attempt to the run history audit log (Unity Catalog) so it
+    # stays reviewable even after the live checkpoint thread moves on, loops
+    # back to self-heal, or is reset. Every execution_node run gets its own
+    # row — success or failure — unlike agent_codebase_memory which only
+    # keeps the latest code per fingerprint.
+    import uuid as _uuid
+    run_id = str(_uuid.uuid4())
+    try:
+        spark = get_spark()
+        fingerprint = get_dataset_fingerprint(spark, state.get("contracts", {}), state.get("gold_ddl", ""))
+        memory.init_run_history_table(spark)
+        memory.log_run(
+            spark,
+            run_id=run_id,
+            pipeline_status=pipeline_status,
+            active_agent="Orchestrator",
+            dataset_fingerprint=fingerprint,
+            failed_scripts=failed_scripts,
+            execution_logs=logs,
+            silver_summary=silver_summary,
+            gold_summary=gold_summary,
+            final_report=final_report,
+            approved_steps=state.get("approved_steps", {}),
+            review_comments=state.get("review_comments", ""),
+        )
+    except Exception as e:
+        print(f"[Warning] Failed to log run to audit history: {e}")
 
     return {
         "execution_logs": logs,
@@ -1065,7 +1093,8 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
         "gold_summary": gold_summary,
         "final_report": final_report,
         "active_agent": "Orchestrator",
-        "review_comments": ""
+        "review_comments": "",
+        "last_run_id": run_id,
     }
 
 

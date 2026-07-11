@@ -872,7 +872,7 @@ tab0, tab1, tab2, tab3 = st.tabs([
     "💬 Talk to Data",
     "📊 Ingestion Monitoring",
     "📥 Action Center (HITL)",
-    "🧠 Agent Memories"
+    "🕓 Run History"
 ])
 
 # ----------------- Tab 0: Talk to Data Chatbot -----------------
@@ -1293,38 +1293,206 @@ with tab2:
                     st.error("Execution error during Submit & Resume:")
                     st.exception(e_click)
 
-# ----------------- Tab 3: Agent Memories -----------------
+# ----------------- Tab 3: Run History -----------------
 with tab3:
-    st.markdown("### 🧠 Agent Memory Catalog")
-    st.write("Below are the historical decisions logged into the few-shot memory system. The agents read this memory before executing steps to reuse your past resolutions.")
-    
-    try:
-        catalog = catalog_config.get("catalog", "databricks_langgraph")
-        # Try displaying from Delta table
+    st.markdown("### 🕓 Run History & Review Decisions")
+    st.caption("Every pipeline execution attempt and every human review decision, kept for auditing — even after the live thread moves on or is reset.")
+
+    hist_subtab, decisions_subtab = st.tabs(["📜 Pipeline Run History", "✅ Review Decisions"])
+
+    # ---- Sub-tab: Pipeline Run History (gold.agent_run_history) ----
+    with hist_subtab:
         try:
-            is_local = spark.conf.get("spark.master", "").startswith("local")
-        except Exception:
-            is_local = False
-        
-        if not is_local:
-            fqn = f"{catalog}.gold.agent_fewshot_memory"
-            df = spark.read.table(fqn).orderBy("timestamp", ascending=False)
-            pandas_df = df.toPandas()
-            if len(pandas_df) > 0:
-                st.dataframe(pandas_df, use_container_width=True)
-            else:
-                st.info("Few-shot memory table is empty. Approvals will appear here once submitted.")
+            runs = memory.get_run_history(spark, limit=500)
+        except Exception as e:
+            runs = []
+            st.warning(f"Could not load run history: {e}")
+
+        if not runs:
+            st.info("No pipeline runs logged yet. Run history is recorded automatically every time the Orchestrator executes the ETL scripts.")
         else:
-            # Local fallback json file
-            if os.path.exists(memory.LOCAL_MEMORY_PATH):
+            runs_df = pd.DataFrame(runs)
+            runs_df["run_timestamp"] = pd.to_datetime(runs_df["run_timestamp"])
+            runs_df["run_date"] = pd.to_datetime(runs_df["run_date"]).dt.date
+
+            # ---- Filters ----
+            f1, f2, f3 = st.columns([1.3, 1, 1.7])
+            with f1:
+                min_date, max_date = runs_df["run_date"].min(), runs_df["run_date"].max()
+                date_range = st.date_input(
+                    "Date range", value=(min_date, max_date),
+                    min_value=min_date, max_value=max_date, key="run_hist_date_range"
+                )
+            with f2:
+                status_options = sorted(runs_df["pipeline_status"].dropna().unique().tolist())
+                status_filter = st.multiselect("Status", status_options, default=status_options, key="run_hist_status")
+            with f3:
+                search_text = st.text_input("Search (run ID or dataset fingerprint)", key="run_hist_search")
+
+            filtered = runs_df.copy()
+            if isinstance(date_range, tuple) and len(date_range) == 2:
+                start_d, end_d = date_range
+                filtered = filtered[(filtered["run_date"] >= start_d) & (filtered["run_date"] <= end_d)]
+            if status_filter:
+                filtered = filtered[filtered["pipeline_status"].isin(status_filter)]
+            if search_text:
+                mask = (
+                    filtered["run_id"].str.contains(search_text, case=False, na=False)
+                    | filtered["dataset_fingerprint"].str.contains(search_text, case=False, na=False)
+                )
+                filtered = filtered[mask]
+
+            st.caption(f"Showing {len(filtered)} of {len(runs_df)} runs.")
+
+            display_cols = ["run_timestamp", "pipeline_status", "active_agent", "failed_scripts", "dataset_fingerprint", "run_id"]
+            st.dataframe(
+                filtered[display_cols].sort_values("run_timestamp", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "run_timestamp": st.column_config.DatetimeColumn("Run Time"),
+                    "pipeline_status": "Status",
+                    "active_agent": "Agent",
+                    "failed_scripts": "Failed Scripts",
+                    "dataset_fingerprint": "Fingerprint",
+                    "run_id": "Run ID",
+                },
+            )
+
+            if len(filtered) > 0:
+                st.markdown("#### 🔍 Inspect a Run")
+                options = filtered.sort_values("run_timestamp", ascending=False)["run_id"].tolist()
+                labels = {
+                    r: f"{ts} · {status} · {rid[:8]}"
+                    for r, ts, status, rid in zip(
+                        options,
+                        filtered.set_index("run_id").loc[options, "run_timestamp"].dt.strftime("%Y-%m-%d %H:%M"),
+                        filtered.set_index("run_id").loc[options, "pipeline_status"],
+                        options,
+                    )
+                }
+                selected_run_id = st.selectbox(
+                    "Select a run", options, format_func=lambda r: labels.get(r, r), key="run_hist_selected_run"
+                )
+                run_row = filtered[filtered["run_id"] == selected_run_id].iloc[0]
+
+                status_color = "🟢" if run_row["pipeline_status"] == "COMPLETED" else "🔴"
+                st.markdown(f"**{status_color} {run_row['pipeline_status']}** — `{run_row['run_id']}` — {run_row['run_timestamp']}")
+
+                with st.expander("📝 Final Run Report", expanded=True):
+                    st.markdown(run_row.get("final_report") or "No report captured for this run.")
+
+                with st.expander("⚙️ Script Execution Logs (stdout/stderr)"):
+                    try:
+                        exec_logs = json.loads(run_row.get("execution_logs") or "{}")
+                    except Exception:
+                        exec_logs = {}
+                    if exec_logs:
+                        for script_name, log_info in exec_logs.items():
+                            st.markdown(f"**{script_name}** — exit code `{log_info.get('exit_code')}`")
+                            st.code(log_info.get("stdout") or "No stdout output.")
+                            if log_info.get("stderr"):
+                                st.error(log_info.get("stderr"))
+                    else:
+                        st.info("No execution logs captured.")
+
+                with st.expander("📊 Silver / Gold Summaries"):
+                    try:
+                        silver_s = json.loads(run_row.get("silver_summary") or "{}")
+                    except Exception:
+                        silver_s = {}
+                    try:
+                        gold_s = json.loads(run_row.get("gold_summary") or "{}")
+                    except Exception:
+                        gold_s = {}
+                    sc1, sc2 = st.columns(2)
+                    with sc1:
+                        st.markdown("**Silver Summary**")
+                        st.json(silver_s or {"info": "empty"})
+                    with sc2:
+                        st.markdown("**Gold Summary**")
+                        st.json(gold_s or {"info": "empty"})
+
+                with st.expander("✅ Approvals in effect at time of run"):
+                    try:
+                        approved = json.loads(run_row.get("approved_steps") or "{}")
+                    except Exception:
+                        approved = {}
+                    st.json(approved or {"info": "empty"})
+                    if run_row.get("review_comments"):
+                        st.markdown(f"**Review comments that triggered this attempt:** {run_row['review_comments']}")
+
+    # ---- Sub-tab: Review Decisions (gold.agent_fewshot_memory) ----
+    with decisions_subtab:
+        st.caption("Human approve/reject decisions made at each review gate. The agents also read this history as few-shot context for future runs.")
+
+        try:
+            catalog = catalog_config.get("catalog", "databricks_langgraph")
+            try:
+                is_local = spark.conf.get("spark.master", "").startswith("local")
+            except Exception:
+                is_local = False
+
+            if not is_local:
+                fqn = f"{catalog}.gold.agent_fewshot_memory"
+                pandas_df = spark.read.table(fqn).orderBy("timestamp", ascending=False).toPandas()
+            elif os.path.exists(memory.LOCAL_MEMORY_PATH):
                 with open(memory.LOCAL_MEMORY_PATH, "r") as f:
                     records = json.load(f)
-                if records:
-                    st.dataframe(pd.DataFrame(records), use_container_width=True)
-                else:
-                    st.info("Local memory cache is empty.")
+                pandas_df = pd.DataFrame(records)
             else:
-                st.info("Local memory cache has not been created yet.")
-                
-    except Exception as e:
-        st.warning(f"Could not load memory catalog view: {e}")
+                pandas_df = pd.DataFrame()
+
+            if len(pandas_df) == 0:
+                st.info("No review decisions logged yet. They'll appear here once you approve or reject a step in the Action Center tab.")
+            else:
+                if "decision" not in pandas_df.columns:
+                    # Backward-compat: infer from resolution text if reading an older table/cache
+                    pandas_df["decision"] = pandas_df["resolution_applied"].str.contains("Rejected", case=False, na=False).map(
+                        {True: "rejected", False: "approved"}
+                    )
+                pandas_df["timestamp"] = pd.to_datetime(pandas_df["timestamp"])
+                pandas_df["decision_date"] = pandas_df["timestamp"].dt.date
+
+                d1, d2, d3 = st.columns([1.3, 1, 1.7])
+                with d1:
+                    dmin, dmax = pandas_df["decision_date"].min(), pandas_df["decision_date"].max()
+                    decision_date_range = st.date_input(
+                        "Date range", value=(dmin, dmax), min_value=dmin, max_value=dmax, key="decisions_date_range"
+                    )
+                with d2:
+                    decision_filter = st.multiselect(
+                        "Decision", ["approved", "rejected"], default=["approved", "rejected"], key="decisions_type"
+                    )
+                with d3:
+                    step_options = sorted(pandas_df["issue_type"].dropna().unique().tolist())
+                    step_filter = st.multiselect("Step", step_options, default=step_options, key="decisions_step")
+
+                filtered_d = pandas_df.copy()
+                if isinstance(decision_date_range, tuple) and len(decision_date_range) == 2:
+                    sd, ed = decision_date_range
+                    filtered_d = filtered_d[(filtered_d["decision_date"] >= sd) & (filtered_d["decision_date"] <= ed)]
+                if decision_filter:
+                    filtered_d = filtered_d[filtered_d["decision"].isin(decision_filter)]
+                if step_filter:
+                    filtered_d = filtered_d[filtered_d["issue_type"].isin(step_filter)]
+
+                st.caption(f"Showing {len(filtered_d)} of {len(pandas_df)} decisions.")
+                display_cols_d = ["timestamp", "decision", "issue_type", "dataset_name", "human_comments", "resolution_applied"]
+                display_cols_d = [c for c in display_cols_d if c in filtered_d.columns]
+                st.dataframe(
+                    filtered_d[display_cols_d].sort_values("timestamp", ascending=False),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "timestamp": st.column_config.DatetimeColumn("When"),
+                        "decision": "Decision",
+                        "issue_type": "Step",
+                        "dataset_name": "Dataset",
+                        "human_comments": "Comments",
+                        "resolution_applied": "Resolution",
+                    },
+                )
+
+        except Exception as e:
+            st.warning(f"Could not load review decisions: {e}")

@@ -60,6 +60,7 @@ def init_memory_table(spark: SparkSession) -> bool:
                 anomalous_fields ARRAY<STRING>,
                 resolution_applied STRING,
                 human_comments STRING,
+                decision STRING,
                 timestamp TIMESTAMP
             ) USING DELTA
         """)
@@ -98,9 +99,11 @@ def log_approval(
             "anomalous_fields": anomalous_fields,
             "resolution_applied": resolution_applied,
             "human_comments": human_comments,
+            "record_type": "approval",
+            "decision": "approved",
             "timestamp": timestamp.isoformat()
         })
-        
+
         with open(LOCAL_MEMORY_PATH, "w") as f:
             json.dump(records, f, indent=2)
     except Exception as e:
@@ -111,10 +114,10 @@ def log_approval(
         is_local = spark.conf.get("spark.master", "").startswith("local")
     except Exception:
         is_local = False
-        
+
     if is_local:
         return
-        
+
     try:
         fqn = get_memory_table_fqn(spark)
         # Create a tiny temp DF and append it
@@ -124,12 +127,14 @@ def log_approval(
             StructField("anomalous_fields", ArrayType(StringType()), True),
             StructField("resolution_applied", StringType(), True),
             StructField("human_comments", StringType(), True),
+            StructField("decision", StringType(), True),
             StructField("timestamp", TimestampType(), True)
         ])
-        
-        row_data = [(dataset_name, issue_type, anomalous_fields, resolution_applied, human_comments, timestamp)]
+
+        row_data = [(dataset_name, issue_type, anomalous_fields, resolution_applied, human_comments, "approved", timestamp)]
         df = spark.createDataFrame(row_data, schema=schema)
-        df.write.format("delta").mode("append").saveAsTable(fqn)
+        # mergeSchema handles UC tables created before the 'decision' column existed
+        df.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable(fqn)
         print(f"Successfully logged approval to Delta table '{fqn}'")
     except Exception as e:
         print(f"[Warning] Failed to log approval to Delta table: {e}")
@@ -157,12 +162,16 @@ def get_few_shot_context(spark: SparkSession, dataset_name: str, issue_type: str
             
             rows = df.collect()
             for r in rows:
+                r_dict = r.asDict()
+                decision = r_dict.get("decision") or "approved"
                 records.append({
                     "dataset_name": r.dataset_name,
                     "issue_type": r.issue_type,
                     "anomalous_fields": r.anomalous_fields,
                     "resolution_applied": r.resolution_applied,
-                    "human_comments": r.human_comments
+                    "human_comments": r.human_comments,
+                    "record_type": "approval" if decision == "approved" else "rejection",
+                    "decision": decision,
                 })
             read_success = True
         except Exception as e:
@@ -227,6 +236,7 @@ def log_rejection(
         "resolution_applied": resolution,
         "human_comments": human_comments,
         "record_type": "rejection",
+        "decision": "rejected",
         "timestamp": timestamp.isoformat()
     }
 
@@ -260,11 +270,12 @@ def log_rejection(
             StructField("anomalous_fields", ArrayType(StringType()), True),
             StructField("resolution_applied", StringType(), True),
             StructField("human_comments", StringType(), True),
+            StructField("decision", StringType(), True),
             StructField("timestamp", TimestampType(), True)
         ])
-        row_data = [(dataset_name, issue_type, [], resolution, human_comments, timestamp)]
+        row_data = [(dataset_name, issue_type, [], resolution, human_comments, "rejected", timestamp)]
         df = spark.createDataFrame(row_data, schema=schema)
-        df.write.format("delta").mode("append").saveAsTable(fqn)
+        df.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable(fqn)
         print(f"Successfully logged rejection to Delta table '{fqn}'")
     except Exception as e:
         print(f"[Warning] Failed to log rejection to Delta table: {e}")
@@ -369,7 +380,7 @@ def log_codebase(
 ) -> None:
     """Store successfully compiled codebase in memory."""
     timestamp = datetime.datetime.now()
-    
+
     # 1. Update local cache
     try:
         os.makedirs(os.path.dirname(LOCAL_CODEBASE_MEMORY_PATH), exist_ok=True)
@@ -377,14 +388,14 @@ def log_codebase(
         if os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
             with open(LOCAL_CODEBASE_MEMORY_PATH, "r") as f:
                 data = json.load(f)
-        
+
         data[fingerprint] = {
             "bronze_code": bronze_code,
             "silver_code": silver_code,
             "gold_code": gold_code,
             "timestamp": timestamp.isoformat()
         }
-        
+
         with open(LOCAL_CODEBASE_MEMORY_PATH, "w") as f:
             json.dump(data, f, indent=2)
     except Exception as e:
@@ -395,10 +406,10 @@ def log_codebase(
         is_local = spark.conf.get("spark.master", "").startswith("local")
     except Exception:
         is_local = False
-        
+
     if is_local:
         return
-        
+
     try:
         fqn = get_codebase_table_fqn(spark)
         schema = StructType([
@@ -408,10 +419,10 @@ def log_codebase(
             StructField("gold_code", StringType(), True),
             StructField("timestamp", TimestampType(), True)
         ])
-        
+
         row_data = [(fingerprint, bronze_code, silver_code, gold_code, timestamp)]
         df = spark.createDataFrame(row_data, schema=schema)
-        
+
         # Merge/Upsert to keep only the latest code for this fingerprint
         if spark.catalog.tableExists(fqn):
             from delta.tables import DeltaTable
@@ -422,8 +433,201 @@ def log_codebase(
             ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
         else:
             df.write.format("delta").mode("overwrite").saveAsTable(fqn)
-            
+
         print(f"Successfully logged codebase to Delta table '{fqn}'")
     except Exception as e:
         print(f"[Warning] Failed to log codebase to Delta table: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Run History — append-only audit log of every pipeline execution attempt.
+# One row per execution_node run (success or failure), date-stamped, so past
+# runs can be reviewed even after the live checkpoint thread moves on or is
+# reset. This is distinct from agent_codebase_memory (which only keeps the
+# LATEST code per dataset fingerprint) and from agent_fewshot_memory (which
+# logs individual human approve/reject decisions, not full run outcomes).
+# ---------------------------------------------------------------------------
+
+LOCAL_RUN_HISTORY_PATH = "./generated/config/agent_run_history.json"
+
+
+def get_run_history_table_fqn(spark: SparkSession) -> str:
+    """Read the run history table path from Spark configuration or catalog settings."""
+    try:
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "databricks_langgraph")
+    except Exception:
+        catalog = "databricks_langgraph"
+    return f"{catalog}.gold.agent_run_history"
+
+
+def init_run_history_table(spark: SparkSession) -> bool:
+    """Initialize the gold.agent_run_history Delta Table in Unity Catalog."""
+    fqn = get_run_history_table_fqn(spark)
+    print(f"Initializing run history table at: {fqn}...")
+
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if is_local:
+        os.makedirs(os.path.dirname(LOCAL_RUN_HISTORY_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_RUN_HISTORY_PATH):
+            with open(LOCAL_RUN_HISTORY_PATH, "w") as f:
+                json.dump([], f)
+        return True
+
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
+
+        spark.sql(f"""
+            CREATE TABLE IF NOT EXISTS {fqn} (
+                run_id STRING,
+                run_date DATE,
+                run_timestamp TIMESTAMP,
+                pipeline_status STRING,
+                active_agent STRING,
+                dataset_fingerprint STRING,
+                failed_scripts ARRAY<STRING>,
+                execution_logs STRING,
+                silver_summary STRING,
+                gold_summary STRING,
+                final_report STRING,
+                approved_steps STRING,
+                review_comments STRING
+            ) USING DELTA
+        """)
+        return True
+    except Exception as e:
+        print(f"[Warning] Failed to initialize UC run history table: {e}. Falling back to local file.")
+        os.makedirs(os.path.dirname(LOCAL_RUN_HISTORY_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_RUN_HISTORY_PATH):
+            with open(LOCAL_RUN_HISTORY_PATH, "w") as f:
+                json.dump([], f)
+        return False
+
+
+def log_run(
+    spark: SparkSession,
+    run_id: str,
+    pipeline_status: str,
+    active_agent: str,
+    dataset_fingerprint: str,
+    failed_scripts: List[str],
+    execution_logs: Dict[str, Any],
+    silver_summary: Dict[str, Any],
+    gold_summary: Dict[str, Any],
+    final_report: str,
+    approved_steps: Dict[str, Any],
+    review_comments: str,
+) -> None:
+    """Append one row to the run history audit log. Always append — never
+    overwrite/merge — so every attempt (including failed ones) stays visible
+    for auditing, unlike agent_codebase_memory which only keeps the latest."""
+    timestamp = datetime.datetime.now()
+    run_date = timestamp.date()
+
+    execution_logs_json = json.dumps(execution_logs or {})
+    silver_summary_json = json.dumps(silver_summary or {})
+    gold_summary_json = json.dumps(gold_summary or {})
+    approved_steps_json = json.dumps(approved_steps or {})
+
+    # 1. Always update local JSON cache
+    try:
+        os.makedirs(os.path.dirname(LOCAL_RUN_HISTORY_PATH), exist_ok=True)
+        records = []
+        if os.path.exists(LOCAL_RUN_HISTORY_PATH):
+            with open(LOCAL_RUN_HISTORY_PATH, "r") as f:
+                records = json.load(f)
+
+        records.append({
+            "run_id": run_id,
+            "run_date": run_date.isoformat(),
+            "run_timestamp": timestamp.isoformat(),
+            "pipeline_status": pipeline_status,
+            "active_agent": active_agent,
+            "dataset_fingerprint": dataset_fingerprint,
+            "failed_scripts": failed_scripts or [],
+            "execution_logs": execution_logs_json,
+            "silver_summary": silver_summary_json,
+            "gold_summary": gold_summary_json,
+            "final_report": final_report,
+            "approved_steps": approved_steps_json,
+            "review_comments": review_comments,
+        })
+
+        with open(LOCAL_RUN_HISTORY_PATH, "w") as f:
+            json.dump(records, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to log run history to local JSON cache: {e}")
+
+    # 2. Try Spark/Delta table log
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if is_local:
+        return
+
+    try:
+        fqn = get_run_history_table_fqn(spark)
+        schema = StructType([
+            StructField("run_id", StringType(), True),
+            StructField("run_date", StringType(), True),  # cast to date below
+            StructField("run_timestamp", TimestampType(), True),
+            StructField("pipeline_status", StringType(), True),
+            StructField("active_agent", StringType(), True),
+            StructField("dataset_fingerprint", StringType(), True),
+            StructField("failed_scripts", ArrayType(StringType()), True),
+            StructField("execution_logs", StringType(), True),
+            StructField("silver_summary", StringType(), True),
+            StructField("gold_summary", StringType(), True),
+            StructField("final_report", StringType(), True),
+            StructField("approved_steps", StringType(), True),
+            StructField("review_comments", StringType(), True),
+        ])
+
+        row_data = [(
+            run_id, run_date.isoformat(), timestamp, pipeline_status, active_agent,
+            dataset_fingerprint, failed_scripts or [], execution_logs_json,
+            silver_summary_json, gold_summary_json, final_report,
+            approved_steps_json, review_comments,
+        )]
+        df = spark.createDataFrame(row_data, schema=schema).withColumn("run_date", F.col("run_date").cast("date"))
+        df.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable(fqn)
+        print(f"Successfully logged run to Delta table '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to log run history to Delta table: {e}")
+
+
+def get_run_history(spark: SparkSession, limit: int = 200) -> List[Dict[str, Any]]:
+    """Retrieve recent run history rows, newest first. Used by the dashboard's
+    Run History tab. Returns plain dicts (JSON fields left as strings for the
+    caller to parse/display as needed)."""
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if not is_local:
+        try:
+            fqn = get_run_history_table_fqn(spark)
+            df = spark.read.table(fqn).orderBy(F.col("run_timestamp").desc()).limit(limit)
+            return [r.asDict() for r in df.collect()]
+        except Exception as e:
+            print(f"[Warning] Failed to read from UC run history table: {e}. Checking local cache.")
+
+    try:
+        if os.path.exists(LOCAL_RUN_HISTORY_PATH):
+            with open(LOCAL_RUN_HISTORY_PATH, "r") as f:
+                records = json.load(f)
+            records = sorted(records, key=lambda r: r.get("run_timestamp", ""), reverse=True)
+            return records[:limit]
+    except Exception as e:
+        print(f"[Warning] Failed to read from local run history cache: {e}")
+
+    return []
 

@@ -267,6 +267,9 @@ def profiler_node(state: AgentState) -> Dict[str, Any]:
 
     # Format message for LLM profiling review
     prompt = f"Raw dataset profiling metrics summary:\n{json.dumps(condensed, indent=2)}\n\nAnalyze and summarize these findings."
+    if state.get("review_comments"):
+        prompt += f"\n\nHuman feedback on previous profiling report:\n{state['review_comments']}"
+
     messages = [
         SystemMessage(content=prompts.PROFILER_SYSTEM_PROMPT),
         HumanMessage(content=prompt)
@@ -779,7 +782,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         pass
         
     stored = None
-    if not reset_requested:
+    if not reset_requested and not state.get("review_comments"):
         stored = memory.get_stored_codebase(spark, fingerprint)
         
     bronze = ""
@@ -792,7 +795,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         silver = stored["silver_code"]
         gold = stored["gold_code"]
     else:
-        print("[Codebase Memory] No matching compiled codebase found or reset requested. Generating first draft...")
+        print("[Codebase Memory] No matching compiled codebase found or reset requested/rejected. Generating first draft...")
         contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
         ddl_str = state["gold_ddl"]
         
@@ -802,6 +805,19 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         )
         if state.get("review_comments"):
             prompt += f"\n\nHuman feedback / fix comments:\n{state['review_comments']}"
+
+        if state.get("execution_logs"):
+            logs_str = ""
+            for script_name, log_info in state["execution_logs"].items():
+                if log_info.get("exit_code", 0) != 0:
+                    logs_str += (
+                        f"\n--- Failure in {script_name} ---\n"
+                        f"Exit Code: {log_info.get('exit_code')}\n"
+                        f"Stdout snippet:\n{log_info.get('stdout', '')[:1000]}\n"
+                        f"Stderr / Traceback:\n{log_info.get('stderr', '')[:2000]}\n"
+                    )
+            if logs_str:
+                prompt += f"\n\nPrevious execution failures during runtime:\n{logs_str}"
             
         messages = [
             SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),

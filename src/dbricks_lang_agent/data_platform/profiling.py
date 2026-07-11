@@ -23,6 +23,100 @@ ID_SUFFIX = "_id"
 FK_OVERLAP_THRESHOLD = 0.5
 
 
+def ensure_and_seed_volume(spark: SparkSession, vol_path: str, is_databricks: bool) -> None:
+    """Ensure raw schema and volume exist in Databricks, and seed them with local CSVs if empty."""
+    if not is_databricks:
+        return
+
+    # Parse catalog, schema, volume name
+    parts = [p for p in vol_path.split("/") if p]
+    if len(parts) < 4 or parts[0] != "Volumes":
+        print(f"[Volume Provision] Warning: Invalid volume path format for auto-provisioning: {vol_path}")
+        return
+
+    catalog = parts[1]
+    schema = parts[2]
+    volume_name = parts[3]
+
+    # Run SQL commands to create schema and volume
+    try:
+        print(f"[Volume Provision] Ensuring schema `{catalog}`.`{schema}` exists...")
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}`")
+    except Exception as e:
+        print(f"[Volume Provision] Warning: Failed to create schema via SQL: {e}")
+
+    try:
+        print(f"[Volume Provision] Ensuring volume `{catalog}`.`{schema}`.`{volume_name}` exists...")
+        spark.sql(f"CREATE VOLUME IF NOT EXISTS `{catalog}`.`{schema}`.`{volume_name}`")
+    except Exception as e:
+        print(f"[Volume Provision] Warning: Failed to create volume via SQL: {e}")
+
+    # Check if volume is empty
+    volume_empty = True
+    try:
+        # Check via POSIX first
+        if os.path.exists(vol_path) and os.path.isdir(vol_path):
+            import glob
+            if glob.glob(os.path.join(vol_path, "*.csv")):
+                volume_empty = False
+                print(f"[Volume Provision] Found CSV files in Volume via POSIX mount.")
+    except Exception:
+        pass
+
+    if volume_empty:
+        try:
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            contents = list(w.files.list_directory_contents(vol_path))
+            if any(f.name.endswith(".csv") for f in contents):
+                volume_empty = False
+                print(f"[Volume Provision] Found CSV files in Volume via Workspace SDK.")
+        except Exception as e:
+            print(f"[Volume Provision] SDK listing failed or empty: {e}")
+
+    # If empty, seed from local Source directory
+    if volume_empty:
+        print(f"[Volume Provision] Volume is empty. Locating local CSV files to seed...")
+        # Walk up to find Source directory
+        cur_dir = os.path.dirname(os.path.abspath(__file__))
+        local_source_dir = None
+        for _ in range(5):
+            candidate = os.path.join(cur_dir, "Source")
+            if os.path.exists(candidate) and os.path.isdir(candidate):
+                local_source_dir = candidate
+                break
+            cur_dir = os.path.dirname(cur_dir)
+
+        if local_source_dir:
+            import glob
+            import io
+            local_csvs = glob.glob(os.path.join(local_source_dir, "*.csv"))
+            print(f"[Volume Provision] Found local CSV files: {local_csvs}")
+            for local_csv in local_csvs:
+                fname = os.path.basename(local_csv)
+                dest_path = os.path.join(vol_path, fname)
+                # Try POSIX copy
+                try:
+                    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                    with open(local_csv, "rb") as sf:
+                        with open(dest_path, "wb") as df:
+                            df.write(sf.read())
+                    print(f"[Volume Provision] Seeded file via POSIX: {fname} → {dest_path}")
+                except Exception as e_posix:
+                    # Try SDK upload
+                    try:
+                        from databricks.sdk import WorkspaceClient
+                        w = WorkspaceClient()
+                        with open(local_csv, "rb") as sf:
+                            file_data = sf.read()
+                        w.files.upload(dest_path, io.BytesIO(file_data), overwrite=True)
+                        print(f"[Volume Provision] Seeded file via SDK: {fname} → {dest_path}")
+                    except Exception as e_sdk:
+                        print(f"[Volume Provision] Failed to seed {fname} to Volume: {e_sdk}")
+        else:
+            print("[Volume Provision] Warning: Local Source directory not found. Cannot seed volume.")
+
+
 def discover_source_tables() -> Dict[str, str]:
     """Discover all CSV source files in the configured Unity Catalog Volume.
     Avoids POSIX file system checks (glob/exists) on Databricks Serverless,
@@ -34,20 +128,24 @@ def discover_source_tables() -> Dict[str, str]:
     # Check if we are running in Databricks (Notebook or App)
     is_databricks = "DATABRICKS_RUNTIME_VERSION" in os.environ or os.environ.get("DATABRICKS_APP_NAME") is not None
     
+    if is_databricks:
+        try:
+            spark = get_spark()
+            ensure_and_seed_volume(spark, vol_path, is_databricks)
+        except Exception as e:
+            print(f"[Warning] Failed to ensure and seed volume: {e}")
+
     files = []
     if is_databricks:
-        # Convert /Volumes/catalog/schema/volume to dbfs:/Volumes/catalog/schema/volume
-        dbfs_path = f"dbfs:{vol_path}" if not vol_path.startswith("dbfs:") else vol_path
-        
         # 1. Try DBUtils (runs inside notebooks)
         try:
             from pyspark.dbutils import DBUtils
             # Safely get spark session
             spark = get_spark()
             dbutils = DBUtils(spark)
-            files_list = dbutils.fs.ls(dbfs_path)
+            files_list = dbutils.fs.ls(vol_path)
             files = [f.path for f in files_list if f.name.endswith(".csv")]
-            print(f"[Info] Discovered {len(files)} CSV source files via DBUtils from {dbfs_path}")
+            print(f"[Info] Discovered {len(files)} CSV source files via DBUtils from {vol_path}")
         except Exception as e_db:
             # 2. Try Databricks SDK WorkspaceClient (runs inside App)
             try:

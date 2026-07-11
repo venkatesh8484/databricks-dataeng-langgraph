@@ -615,6 +615,34 @@ def _sanitize_and_heal_code(code: str) -> str:
             code
         )
 
+    # 1.14. Fix hallucinated literal "event_ts" column reference. The gold-layer prompt
+    # explicitly warns the model that `event_ts` is a placeholder name only and never a
+    # real column, but the LLM sometimes emits it verbatim anyway (e.g. in point-in-time
+    # SCD2 join conditions). Since we don't know the real per-fact timestamp column
+    # ahead of time, infer it structurally: within each function, the real event
+    # timestamp column is the one most recently cast via `to_timestamp(...)` before the
+    # `event_ts` reference appears (this mirrors the pattern the prompt asks for, e.g.
+    # `.withColumn("created_ts", F.to_timestamp("created_ts"))` immediately followed by
+    # the point-in-time join). Replace all literal "event_ts"/'event_ts' occurrences in
+    # that function with the inferred real column name.
+    if re.search(r"""['"]event_ts['"]""", code):
+        def_pattern = re.compile(r"^(\s*)def\s+\w+\s*\(")
+        ts_assign_pattern = re.compile(r'withColumn\(\s*["\'](\w+)["\']\s*,\s*[\w.]*to_timestamp\(')
+        event_ts_pattern = re.compile(r"""(['"])event_ts\1""")
+
+        fixed_lines = []
+        current_ts_col = None
+        for line in code.split("\n"):
+            if def_pattern.match(line):
+                current_ts_col = None  # reset inference at each new function boundary
+            m_ts = ts_assign_pattern.search(line)
+            if m_ts:
+                current_ts_col = m_ts.group(1)
+            if current_ts_col and event_ts_pattern.search(line):
+                line = event_ts_pattern.sub(lambda mm: mm.group(1) + current_ts_col + mm.group(1), line)
+            fixed_lines.append(line)
+        code = "\n".join(fixed_lines)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

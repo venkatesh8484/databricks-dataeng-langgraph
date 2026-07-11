@@ -1157,6 +1157,13 @@ with tab2:
         
         # Render specific artifact content based on what node is paused
         if active_agent == "Profiler":
+            profiler_error = state.values.get("profiler_error", "")
+            if profiler_error:
+                st.error(profiler_error)
+                diagnostics = state.values.get("profiling_report", {}).get("discovery_diagnostics", [])
+                if diagnostics:
+                    with st.expander("🔍 Raw discovery trail (DBUtils / SDK / POSIX attempts)", expanded=True):
+                        st.code("\n".join(diagnostics), language="text")
             st.markdown("### Inferred Source Table Schemas:")
             st.json(state.values.get("discovered_tables", {}))
             st.markdown("### Dynamic Profiling Report:")

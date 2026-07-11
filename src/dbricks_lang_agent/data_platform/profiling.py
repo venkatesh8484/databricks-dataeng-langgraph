@@ -151,23 +151,46 @@ def ensure_and_seed_volume(spark: SparkSession, vol_path: str, is_databricks: bo
             print("[Volume Provision] Warning: Local Source directory not found. Cannot seed volume.")
 
 
+# Populated by discover_source_tables() on every call so callers (dashboard,
+# profiler_node) can surface *why* discovery came back empty instead of just
+# guessing. Reset at the top of every call.
+_last_discovery_diagnostics: List[str] = []
+
+
+def get_last_discovery_diagnostics() -> List[str]:
+    """Return the diagnostic trail (attempted methods, counts, exceptions) from
+    the most recent discover_source_tables() call."""
+    return list(_last_discovery_diagnostics)
+
+
 def discover_source_tables() -> Dict[str, str]:
     """Discover all CSV source files in the configured Unity Catalog Volume.
     Avoids POSIX file system checks (glob/exists) on Databricks Serverless,
     using DBUtils or Workspace Client instead.
     """
+    global _last_discovery_diagnostics
+    _last_discovery_diagnostics = []
+
+    def _log(msg: str) -> None:
+        print(msg)
+        _last_discovery_diagnostics.append(msg)
+
     cfg = load_config()
     vol_path = cfg.get("volume_raw_path", "/Volumes/databricks_langgraph/raw/source_volume")
-    
+    _log(f"[Discovery] Configured volume_raw_path: {vol_path}")
+
     # Check if we are running in Databricks (Notebook or App)
     is_databricks = "DATABRICKS_RUNTIME_VERSION" in os.environ or os.environ.get("DATABRICKS_APP_NAME") is not None
-    
+    _log(f"[Discovery] is_databricks={is_databricks} "
+         f"(DATABRICKS_RUNTIME_VERSION={os.environ.get('DATABRICKS_RUNTIME_VERSION')!r}, "
+         f"DATABRICKS_APP_NAME={os.environ.get('DATABRICKS_APP_NAME')!r})")
+
     if is_databricks:
         try:
             spark = get_spark()
             ensure_and_seed_volume(spark, vol_path, is_databricks)
         except Exception as e:
-            print(f"[Warning] Failed to ensure and seed volume: {e}")
+            _log(f"[Warning] Failed to ensure and seed volume: {type(e).__name__}: {e}")
 
     files = []
     if is_databricks:
@@ -180,7 +203,7 @@ def discover_source_tables() -> Dict[str, str]:
             dbfs_path = f"dbfs:{vol_path}" if not vol_path.startswith("dbfs:") else vol_path
             files_list = dbutils.fs.ls(dbfs_path)
             files = [f.path for f in files_list if f.name.endswith(".csv")]
-            print(f"[Info] Discovered {len(files)} CSV source files via DBUtils from {dbfs_path}")
+            _log(f"[Info] Discovered {len(files)} CSV source files via DBUtils from {dbfs_path}")
         except Exception as e_db:
             # 2. Try Databricks SDK WorkspaceClient (runs inside App)
             try:
@@ -188,19 +211,32 @@ def discover_source_tables() -> Dict[str, str]:
                 w = WorkspaceClient()
                 files_list = list(w.files.list_directory_contents(vol_path))
                 files = [f.path for f in files_list if f.name.endswith(".csv")]
-                print(f"[Info] Discovered {len(files)} CSV source files via SDK from {vol_path}")
+                _log(f"[Info] Discovered {len(files)} CSV source files via SDK from {vol_path}")
             except Exception as e_sdk:
-                print(f"[Warning] Failed to list volume files via DBUtils ({e_db}) and SDK ({e_sdk})")
-                
+                _log(
+                    f"[Warning] Failed to list volume files via DBUtils "
+                    f"({type(e_db).__name__}: {e_db}) and SDK ({type(e_sdk).__name__}: {e_sdk})"
+                )
+
     # Fallback: standard POSIX glob (local runs or when POSIX mount works)
     if not files:
-        if not os.path.exists(vol_path):
+        exists = os.path.exists(vol_path)
+        _log(f"[Discovery] os.path.exists({vol_path}) = {exists}")
+        if not exists:
             # Fallback to local source path for unit testing
             vol_path = os.environ.get("SOURCE_ROOT", "./Source")
-        
+            _log(f"[Discovery] Falling back to SOURCE_ROOT/local path: {vol_path}")
+
         import glob
         files = sorted(glob.glob(os.path.join(vol_path, "*.csv")))
-        print(f"[Info] Discovered {len(files)} CSV source files via POSIX glob from {vol_path}")
+        _log(f"[Info] Discovered {len(files)} CSV source files via POSIX glob from {vol_path}")
+        if not files and exists:
+            try:
+                listing = os.listdir(vol_path)
+                _log(f"[Discovery] Directory {vol_path} exists but glob found no *.csv. "
+                     f"Raw os.listdir() contents: {listing[:50]}")
+            except Exception as e_ls:
+                _log(f"[Discovery] os.listdir({vol_path}) failed: {type(e_ls).__name__}: {e_ls}")
 
     tables = {}
     for f in files:
@@ -208,6 +244,12 @@ def discover_source_tables() -> Dict[str, str]:
         # Strip raw_ prefix if present
         table_name = stem[4:] if stem.startswith("raw_") else stem
         tables[table_name] = os.path.basename(f)
+
+    if not tables:
+        _log("[Discovery] RESULT: 0 tables discovered.")
+    else:
+        _log(f"[Discovery] RESULT: {len(tables)} tables discovered: {sorted(tables.keys())}")
+
     return tables
 
 
@@ -414,6 +456,7 @@ def profile_all_sources(output_path: Optional[str] = None) -> Dict[str, Any]:
     """
     spark = get_spark()
     discovered_tables = discover_source_tables()
+    discovery_diagnostics = get_last_discovery_diagnostics()
 
     # Load all source DataFrames
     dfs: Dict[str, DataFrame] = {
@@ -461,6 +504,7 @@ def profile_all_sources(output_path: Optional[str] = None) -> Dict[str, Any]:
         "duplicate_keys": dup_keys,
         "referential_integrity": fks,
         "tables": tables_profile,
+        "discovery_diagnostics": discovery_diagnostics,
     }
 
     if output_path:

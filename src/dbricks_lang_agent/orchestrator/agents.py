@@ -208,13 +208,17 @@ def profiler_node(state: AgentState) -> Dict[str, Any]:
     # GUARD: No tables discovered — return diagnostic error WITHOUT calling the LLM.
     # Calling the LLM with empty data causes hallucination (it invents tables/columns).
     if not discovered:
-        cfg_path = "/app/python/source_code/config.yaml"
+        diagnostics = report.get("discovery_diagnostics", [])
+        diag_trail = "\n".join(f"  - {line}" for line in diagnostics) or "  (no diagnostics captured)"
         error_msg = (
-            "Profiler BLOCKED: No source tables discovered. "
-            "Diagnostics: (1) Check volume_raw_path in config.yaml — current path may be wrong. "
-            "(2) Verify DBUtils / Databricks SDK file listing permissions for the volume. "
-            "(3) Confirm CSV files exist at the configured volume path. "
-            "(4) If running locally, ensure SOURCE_ROOT env var points to a directory with .csv files."
+            "Profiler BLOCKED: No source tables discovered.\n"
+            "Live discovery trail from this run:\n"
+            f"{diag_trail}\n"
+            "Common causes: (1) volume_raw_path in config.yaml doesn't match the actual UC Volume path. "
+            "(2) The app/notebook's identity lacks READ FILES / browse privilege on the volume — "
+            "check the Permissions tab on the volume in Catalog Explorer. "
+            "(3) DBUtils and SDK listing both raised exceptions — see trail above for the exact error. "
+            "(4) If running locally, set SOURCE_ROOT to a directory with .csv files."
         )
         print(f"[Profiler] ABORT: {error_msg}")
         return {
@@ -223,6 +227,7 @@ def profiler_node(state: AgentState) -> Dict[str, Any]:
                 "error": error_msg,
                 "profiler_narration": "",
                 "discovered_tables": {},
+                "discovery_diagnostics": diagnostics,
             },
             "profiler_error": error_msg,
             "active_agent": "Profiler",

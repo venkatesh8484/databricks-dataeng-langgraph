@@ -170,11 +170,37 @@ st.markdown("""
             -webkit-font-smoothing: antialiased;
         }
 
-        /* Text colors — DO NOT add div/span here; it breaks code blocks */
-        p, .stMarkdown p, label {
-            color: #334155 !important;
+        /* ── Global text — all paragraph/list/label content must be readable ── */
+        p, label,
+        .stMarkdown p, .stMarkdown li, .stMarkdown ol, .stMarkdown ul,
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li,
+        [data-testid="stMarkdownContainer"] span {
+            color: #1E293B !important;
             font-size: 0.925rem !important;
             line-height: 1.6 !important;
+        }
+
+        /* ── Chat message containers ─────────────────────────────── */
+        /* Ensure all text inside native st.chat_message() is visible */
+        [data-testid="stChatMessage"] { background: transparent !important; }
+        [data-testid="stChatMessageContent"] { background: transparent !important; }
+        [data-testid="stChatMessage"] p,
+        [data-testid="stChatMessage"] span,
+        [data-testid="stChatMessage"] li,
+        [data-testid="stChatMessage"] div,
+        [data-testid="stChatMessage"] .stMarkdown p,
+        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p,
+        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] span,
+        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li {
+            color: #1E293B !important;
+            font-size: 0.9rem !important;
+        }
+        /* Caption text inside chat stays muted */
+        [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] p,
+        [data-testid="stChatMessage"] small {
+            color: #64748B !important;
+            font-size: 0.78rem !important;
         }
 
         /* Code blocks: let Streamlit's own theme handle colours/background.
@@ -454,7 +480,23 @@ st.markdown("""
             color: #4F46E5;
         }
 
-        /* ── Streamlit form input override ───────────────────────── */
+        /* ── Streamlit chat input (st.chat_input dark pill) ────────────────── */
+        [data-testid="stChatInput"] textarea {
+            background: #1E293B !important;
+            color: #F1F5F9 !important;
+            border-radius: 8px !important;
+            font-size: 0.9rem !important;
+        }
+        [data-testid="stChatInput"] textarea::placeholder {
+            color: #94A3B8 !important;
+        }
+        [data-testid="stChatInput"] button {
+            background: #4F46E5 !important;
+            color: #FFFFFF !important;
+            border-radius: 6px !important;
+        }
+
+        /* ── Streamlit form text input override ─────────────────────────────── */
         [data-testid="stTextInput"] input {
             border-radius: 6px !important;
             border: 1px solid #D1D5DB !important;
@@ -469,6 +511,19 @@ st.markdown("""
             outline: none !important;
         }
         [data-testid="stTextInput"] input::placeholder { color: #94A3B8 !important; }
+
+        /* ── Caption / small text ──────────────────────────────────────────── */
+        [data-testid="stCaptionContainer"] p,
+        .stCaption p {
+            color: #64748B !important;
+            font-size: 0.8rem !important;
+        }
+
+        /* ── Alert type text colours ───────────────────────────────────────── */
+        .stSuccess [data-testid="stMarkdownContainer"] p  { color: #065F46 !important; }
+        .stWarning [data-testid="stMarkdownContainer"] p  { color: #92400E !important; }
+        .stError   [data-testid="stMarkdownContainer"] p  { color: #991B1B !important; }
+        .stInfo    [data-testid="stMarkdownContainer"] p  { color: #1E40AF !important; }
     </style>
 """, unsafe_allow_html=True)
 

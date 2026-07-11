@@ -805,9 +805,14 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     from dbricks_lang_agent.orchestrator import memory
     
     spark = get_spark()
-    
-    # 1. Initialize codebase memory table
+
+    # 1. Initialize codebase memory table + compile audit log, and mint a
+    # run id for this engineering_node invocation so every compile/self-heal
+    # attempt it makes can be tied back together for auditing.
     memory.init_codebase_memory_table(spark)
+    memory.init_compile_audit_table(spark)
+    import uuid as _uuid
+    compile_run_id = str(_uuid.uuid4())
     
     # GUARD: No contracts — cannot generate code for nonexistent tables
     if not state.get("contracts"):
@@ -864,6 +869,14 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     silver = ""
     gold = ""
 
+    # Tracks, per script, WHY the code about to enter the compiler loop looks
+    # the way it does — 'cache_recalled' (untouched from Unity Catalog),
+    # 'llm_targeted_patch' (only this script was regenerated after a prior
+    # execution failure), or 'llm_fresh_generated' (no usable cache at all).
+    # Logged alongside every compile attempt below so cache-vs-regenerate
+    # behavior is auditable instead of inferred from stack traces.
+    code_source = {"bronze_code": "unknown", "silver_code": "unknown", "gold_code": "unknown"}
+
     contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
     ddl_str = state["gold_ddl"]
 
@@ -880,6 +893,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             "silver_code": stored["silver_code"],
             "gold_code": stored["gold_code"],
         }
+        code_source = {"bronze_code": "cache_recalled", "silver_code": "cache_recalled", "gold_code": "cache_recalled"}
 
         llm = get_llm("engineering")
         for script_name in sorted(failed_script_names):
@@ -910,8 +924,10 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
                 fix_response = llm.invoke(messages)
                 fix_parsed = parse_json_from_response(fix_response.content, fallback_key=key_name)
                 current_by_key[key_name] = _sanitize_and_heal_code(fix_parsed.get(key_name, current_by_key[key_name]))
+                code_source[key_name] = "llm_targeted_patch"
             except ValueError as e_parse:
                 print(f"[Codebase Memory] WARNING: Could not parse targeted fix response for {script_name}: {e_parse}. Keeping cached code as-is; compiler loop below will retry.")
+                code_source[key_name] = "cache_recalled_patch_failed"
 
         bronze = current_by_key["bronze_code"]
         silver = current_by_key["silver_code"]
@@ -921,6 +937,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         bronze = stored["bronze_code"]
         silver = stored["silver_code"]
         gold = stored["gold_code"]
+        code_source = {"bronze_code": "cache_recalled", "silver_code": "cache_recalled", "gold_code": "cache_recalled"}
     else:
         print("[Codebase Memory] No matching compiled codebase found or reset requested/rejected. Generating first draft...")
 
@@ -956,6 +973,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         bronze = _sanitize_and_heal_code(parsed.get("bronze_code", ""))
         silver = _sanitize_and_heal_code(parsed.get("silver_code", ""))
         gold = _sanitize_and_heal_code(parsed.get("gold_code", ""))
+        code_source = {"bronze_code": "llm_fresh_generated", "silver_code": "llm_fresh_generated", "gold_code": "llm_fresh_generated"}
 
     # 4. Sequential Compilation & Self-Correction Loop
     scripts_info = [
@@ -988,7 +1006,26 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             print(f"[Compiler Loop] Verifying {script_name} (Attempt {attempt + 1})...")
             res = _run_and_verify_script(script_name, current_code)
             verification_logs[script_name] = res
-            
+
+            # Audit every attempt: attempt 0 is tagged with how this script's
+            # starting code was sourced (cache/patch/fresh); any retry beyond
+            # that is the compiler loop's own self-heal regenerating it.
+            try:
+                memory.log_compile_attempt(
+                    spark,
+                    run_id=compile_run_id,
+                    dataset_fingerprint=fingerprint,
+                    script_name=script_name,
+                    attempt_number=attempt + 1,
+                    code_source=code_source.get(key_name, "unknown") if attempt == 0 else "llm_self_heal_fix",
+                    code=current_code,
+                    exit_code=res["exit_code"],
+                    stdout=res["stdout"],
+                    stderr=res["stderr"],
+                )
+            except Exception as e_audit:
+                print(f"[Compile Audit] WARNING: Failed to log compile attempt for {script_name}: {e_audit}")
+
             if res["exit_code"] == 0:
                 print(f"[Compiler Loop] {script_name} compiled and executed successfully!")
                 current_codes[key_name] = current_code
@@ -1070,7 +1107,23 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
 def execution_node(state: AgentState) -> Dict[str, Any]:
     """Runs the generated scripts and compiles the final orchestrator report."""
     print(">>> [Orchestrator] Executing PySpark scripts on Databricks...")
-    
+
+    # Mint a run id up front (reused below for the run-history row) and set
+    # up the compile audit context so each script's REAL execution outcome
+    # against production data gets logged alongside its compile-time
+    # verification attempts from engineering_node — same dataset_fingerprint,
+    # so the two can be cross-referenced.
+    import uuid as _uuid
+    run_id = str(_uuid.uuid4())
+    audit_spark = None
+    audit_fingerprint = ""
+    try:
+        audit_spark = get_spark()
+        audit_fingerprint = get_dataset_fingerprint(audit_spark, state.get("contracts", {}), state.get("gold_ddl", ""))
+        memory.init_compile_audit_table(audit_spark)
+    except Exception as e:
+        print(f"[Compile Audit] WARNING: Could not initialize compile audit context: {e}")
+
     code_dir = "/tmp/generated/data_platform"
     os.makedirs(code_dir, exist_ok=True)
     
@@ -1121,6 +1174,24 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
                 "stdout": stdout_io.getvalue()[:15000],
                 "stderr": stderr_io.getvalue()[:15000]
             }
+
+            if audit_spark is not None:
+                try:
+                    memory.log_compile_attempt(
+                        audit_spark,
+                        run_id=run_id,
+                        dataset_fingerprint=audit_fingerprint,
+                        script_name=s,
+                        attempt_number=1,
+                        code_source="execution_node_real_run",
+                        code=code_content,
+                        exit_code=exit_code,
+                        stdout=logs[s]["stdout"],
+                        stderr=logs[s]["stderr"],
+                    )
+                except Exception as e_audit:
+                    print(f"[Compile Audit] WARNING: Failed to log execution attempt for {s}: {e_audit}")
+
             if exit_code != 0:
                 print(f"!!! Script {s} failed with exit code {exit_code}")
                 # Stop executing downstream scripts if upstream fails
@@ -1191,8 +1262,6 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     # back to self-heal, or is reset. Every execution_node run gets its own
     # row — success or failure — unlike agent_codebase_memory which only
     # keeps the latest code per fingerprint.
-    import uuid as _uuid
-    run_id = str(_uuid.uuid4())
     try:
         spark = get_spark()
         fingerprint = get_dataset_fingerprint(spark, state.get("contracts", {}), state.get("gold_ddl", ""))

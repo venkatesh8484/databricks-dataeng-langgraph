@@ -440,6 +440,211 @@ def log_codebase(
 
 
 # ---------------------------------------------------------------------------
+# Compile Audit Log — append-only record of EVERY compile/self-heal attempt
+# made while producing bronze/silver/gold scripts: whether the code fed into
+# that attempt came from the Unity Catalog cache untouched, a fresh LLM
+# generation, a targeted cache-patch (only the previously-failing script
+# regenerated), or an in-loop compiler self-heal retry — plus the resulting
+# exit_code/stdout/stderr and a hash of the exact code that ran. This exists
+# so "is the agent actually reusing code or generating something new every
+# time?" is answerable by reading a table instead of inferring it from stack
+# trace line numbers. Always append — never overwrite — one row per attempt.
+# ---------------------------------------------------------------------------
+
+LOCAL_COMPILE_AUDIT_PATH = "./generated/config/agent_compile_audit.json"
+
+
+def get_compile_audit_table_fqn(spark: SparkSession) -> str:
+    """Read the compile audit table path from Spark configuration or catalog settings."""
+    try:
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "databricks_langgraph")
+    except Exception:
+        catalog = "databricks_langgraph"
+    return f"{catalog}.gold.agent_compile_audit"
+
+
+def init_compile_audit_table(spark: SparkSession) -> bool:
+    """Initialize the gold.agent_compile_audit Delta Table in Unity Catalog."""
+    fqn = get_compile_audit_table_fqn(spark)
+    print(f"Initializing compile audit table at: {fqn}...")
+
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if is_local:
+        os.makedirs(os.path.dirname(LOCAL_COMPILE_AUDIT_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_COMPILE_AUDIT_PATH):
+            with open(LOCAL_COMPILE_AUDIT_PATH, "w") as f:
+                json.dump([], f)
+        return True
+
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
+
+        spark.sql(f"""
+            CREATE TABLE IF NOT EXISTS {fqn} (
+                run_id STRING,
+                dataset_fingerprint STRING,
+                script_name STRING,
+                attempt_number INT,
+                code_source STRING,
+                code_sha256 STRING,
+                code_snapshot STRING,
+                exit_code INT,
+                stdout STRING,
+                stderr STRING,
+                timestamp TIMESTAMP
+            ) USING DELTA
+        """)
+        return True
+    except Exception as e:
+        print(f"[Warning] Failed to initialize UC compile audit table: {e}. Falling back to local file.")
+        os.makedirs(os.path.dirname(LOCAL_COMPILE_AUDIT_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_COMPILE_AUDIT_PATH):
+            with open(LOCAL_COMPILE_AUDIT_PATH, "w") as f:
+                json.dump([], f)
+        return False
+
+
+def log_compile_attempt(
+    spark: SparkSession,
+    run_id: str,
+    dataset_fingerprint: str,
+    script_name: str,
+    attempt_number: int,
+    code_source: str,
+    code: str,
+    exit_code: int,
+    stdout: str,
+    stderr: str,
+) -> None:
+    """Append one row per compile/execution attempt.
+
+    code_source should be one of: 'cache_recalled', 'llm_fresh_generated',
+    'llm_targeted_patch', 'llm_self_heal_fix', 'execution_node_real_run' —
+    callers pick the label that describes how THIS attempt's code came to be.
+    Failures here are swallowed (print-only) so audit logging never breaks
+    the pipeline it's observing.
+    """
+    import hashlib
+    timestamp = datetime.datetime.now()
+    code_sha256 = hashlib.sha256((code or "").encode("utf-8")).hexdigest()
+    code_snapshot = (code or "")[:20000]
+    stdout_trunc = (stdout or "")[:5000]
+    stderr_trunc = (stderr or "")[:5000]
+
+    # 1. Always update local JSON cache
+    try:
+        os.makedirs(os.path.dirname(LOCAL_COMPILE_AUDIT_PATH), exist_ok=True)
+        records = []
+        if os.path.exists(LOCAL_COMPILE_AUDIT_PATH):
+            with open(LOCAL_COMPILE_AUDIT_PATH, "r") as f:
+                records = json.load(f)
+        records.append({
+            "run_id": run_id,
+            "dataset_fingerprint": dataset_fingerprint,
+            "script_name": script_name,
+            "attempt_number": attempt_number,
+            "code_source": code_source,
+            "code_sha256": code_sha256,
+            "code_snapshot": code_snapshot,
+            "exit_code": exit_code,
+            "stdout": stdout_trunc,
+            "stderr": stderr_trunc,
+            "timestamp": timestamp.isoformat(),
+        })
+        with open(LOCAL_COMPILE_AUDIT_PATH, "w") as f:
+            json.dump(records, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to log compile attempt to local JSON cache: {e}")
+
+    # 2. Try Delta table
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if is_local:
+        return
+
+    try:
+        fqn = get_compile_audit_table_fqn(spark)
+        schema = StructType([
+            StructField("run_id", StringType(), True),
+            StructField("dataset_fingerprint", StringType(), True),
+            StructField("script_name", StringType(), True),
+            StructField("attempt_number", StringType(), True),
+            StructField("code_source", StringType(), True),
+            StructField("code_sha256", StringType(), True),
+            StructField("code_snapshot", StringType(), True),
+            StructField("exit_code", StringType(), True),
+            StructField("stdout", StringType(), True),
+            StructField("stderr", StringType(), True),
+            StructField("timestamp", TimestampType(), True),
+        ])
+        row_data = [(
+            run_id, dataset_fingerprint, script_name, str(attempt_number), code_source,
+            code_sha256, code_snapshot, str(exit_code), stdout_trunc, stderr_trunc, timestamp,
+        )]
+        df = (
+            spark.createDataFrame(row_data, schema=schema)
+            .withColumn("attempt_number", F.col("attempt_number").cast("int"))
+            .withColumn("exit_code", F.col("exit_code").cast("int"))
+        )
+        df.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable(fqn)
+        print(f"Successfully logged compile attempt ({script_name}, {code_source}) to Delta table '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to log compile attempt to Delta table: {e}")
+
+
+def get_compile_audit(
+    spark: SparkSession,
+    fingerprint: str = None,
+    run_id: str = None,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """Retrieve compile audit rows, newest first, optionally filtered by
+    dataset fingerprint and/or run_id. Used to audit whether a given run
+    actually reused cached code or regenerated it, attempt by attempt."""
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if not is_local:
+        try:
+            fqn = get_compile_audit_table_fqn(spark)
+            df = spark.read.table(fqn)
+            if fingerprint:
+                df = df.filter(F.col("dataset_fingerprint") == fingerprint)
+            if run_id:
+                df = df.filter(F.col("run_id") == run_id)
+            df = df.orderBy(F.col("timestamp").desc()).limit(limit)
+            return [r.asDict() for r in df.collect()]
+        except Exception as e:
+            print(f"[Warning] Failed to read from UC compile audit table: {e}. Checking local cache.")
+
+    try:
+        if os.path.exists(LOCAL_COMPILE_AUDIT_PATH):
+            with open(LOCAL_COMPILE_AUDIT_PATH, "r") as f:
+                records = json.load(f)
+            if fingerprint:
+                records = [r for r in records if r.get("dataset_fingerprint") == fingerprint]
+            if run_id:
+                records = [r for r in records if r.get("run_id") == run_id]
+            records = sorted(records, key=lambda r: r.get("timestamp", ""), reverse=True)
+            return records[:limit]
+    except Exception as e:
+        print(f"[Warning] Failed to read from local compile audit cache: {e}")
+
+    return []
+
+
+# ---------------------------------------------------------------------------
 # Run History — append-only audit log of every pipeline execution attempt.
 # One row per execution_node run (success or failure), date-stamped, so past
 # runs can be reviewed even after the live checkpoint thread moves on or is

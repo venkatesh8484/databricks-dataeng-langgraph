@@ -752,10 +752,26 @@ for i, stage in enumerate(stages):
         }
         target_node = gate_to_next_node.get(stage["gate"])
         if st.button("🔄 Rerun", key=f"btn_rerun_{stage['gate']}", use_container_width=True):
-            with st.spinner(f"Rolling back pipeline state to '{stage['name']}'..."):
+            with st.spinner(f"Rolling back and running '{stage['name']}'..."):
                 if rollback_to_node(target_node):
-                    st.success("State updated successfully! Reloading...")
+                    # Force reload the graph app connection to bind to the modified database state
                     refresh_graph_checkpoint()
+                    app_to_use = get_or_create_graph()
+                    
+                    # Run/stream the graph forward to execute the target agent node
+                    try:
+                        inputs = {} if target_node == "profiler" else None
+                        events = app_to_use.stream(inputs, config, stream_mode="values")
+                        for event in events:
+                            pass
+                    except Exception as e_stream:
+                        if not (isinstance(e_stream, KeyError) and "__end__" in str(e_stream)):
+                            st.error(f"Stream execution error: {e_stream}")
+                    
+                    # Sync updated state back to Volume and reload page
+                    sync_db_to_volume()
+                    refresh_graph_checkpoint()
+                    st.success(f"'{stage['name']}' execution completed successfully!")
                     st.rerun()
                 else:
                     st.error("Cannot rerun: no historical checkpoint found for this stage.")

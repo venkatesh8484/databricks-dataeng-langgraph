@@ -197,23 +197,72 @@ def parse_json_from_response(content: str) -> dict:
 def profiler_node(state: AgentState) -> Dict[str, Any]:
     """Nodes runs PySpark profiling on raw files and summaries findings."""
     print(">>> [Profiler Agent] Discovering and profiling raw source files...")
-    
+
     # Run the dynamic data platform profiler
     reports_dir = "/tmp/reports"
     os.makedirs(reports_dir, exist_ok=True)
     report = profiling.profile_all_sources(output_path=os.path.join(reports_dir, "profiling_report.json"))
-    
-    # Prepare a condensed profiling report for the LLM to read
+
     discovered = report.get("discovered_tables", {})
+
+    # GUARD: No tables discovered — return diagnostic error WITHOUT calling the LLM.
+    # Calling the LLM with empty data causes hallucination (it invents tables/columns).
+    if not discovered:
+        cfg_path = "/app/python/source_code/config.yaml"
+        error_msg = (
+            "Profiler BLOCKED: No source tables discovered. "
+            "Diagnostics: (1) Check volume_raw_path in config.yaml — current path may be wrong. "
+            "(2) Verify DBUtils / Databricks SDK file listing permissions for the volume. "
+            "(3) Confirm CSV files exist at the configured volume path. "
+            "(4) If running locally, ensure SOURCE_ROOT env var points to a directory with .csv files."
+        )
+        print(f"[Profiler] ABORT: {error_msg}")
+        return {
+            "discovered_tables": {},
+            "profiling_report": {
+                "error": error_msg,
+                "profiler_narration": "",
+                "discovered_tables": {},
+            },
+            "profiler_error": error_msg,
+            "active_agent": "Profiler",
+            "review_comments": "",
+            "loop_count": (state.get("loop_count") or 0) + 1,
+        }
+
     unique_keys = report.get("candidate_unique_keys", {})
     duplicate_keys = report.get("duplicate_keys", {})
     ri = report.get("referential_integrity", [])
-    
+    tables_profile = report.get("tables", {})
+
+    # Build condensed report including per-column stats (with token budget cap per table)
+    tables_summary = {}
+    for tbl, profile in tables_profile.items():
+        col_summary = {}
+        for col_name, col_stat in profile.get("columns", {}).items():
+            col_summary[col_name] = {
+                "dtype": col_stat.get("dtype"),
+                "null_pct": col_stat.get("null_pct"),
+                "distinct_count": col_stat.get("distinct_count"),
+            }
+            if col_stat.get("numeric_stats"):
+                col_summary[col_name]["numeric_stats"] = col_stat["numeric_stats"]
+            if col_stat.get("value_counts"):
+                # Top 5 values only to keep token budget lean
+                top5 = dict(list(col_stat["value_counts"].items())[:5])
+                col_summary[col_name]["top_values"] = top5
+        tables_summary[tbl] = {
+            "row_count": profile.get("row_count"),
+            "column_count": profile.get("column_count"),
+            "columns": col_summary,
+        }
+
     condensed = {
         "discovered_tables": discovered,
         "candidate_primary_keys": unique_keys,
         "duplicate_key_counts": duplicate_keys,
-        "referential_integrity": ri
+        "referential_integrity": ri,
+        "tables": tables_summary,
     }
 
     # Format message for LLM profiling review
@@ -222,51 +271,68 @@ def profiler_node(state: AgentState) -> Dict[str, Any]:
         SystemMessage(content=prompts.PROFILER_SYSTEM_PROMPT),
         HumanMessage(content=prompt)
     ]
-    
+
     llm = get_llm("profiler")
     response = llm.invoke(messages)
-    
+
     # Save findings narration in state
     report["profiler_narration"] = response.content
-    
+
     return {
         "discovered_tables": discovered,
         "profiling_report": report,
+        "profiler_error": "",
         "active_agent": "Profiler",
-        "review_comments": ""
+        "review_comments": "",
+        "loop_count": 0,
     }
 
 
 def dq_node(state: AgentState) -> Dict[str, Any]:
     """Data Quality Agent Node: Checks for logical and physical data anomalies."""
     print(">>> [Data Quality Agent] Assessing raw source data quality...")
-    
+
+    # GUARD: Cannot run DQ checks without discovered tables — prevents LLM hallucination
+    if not state.get("discovered_tables"):
+        upstream_error = state.get("profiler_error") or "No tables were discovered by the Profiler."
+        blocked_msg = (
+            f"\u26a0\ufe0f DQ Agent blocked: {upstream_error}\n\n"
+            "**Action required**: Fix the upstream Profiler failure (check Volume path, DBUtils access, "
+            "CSV file existence) and re-run the Profiler step before DQ assessment can proceed."
+        )
+        print(f"[DQ Agent] ABORT: Cannot assess quality — no tables in state.")
+        return {
+            "dq_report": blocked_msg,
+            "active_agent": "DataQualityAgent",
+            "review_comments": "",
+        }
+
     # Query few-shot memory database
     spark = get_spark()
     memory.init_memory_table(spark)
     dataset = list(state.get("discovered_tables", {}).keys())[0] if state.get("discovered_tables") else "generic"
     few_shot_context = memory.get_few_shot_context(spark, dataset, "data_quality")
-    
+
     profiling_report = state.get("profiling_report", {})
     profiling_narration = profiling_report.get("profiler_narration", "")
     profiling_metrics = {k: v for k, v in profiling_report.items() if k != "profiler_narration"}
-    
+
     prompt = (
         f"Data Profiler Report Narrative:\n{profiling_narration}\n\n"
-        f"Raw Metrics JSON:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n\n"
+        f"Raw Metrics JSON:\n{json.dumps(profiling_metrics, indent=2)}\n\n"
         f"{few_shot_context}"
     )
     if state.get("review_comments"):
         prompt += f"\n\nHuman feedback on previous DQ assessment:\n{state['review_comments']}"
-        
+
     messages = [
         SystemMessage(content=prompts.DQ_SYSTEM_PROMPT),
         HumanMessage(content=prompt)
     ]
-    
+
     llm = get_llm("dq")
     response = llm.invoke(messages)
-    
+
     return {
         "dq_report": response.content,
         "active_agent": "DataQualityAgent",
@@ -277,17 +343,53 @@ def dq_node(state: AgentState) -> Dict[str, Any]:
 def contract_node(state: AgentState) -> Dict[str, Any]:
     """Steward designs and authors YAML schema data contracts."""
     print(">>> [Contract Steward] Authoring YAML schema data contracts...")
-    
+
+    discovered = state.get("discovered_tables", {})
+
+    # GUARD: No tables discovered — return diagnostic error WITHOUT calling the LLM.
+    # Without this guard, the LLM receives empty input and hallucinates contracts
+    # (e.g., the infamous 'investigation' table from human feedback text).
+    if not discovered:
+        upstream_error = state.get("profiler_error") or "No tables were discovered by the Profiler."
+        review_comments = state.get("review_comments", "")
+        diagnostic = (
+            f"ContractSteward BLOCKED: Cannot author contracts — no tables in discovered_tables.\n"
+            f"Root cause: {upstream_error}\n"
+            f"Human feedback received: '{review_comments}'\n"
+            f"Action required: Fix the upstream Profiler failure and re-run the Profiler step."
+        )
+        print(f"[Contract Steward] ABORT: {diagnostic}")
+        return {
+            "contracts": {},
+            "contracts_error": diagnostic,
+            "active_agent": "ContractSteward",
+            "review_comments": "",
+        }
+
     # Query few-shot memory database
     spark = get_spark()
-    dataset = list(state.get("discovered_tables", {}).keys())[0] if state.get("discovered_tables") else "generic"
+    dataset = list(discovered.keys())[0] if discovered else "generic"
     few_shot_context = memory.get_few_shot_context(spark, dataset, "contracts")
-    
+
     profiling_report = state.get("profiling_report", {})
     profiling_narration = profiling_report.get("profiler_narration", "")
     profiling_metrics = {k: v for k, v in profiling_report.items() if k != "profiler_narration"}
-    
+
+    # Build column schema section — gives LLM exact column names/types to prevent hallucination
+    tables_profile = profiling_report.get("tables", {})
+    column_schema_lines = []
+    for tbl, profile in tables_profile.items():
+        column_schema_lines.append(f"\nTable: {tbl}")
+        for col_name, col_stat in profile.get("columns", {}).items():
+            null_pct = col_stat.get("null_pct", 0)
+            dtype = col_stat.get("dtype", "unknown")
+            distinct = col_stat.get("distinct_count", "N/A")
+            column_schema_lines.append(f"  - {col_name} ({dtype}) null_pct={null_pct}% distinct={distinct}")
+    column_schema_str = "\n".join(column_schema_lines) if column_schema_lines else "No column schema available."
+
     prompt = (
+        f"Discovered Tables: {list(discovered.keys())}\n\n"
+        f"Column Schema (use ONLY these exact column names in contracts):\n{column_schema_str}\n\n"
         f"Data Profiling Report:\n{profiling_narration}\n\n"
         f"Data Quality Assessment Report:\n{state.get('dq_report', '')}\n\n"
         f"Raw Metrics:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n\n"
@@ -300,22 +402,36 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
         SystemMessage(content=prompts.CONTRACT_SYSTEM_PROMPT),
         HumanMessage(content=prompt)
     ]
-    
+
     llm = get_llm("contracts")
     response = llm.invoke(messages)
-    
+
     parsed = parse_json_from_response(response.content)
     contracts = parsed.get("contracts", {})
-    
-    # Write the YAML contracts to disk so that they are visible in generated/config/contracts
+
+    # Write the YAML contracts to disk — validate each one first to prevent downstream crashes
     contracts_dir = "/tmp/generated/config/contracts"
     os.makedirs(contracts_dir, exist_ok=True)
+    valid_contracts = {}
     for table, yaml_str in contracts.items():
-        with open(os.path.join(contracts_dir, f"{table}.yaml"), "w") as f:
-            f.write(yaml_str)
+        try:
+            import yaml as _yaml
+            parsed_yaml = _yaml.safe_load(yaml_str)
+            if not isinstance(parsed_yaml, dict) or "table" not in parsed_yaml:
+                print(f"[Contract Steward] WARNING: YAML for '{table}' is missing 'table' key — skipping.")
+                continue
+            if parsed_yaml.get("table") != table:
+                print(f"[Contract Steward] WARNING: YAML table name '{parsed_yaml.get('table')}' != dict key '{table}' — correcting.")
+                parsed_yaml["table"] = table
+            with open(os.path.join(contracts_dir, f"{table}.yaml"), "w") as f:
+                f.write(yaml_str)
+            valid_contracts[table] = yaml_str
+        except Exception as e_yaml:
+            print(f"[Contract Steward] WARNING: Invalid YAML for '{table}': {e_yaml} — skipping.")
 
     return {
-        "contracts": contracts,
+        "contracts": valid_contracts,
+        "contracts_error": "" if valid_contracts else "No valid contracts generated.",
         "active_agent": "ContractSteward",
         "review_comments": ""
     }
@@ -324,10 +440,27 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
 def modeling_node(state: AgentState) -> Dict[str, Any]:
     """Modeler designs Gold-layer dimensions and facts SQL DDL."""
     print(">>> [Dimensional Modeler] Designing Kimball star schema DDL...")
-    
-    profiling_narration = state["profiling_report"].get("profiler_narration", "")
+
+    contracts = state.get("contracts", {})
+
+    # GUARD: Cannot design a model without valid contracts — prevents hallucinated DDL
+    if not contracts:
+        contracts_error = state.get("contracts_error", "No contracts were generated by ContractSteward.")
+        error_msg = (
+            f"\u26a0\ufe0f Modeler blocked: {contracts_error}\n"
+            "Fix upstream Profiler/Contract failures before attempting dimensional modeling."
+        )
+        print(f"[Modeler] ABORT: {error_msg}")
+        return {
+            "gold_ddl": "",
+            "data_dictionary": error_msg,
+            "active_agent": "DimensionalModeler",
+            "review_comments": "",
+        }
+
+    profiling_narration = state.get("profiling_report", {}).get("profiler_narration", "")
     contracts_summary = ""
-    for table, yaml_str in state["contracts"].items():
+    for table, yaml_str in contracts.items():
         contracts_summary += f"--- CONTRACT FOR {table} ---\n{yaml_str}\n"
 
     prompt = (
@@ -341,14 +474,14 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
         SystemMessage(content=prompts.MODELER_SYSTEM_PROMPT),
         HumanMessage(content=prompt)
     ]
-    
+
     llm = get_llm("modeling")
     response = llm.invoke(messages)
-    
+
     parsed = parse_json_from_response(response.content)
     gold_ddl = parsed.get("gold_ddl", "")
     data_dictionary = parsed.get("data_dictionary", "")
-    
+
     # Write SQL and Markdown DDL files
     ddl_dir = "/tmp/generated/data_model"
     os.makedirs(ddl_dir, exist_ok=True)
@@ -532,18 +665,18 @@ def _sanitize_and_heal_code(code: str) -> str:
     return code
 
 
-def get_dataset_fingerprint(spark: SparkSession) -> str:
+def get_dataset_fingerprint(spark, contracts: Dict[str, str] = None, gold_ddl: str = "") -> str:
     import hashlib
     import json
     from dbricks_lang_agent.data_platform.profiling import discover_source_tables
     from dbricks_lang_agent.data_platform.spark_utils import load_config
-    
+
     cfg = load_config()
     vol_path = cfg.get("volume_raw_path", "/Volumes/databricks_langgraph/raw/source_volume")
-    
+
     source_tables = discover_source_tables()
     fingerprint_data = []
-    
+
     for table_name, filename in sorted(source_tables.items()):
         path = os.path.join(vol_path, filename)
         try:
@@ -559,8 +692,16 @@ def get_dataset_fingerprint(spark: SparkSession) -> str:
             else:
                 first_line = ""
         fingerprint_data.append((table_name, first_line))
-        
-    fingerprint_str = json.dumps(fingerprint_data)
+
+    # Include contracts + DDL hash so cache is invalidated when governance rules change
+    contracts_hash = ""
+    if contracts:
+        contracts_hash = hashlib.sha256(
+            json.dumps(sorted(contracts.items())).encode("utf-8")
+        ).hexdigest()[:16]
+    ddl_hash = hashlib.sha256(gold_ddl.encode("utf-8")).hexdigest()[:16] if gold_ddl else ""
+
+    fingerprint_str = json.dumps(fingerprint_data) + contracts_hash + ddl_hash
     return hashlib.sha256(fingerprint_str.encode("utf-8")).hexdigest()
 
 
@@ -611,8 +752,21 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     # 1. Initialize codebase memory table
     memory.init_codebase_memory_table(spark)
     
-    # 2. Compute fingerprint
-    fingerprint = get_dataset_fingerprint(spark)
+    # GUARD: No contracts — cannot generate code for nonexistent tables
+    if not state.get("contracts"):
+        contracts_error = state.get("contracts_error", "No contracts available.")
+        print(f"[Data Engineer] ABORT: {contracts_error}")
+        return {
+            "bronze_code": "",
+            "silver_code": "",
+            "gold_code": "",
+            "execution_logs": {},
+            "active_agent": "DataEngineer",
+            "review_comments": "",
+        }
+
+    # 2. Compute fingerprint — now includes contracts + DDL hash
+    fingerprint = get_dataset_fingerprint(spark, state.get("contracts", {}), state.get("gold_ddl", ""))
     print(f"[Codebase Memory] Computed dataset fingerprint: {fingerprint}")
     
     # 3. Check for stored codebase
@@ -710,7 +864,8 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
                     f"Target data contracts:\n{contracts_str}\n\n"
                     f"Target Gold DDL star schema:\n{ddl_str}\n\n"
                     f"Current failing code for {script_name}:\n```python\n{current_code}\n```\n\n"
-                    f"Execution stderr / traceback:\n{res['stderr']}\n\n"
+                    f"Execution stdout (may contain Spark warnings):\n{res['stdout'][:3000]}\n\n"
+                    f"Execution stderr / traceback:\n{res['stderr'][:5000]}\n\n"
                     f"Please analyze the error and output the corrected version of the code. "
                     f"Ensure all functions and classes are fully imported and syntactically correct.\n"
                     f"Return your corrected code as a JSON object matching this schema:\n"
@@ -846,10 +1001,25 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
             pass
 
     # Compile Final Orchestrator Report
+    # Detect failures so the LLM prompt explicitly notes unavailable data
+    failed_scripts = [s for s, r in logs.items() if r.get("exit_code", 0) != 0]
+    pipeline_status = "HALTED" if failed_scripts else "COMPLETED"
+
+    failure_details = ""
+    if failed_scripts:
+        for s in failed_scripts:
+            failure_details += (
+                f"\n--- FAILED SCRIPT: {s} ---\n"
+                f"stdout:\n{logs[s].get('stdout', '')[:2000]}\n"
+                f"stderr:\n{logs[s].get('stderr', '')[:3000]}\n"
+            )
+
     prompt = (
+        f"Pipeline status: {pipeline_status}\n"
         f"Script execution logs:\n{json.dumps(logs, indent=2)}\n\n"
-        f"Silver Validation summary:\n{json.dumps(silver_summary, indent=2)}\n\n"
-        f"Gold schema summary:\n{json.dumps(gold_summary, indent=2)}"
+        f"Silver Validation summary (empty if silver.py failed):\n{json.dumps(silver_summary, indent=2)}\n\n"
+        f"Gold schema summary (empty if gold.py failed):\n{json.dumps(gold_summary, indent=2)}\n\n"
+        + (f"FAILURE DETAILS:\n{failure_details}" if failure_details else "")
     )
     
     messages = [

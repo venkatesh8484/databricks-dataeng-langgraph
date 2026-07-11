@@ -12,6 +12,7 @@ import json
 import datetime
 from typing import Dict, Any, List, Optional
 from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType, TimestampType
 
 # Local fallback path for development sandbox runs
@@ -149,10 +150,10 @@ def get_few_shot_context(spark: SparkSession, dataset_name: str, issue_type: str
     if not is_local:
         try:
             fqn = get_memory_table_fqn(spark)
-            # Fetch matching history
+            # Use PySpark column API — NOT string interpolation — to prevent SQL injection
             df = spark.read.table(fqn).filter(
-                f"issue_type = '{issue_type}' OR dataset_name = '{dataset_name}'"
-            ).orderBy("timestamp", ascending=False).limit(5)
+                (F.col("issue_type") == issue_type) | (F.col("dataset_name") == dataset_name)
+            ).orderBy(F.col("timestamp").desc()).limit(5)
             
             rows = df.collect()
             for r in rows:
@@ -187,19 +188,86 @@ def get_few_shot_context(spark: SparkSession, dataset_name: str, issue_type: str
             
     if not records:
         return "No historical human approvals are registered for this issue category yet."
-        
+
     # Format as Markdown few-shot context
     markdown = "### Historical Human Approvals for Reference:\n"
     for r in records:
-        fields_str = ", ".join(r["anomalous_fields"])
+        fields_str = ", ".join(r.get("anomalous_fields") or [])
+        record_type = r.get("record_type", "approval")
+        type_label = "👍 Approved" if record_type == "approval" else "🚫 Rejected"
         markdown += (
-            f"- **Dataset**: {r['dataset_name']}\n"
+            f"- **Dataset**: {r['dataset_name']} [{type_label}]\n"
             f"  - **Issue Type**: {r['issue_type']}\n"
             f"  - **Affected Fields**: [{fields_str}]\n"
-            f"  - **Approved Resolution**: {r['resolution_applied']}\n"
+            f"  - **Resolution / Outcome**: {r['resolution_applied']}\n"
             f"  - **Human Feedback**: \"{r['human_comments'] or 'None'}\"\n"
         )
     return markdown
+
+
+def log_rejection(
+    spark: SparkSession,
+    dataset_name: str,
+    issue_type: str,
+    human_comments: str,
+    step_key: str,
+) -> None:
+    """Log human rejection feedback into memory so agents can learn from mistakes.
+
+    Unlike log_approval, rejections store what went wrong so future agent runs
+    can avoid repeating the same errors.
+    """
+    resolution = f"Rejected at step '{step_key}' — agent output was insufficient or incorrect."
+    timestamp = datetime.datetime.now()
+
+    record = {
+        "dataset_name": dataset_name,
+        "issue_type": issue_type,
+        "anomalous_fields": [],
+        "resolution_applied": resolution,
+        "human_comments": human_comments,
+        "record_type": "rejection",
+        "timestamp": timestamp.isoformat()
+    }
+
+    # 1. Always update local JSON cache
+    try:
+        os.makedirs(os.path.dirname(LOCAL_MEMORY_PATH), exist_ok=True)
+        records = []
+        if os.path.exists(LOCAL_MEMORY_PATH):
+            with open(LOCAL_MEMORY_PATH, "r") as f:
+                records = json.load(f)
+        records.append(record)
+        with open(LOCAL_MEMORY_PATH, "w") as f:
+            json.dump(records, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to log rejection to local JSON cache: {e}")
+
+    # 2. Try Delta table
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if is_local:
+        return
+
+    try:
+        fqn = get_memory_table_fqn(spark)
+        schema = StructType([
+            StructField("dataset_name", StringType(), True),
+            StructField("issue_type", StringType(), True),
+            StructField("anomalous_fields", ArrayType(StringType()), True),
+            StructField("resolution_applied", StringType(), True),
+            StructField("human_comments", StringType(), True),
+            StructField("timestamp", TimestampType(), True)
+        ])
+        row_data = [(dataset_name, issue_type, [], resolution, human_comments, timestamp)]
+        df = spark.createDataFrame(row_data, schema=schema)
+        df.write.format("delta").mode("append").saveAsTable(fqn)
+        print(f"Successfully logged rejection to Delta table '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to log rejection to Delta table: {e}")
 
 
 LOCAL_CODEBASE_MEMORY_PATH = "./generated/config/agent_codebase_memory.json"

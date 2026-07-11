@@ -15,6 +15,9 @@ from langgraph.checkpoint.base import BaseCheckpointSaver, Checkpoint, Checkpoin
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from dbricks_lang_agent.data_platform.spark_utils import load_config
 
+# Maximum number of consecutive rejections/retries before forcing a halt
+MAX_AGENT_RETRIES = 3
+
 class PureSqliteSaver(BaseCheckpointSaver):
     """Pure Python SQLite Checkpointer with zero binary dependencies, safe for Databricks Apps containers."""
     def __init__(self, conn: sqlite3.Connection):
@@ -231,6 +234,17 @@ def execution_review_gate(state: AgentState) -> Dict[str, Any]:
 def route_after_profiler(state: AgentState) -> str:
     """Route after profile_review_gate node runs."""
     approvals = state.get("approved_steps", {})
+    loop_count = state.get("loop_count") or 0
+
+    # Safety: if profiler has failed too many consecutive times, halt rather than loop forever.
+    # This catches persistent infrastructure issues (wrong volume path, no permissions, etc.)
+    if not state.get("discovered_tables") and loop_count >= MAX_AGENT_RETRIES:
+        print(
+            f"[Router] Profiler has failed {loop_count} times with no tables discovered. "
+            "Forcing END to prevent infinite loop. Fix the Volume path / DBUtils access then restart."
+        )
+        return END
+
     if approvals.get("profile") is True:
         return "data_quality"
     return "profiler"  # Route back to profiler if rejected/unapproved
@@ -249,7 +263,17 @@ def route_after_contracts(state: AgentState) -> str:
     approvals = state.get("approved_steps", {})
     if approvals.get("contracts") is True:
         return "modeling"
-    return "contracts"  # Route back to contract node if rejected
+
+    # If there are no discovered tables, the contract failure is an upstream Profiler problem.
+    # Routing back to the ContractSteward cannot fix this — re-run the Profiler instead.
+    if not state.get("discovered_tables"):
+        print(
+            "[Router] Contracts rejected with no discovered_tables in state. "
+            "Routing to profiler (upstream fix needed)."
+        )
+        return "profiler"
+
+    return "contracts"  # Route back to contract node if rejected for content reasons
 
 
 def route_after_modeling(state: AgentState) -> str:
@@ -271,16 +295,21 @@ def route_after_engineering(state: AgentState) -> str:
 def route_after_execution(state: AgentState) -> str:
     """Route after execution_review_gate node runs."""
     approvals = state.get("approved_steps", {})
+
+    # Approved: done
     if approvals.get("report") is True:
         return END
-    
-    # Check if there are execution failures, route back to engineering to auto-fix
-    # or route back if human rejects the final run report.
+
+    # Explicitly rejected by human: route back to engineering to fix
+    if approvals.get("report") is False:
+        return "engineering"
+
+    # Script failures detected (human has not reviewed yet — auto-route to engineer to self-heal)
     logs = state.get("execution_logs", {})
     has_failure = any(l.get("exit_code", 0) != 0 for l in logs.values())
-    if has_failure or approvals.get("report") is False:
+    if has_failure:
         return "engineering"
-        
+
     return END
 
 
@@ -343,7 +372,8 @@ def create_pipeline_graph():
         route_after_contracts,
         {
             "modeling": "modeling",
-            "contracts": "contracts"
+            "contracts": "contracts",
+            "profiler": "profiler",   # Re-route to profiler when tables are missing (upstream fix needed)
         }
     )
 

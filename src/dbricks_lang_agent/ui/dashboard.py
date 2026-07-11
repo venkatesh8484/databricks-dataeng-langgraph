@@ -1134,6 +1134,14 @@ with tab2:
                         st.error(f"Rejecting step '{step_key}'...")
                         approvals[step_key] = False
                         comments = feedback
+
+                        # Log rejection to memory so agents can learn from it
+                        try:
+                            dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
+                            issue_type = "data_quality" if step_key == "dq" else step_key
+                            memory.log_rejection(spark, dataset, issue_type, feedback, step_key)
+                        except Exception as e:
+                            st.warning(f"Unable to log rejection to memory table: {e}")
                         
                     # Update graph checkpointer state
                     app.update_state(

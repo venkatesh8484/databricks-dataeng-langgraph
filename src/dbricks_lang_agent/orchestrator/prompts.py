@@ -69,21 +69,29 @@ rules:
   not_null:
     severity: "hard"  # "hard" (halt promotion on failure) or "soft" (quarantine)
     max_fail_rate: 0.0
-    columns: ["col1", "col2"]
+    columns:
+      - "col1"
+      - "col2"
   unique:
     severity: "hard"
     max_fail_rate: 0.0
-    columns: ["business_key"]
+    columns:
+      - "business_key"
   allowed_values:
     severity: "soft"
     max_fail_rate: 0.05
     checks:
-      status_col: ["ACTIVE", "CANCELLED", "PENDING"]
+      status_col:
+        - "ACTIVE"
+        - "CANCELLED"
+        - "PENDING"
   range:
     severity: "soft"
     max_fail_rate: 0.0
     checks:
-      age_col: {min: 0, max: 120}
+      age_col:
+        min: 0
+        max: 120
   referential_integrity:
     severity: "soft"
     max_fail_rate: 0.05
@@ -93,6 +101,8 @@ rules:
         parent_column: "parent_pk_column"
         nullable: true
 ```
+
+CRITICAL YAML FORMATTING RULE: Output ONLY standard YAML block style, exactly as shown above — every key on its own line, every list item as a `- item` block entry. NEVER use flow-style collections such as `["a", "b"]` or `{min: 0, max: 120}` anywhere in the contract, even though they are valid YAML. Flow-style collections are a common source of scanner errors (e.g. a missing space after a colon silently breaks the whole document), so they are banned in this output regardless of correctness — block style only.
 
 Guidelines:
 - Ground ALL rules in the profiling evidence. Use exact column names from the "Column Schema" section provided.

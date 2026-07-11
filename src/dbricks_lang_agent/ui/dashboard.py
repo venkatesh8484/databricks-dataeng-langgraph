@@ -1174,12 +1174,18 @@ with tab2:
             st.markdown(state.values.get("dq_report", "No DQ report found."))
             
         elif active_agent == "ContractSteward":
+            contracts_error = state.values.get("contracts_error", "")
+            if contracts_error:
+                st.error(contracts_error)
             st.markdown("### Generated YAML Data Contracts:")
             contracts = state.values.get("contracts", {})
+            if not contracts:
+                if not contracts_error:
+                    st.info("No contracts were generated and no error was recorded — this looks like an unexpected empty result. Check the app logs for '[Contract Steward]' entries.")
             for tbl, contract_yaml in contracts.items():
                 st.subheader(f"Table Contract: {tbl}")
                 st.code(contract_yaml, language="yaml")
-                
+
         elif active_agent == "DimensionalModeler":
             st.markdown("### Inferred Star Schema SQL DDL:")
             st.code(state.values.get("gold_ddl", ""), language="sql")

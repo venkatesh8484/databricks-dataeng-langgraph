@@ -149,11 +149,19 @@ def sanitize_json_string(s: str) -> str:
             escaped = False
     return "".join(chars)
 
-def parse_json_from_response(content: str) -> dict:
-    """Safely extract and parse JSON block from model response."""
+def parse_json_from_response(content: str, fallback_key: str = None) -> dict:
+    """Safely extract and parse JSON block from model response.
+
+    Some models ignore the "return JSON" instruction under a fix/retry prompt and
+    instead respond with free-form prose (e.g. a "step-by-step analysis") plus a
+    fenced code block containing the actual fix. If every JSON-parsing strategy
+    below fails and `fallback_key` is supplied, we make one last attempt to pull
+    the first fenced code block out of the response and return it under that key,
+    rather than raising and losing the fix entirely.
+    """
     import re
     content_str = content.strip()
-    
+
     # 1. Try to find json code block first
     code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content_str, re.DOTALL)
     if code_block_match:
@@ -183,6 +191,19 @@ def parse_json_from_response(content: str) -> dict:
         sanitized = sanitize_json_string(cleaned)
         return json.loads(sanitized)
     except Exception as e_direct:
+        # Last resort: the model may have ignored the JSON-output instruction and
+        # replied with prose + a fenced code block instead (common with reasoning-
+        # style responses like "Step-by-step analysis... Fixed solution: ```python").
+        # Recover the code rather than discarding a valid fix over a format miss.
+        if fallback_key:
+            fence_match = re.search(r"```(?:python|py)?\s*\n(.*?)```", content_str, re.DOTALL)
+            if fence_match:
+                print(
+                    f"[parse_json_from_response] WARNING: Response was not valid JSON "
+                    f"(model likely ignored JSON-output instructions). Recovered code "
+                    f"from a fenced code block instead and mapped it to '{fallback_key}'."
+                )
+                return {fallback_key: fence_match.group(1).strip()}
         raise ValueError(
             f"Failed to parse JSON from LLM response.\n"
             f"Parser error: {e_direct}\n"
@@ -941,11 +962,18 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
                     SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
                     HumanMessage(content=fix_prompt)
                 ]
-                
+
                 fix_response = llm.invoke(messages)
-                fix_parsed = parse_json_from_response(fix_response.content)
-                current_code = _sanitize_and_heal_code(fix_parsed.get(key_name, ""))
-                
+                try:
+                    fix_parsed = parse_json_from_response(fix_response.content, fallback_key=key_name)
+                    current_code = _sanitize_and_heal_code(fix_parsed.get(key_name, ""))
+                except ValueError as e_parse:
+                    # Even the fenced-code-block fallback couldn't recover anything usable.
+                    # Don't let this crash the whole pipeline run — count it as a failed
+                    # attempt (current_code is left unchanged) and let the loop retry or
+                    # exhaust its attempts and halt cleanly like any other compile failure.
+                    print(f"[Compiler Loop] WARNING: Could not parse self-heal response for {script_name}: {e_parse}")
+
         if not success:
             print(f"[Compiler Loop] CRITICAL: Failed to compile {script_name} after max retries.")
             compile_failed = True

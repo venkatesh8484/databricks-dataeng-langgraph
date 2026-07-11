@@ -786,14 +786,28 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     except Exception:
         pass
         
+    # A prior execution failure for this exact fingerprint means the cached
+    # codebase (if any) is known-bad — recalling it would silently replay the
+    # same bug forever, even after a prompt/logic fix, since the fingerprint
+    # (contracts + DDL hash) doesn't change when only the *instructions* to
+    # the LLM change. Force regeneration whenever we're arriving here after
+    # a failed run so the fresh system prompt actually gets a chance to fix it.
+    prior_execution_logs = state.get("execution_logs") or {}
+    had_prior_failure = any(
+        (log_info or {}).get("exit_code", 0) != 0
+        for log_info in prior_execution_logs.values()
+    )
+    if had_prior_failure:
+        print("[Codebase Memory] Previous execution attempt failed — bypassing cached codebase and regenerating from scratch.")
+
     stored = None
-    if not reset_requested and not state.get("review_comments"):
+    if not reset_requested and not state.get("review_comments") and not had_prior_failure:
         stored = memory.get_stored_codebase(spark, fingerprint)
-        
+
     bronze = ""
     silver = ""
     gold = ""
-    
+
     if stored:
         print("[Codebase Memory] Found matching compiled codebase in memory. Recalling...")
         bronze = stored["bronze_code"]

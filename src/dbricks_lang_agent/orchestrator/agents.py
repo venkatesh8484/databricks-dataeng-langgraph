@@ -835,38 +835,95 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     except Exception:
         pass
         
-    # A prior execution failure for this exact fingerprint means the cached
-    # codebase (if any) is known-bad — recalling it would silently replay the
-    # same bug forever, even after a prompt/logic fix, since the fingerprint
-    # (contracts + DDL hash) doesn't change when only the *instructions* to
-    # the LLM change. Force regeneration whenever we're arriving here after
-    # a failed run so the fresh system prompt actually gets a chance to fix it.
+    # A prior execution failure for this exact fingerprint means at least one
+    # generated script broke against real data. We no longer throw away the
+    # WHOLE cached codebase for this — bronze/silver/gold that already ran
+    # fine shouldn't be regenerated just because a sibling script failed.
+    # Instead: recall the cache and send ONLY the failing script(s) back to
+    # the LLM with their traceback for a targeted patch, mirroring the
+    # compiler loop's self-heal below. The patched result is re-persisted to
+    # memory so subsequent runs recall the fixed version instead of re-fixing
+    # the same bug every time.
     prior_execution_logs = state.get("execution_logs") or {}
     had_prior_failure = any(
         (log_info or {}).get("exit_code", 0) != 0
         for log_info in prior_execution_logs.values()
     )
+    failed_script_names = {
+        script_name for script_name, log_info in prior_execution_logs.items()
+        if (log_info or {}).get("exit_code", 0) != 0
+    }
     if had_prior_failure:
-        print("[Codebase Memory] Previous execution attempt failed — bypassing cached codebase and regenerating from scratch.")
+        print(f"[Codebase Memory] Previous execution attempt failed for {sorted(failed_script_names)} — will recall cache and patch only the failing script(s).")
 
     stored = None
-    if not reset_requested and not state.get("review_comments") and not had_prior_failure:
+    if not reset_requested and not state.get("review_comments"):
         stored = memory.get_stored_codebase(spark, fingerprint)
 
     bronze = ""
     silver = ""
     gold = ""
 
-    if stored:
+    contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
+    ddl_str = state["gold_ddl"]
+
+    script_key_map = {
+        "bronze.py": "bronze_code",
+        "silver.py": "silver_code",
+        "gold.py": "gold_code",
+    }
+
+    if stored and had_prior_failure:
+        print("[Codebase Memory] Found matching compiled codebase in memory. Recalling and patching failed script(s)...")
+        current_by_key = {
+            "bronze_code": stored["bronze_code"],
+            "silver_code": stored["silver_code"],
+            "gold_code": stored["gold_code"],
+        }
+
+        llm = get_llm("engineering")
+        for script_name in sorted(failed_script_names):
+            key_name = script_key_map.get(script_name)
+            if not key_name:
+                continue
+            log_info = prior_execution_logs.get(script_name, {}) or {}
+            fix_prompt = (
+                f"You are a Senior Data Engineer. The generated {script_name} failed during a real "
+                f"execution run against production data (not the compile-time sandbox check).\n\n"
+                f"Target data contracts:\n{contracts_str}\n\n"
+                f"Target Gold DDL star schema:\n{ddl_str}\n\n"
+                f"Current failing code for {script_name}:\n```python\n{current_by_key[key_name]}\n```\n\n"
+                f"Execution stdout (may contain Spark warnings):\n{log_info.get('stdout', '')[:3000]}\n\n"
+                f"Execution stderr / traceback:\n{log_info.get('stderr', '')[:5000]}\n\n"
+                f"Please analyze the error and output the corrected version of the code. "
+                f"Ensure all functions and classes are fully imported and syntactically correct.\n"
+                f"Return your corrected code as a JSON object matching this schema:\n"
+                f"{{\n"
+                f"  \"{key_name}\": \"Corrected PySpark code string\"\n"
+                f"}}\n"
+            )
+            messages = [
+                SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
+                HumanMessage(content=fix_prompt)
+            ]
+            try:
+                fix_response = llm.invoke(messages)
+                fix_parsed = parse_json_from_response(fix_response.content, fallback_key=key_name)
+                current_by_key[key_name] = _sanitize_and_heal_code(fix_parsed.get(key_name, current_by_key[key_name]))
+            except ValueError as e_parse:
+                print(f"[Codebase Memory] WARNING: Could not parse targeted fix response for {script_name}: {e_parse}. Keeping cached code as-is; compiler loop below will retry.")
+
+        bronze = current_by_key["bronze_code"]
+        silver = current_by_key["silver_code"]
+        gold = current_by_key["gold_code"]
+    elif stored:
         print("[Codebase Memory] Found matching compiled codebase in memory. Recalling...")
         bronze = stored["bronze_code"]
         silver = stored["silver_code"]
         gold = stored["gold_code"]
     else:
         print("[Codebase Memory] No matching compiled codebase found or reset requested/rejected. Generating first draft...")
-        contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
-        ddl_str = state["gold_ddl"]
-        
+
         prompt = (
             f"Target data contracts:\n{contracts_str}\n\n"
             f"Target Gold DDL star schema:\n{ddl_str}"
@@ -886,16 +943,16 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
                     )
             if logs_str:
                 prompt += f"\n\nPrevious execution failures during runtime:\n{logs_str}"
-            
+
         messages = [
             SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
             HumanMessage(content=prompt)
         ]
-        
+
         llm = get_llm("engineering")
         response = llm.invoke(messages)
         parsed = parse_json_from_response(response.content)
-        
+
         bronze = _sanitize_and_heal_code(parsed.get("bronze_code", ""))
         silver = _sanitize_and_heal_code(parsed.get("silver_code", ""))
         gold = _sanitize_and_heal_code(parsed.get("gold_code", ""))

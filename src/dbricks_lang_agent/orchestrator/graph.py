@@ -402,9 +402,9 @@ def create_pipeline_graph():
         check_same_thread=False,
         isolation_level=None,
     )
-    # WAL journal mode allows concurrent readers while a write is in progress,
-    # which is important when the notebook and dashboard share the same DB file.
-    conn.execute("PRAGMA journal_mode=WAL")
+    # Use DELETE journal mode so that all transactions are written directly
+    # to checkpoint.db, ensuring the file is fully up to date for Volume syncs.
+    conn.execute("PRAGMA journal_mode=DELETE")
     memory = PureSqliteSaver(conn)
 
 

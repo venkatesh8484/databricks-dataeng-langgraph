@@ -37,14 +37,14 @@ def load_config() -> dict:
 
     # Fallback default configuration
     _config = {
-        "catalog": "hospitality_catalog",
+        "catalog": "databricks_langgraph",
         "schemas": {
             "raw": "raw",
             "bronze": "bronze",
             "silver": "silver",
             "gold": "gold"
         },
-        "volume_raw_path": "/Volumes/hospitality_catalog/raw/source_volume",
+        "volume_raw_path": "/Volumes/databricks_langgraph/raw/source_volume",
         "llm": {
             "endpoint": "databricks-meta-llama-3-1-70b-instruct",
             "temperature": 0.0
@@ -65,7 +65,15 @@ def get_spark(app_name: str = "databricks-langgraph-medallion") -> SparkSession:
     except Exception:
         pass
 
-    # 2. Try Databricks Connect session builder (standard for Databricks Apps)
+    # 2. If SPARK_REMOTE is in environment, try native Spark Connect getOrCreate
+    if _spark is None and "SPARK_REMOTE" in os.environ:
+        try:
+            _spark = SparkSession.builder.appName(app_name).getOrCreate()
+            print("[Debug] Successfully established Spark Connect session from SPARK_REMOTE.")
+        except Exception as e_connect:
+            print(f"[Debug] Spark Connect session creation failed: {e_connect}")
+
+    # 3. Try Databricks Connect session builder (standard for Databricks Apps)
     if _spark is None:
         try:
             from databricks.connect import DatabricksSession
@@ -79,11 +87,13 @@ def get_spark(app_name: str = "databricks-langgraph-medallion") -> SparkSession:
         except Exception as e:
             print(f"[Debug] Databricks Connect not available or failed: {e}. Falling back to local PySpark.")
 
-    # 3. Local fallback for development/sandbox
+    # 4. Local fallback for development/sandbox
     if _spark is None:
+        builder = SparkSession.builder.appName(app_name)
+        if "SPARK_REMOTE" not in os.environ:
+            builder = builder.master("local[*]")
         builder = (
-            SparkSession.builder.appName(app_name)
-            .master("local[*]")
+            builder
             .config("spark.driver.host", "127.0.0.1")
             .config("spark.driver.bindAddress", "127.0.0.1")
             .config("spark.ui.enabled", "false")
@@ -102,7 +112,7 @@ def get_spark(app_name: str = "databricks-langgraph-medallion") -> SparkSession:
 def get_fqn(schema: str, table: str) -> str:
     """Construct a 3-level Unity Catalog Table Name: `catalog`.`schema`.`table`."""
     cfg = load_config()
-    catalog = cfg.get("catalog", "hospitality_catalog")
+    catalog = cfg.get("catalog", "databricks_langgraph")
     schemas = cfg.get("schemas", {})
     resolved_schema = schemas.get(schema, schema)
     return f"`{catalog}`.`{resolved_schema}`.`{table}`"
@@ -126,7 +136,7 @@ def write_full_overwrite(df: DataFrame, schema: str, table: str, partition_by: O
     """Write DataFrame as a Delta table in Unity Catalog (full overwrite)."""
     spark = get_spark()
     cfg = load_config()
-    catalog = cfg.get("catalog", "hospitality_catalog")
+    catalog = cfg.get("catalog", "databricks_langgraph")
     schemas = cfg.get("schemas", {})
     resolved_schema = schemas.get(schema, schema)
 
@@ -150,7 +160,7 @@ def merge_upsert(new_df: DataFrame, schema: str, table: str, key_cols: List[str]
     """Upsert new_df into target Delta table in Unity Catalog using MERGE INTO."""
     spark = get_spark()
     cfg = load_config()
-    catalog = cfg.get("catalog", "hospitality_catalog")
+    catalog = cfg.get("catalog", "databricks_langgraph")
     schemas = cfg.get("schemas", {})
     resolved_schema = schemas.get(schema, schema)
 
@@ -213,7 +223,7 @@ def scd2_merge(
             .drop(as_of_ts_col)
         )
         write_full_overwrite(result, schema, table)
-        return fqn
+        return read_table(schema, table)
 
     existing = read_table(schema, table)
     max_sk = existing.agg(F.max(surrogate_key_col)).collect()[0][0] or 0
@@ -229,7 +239,7 @@ def scd2_merge(
     ).select("inc.*")
 
     if not changed_or_new.head(1):
-        return fqn  # No updates to process
+        return read_table(schema, table)  # No updates to process
 
     keys_changed = changed_or_new.select(business_key).distinct()
 
@@ -259,7 +269,8 @@ def scd2_merge(
         new_versions, allowMissingColumns=True
     )
     write_full_overwrite(final, schema, table)
-    return fqn
+    return read_table(schema, table)
+
 
 
 def build_dim_date(spark: SparkSession, start_date: str, end_date: str) -> DataFrame:
@@ -287,7 +298,18 @@ def reset_lake(schemas: Optional[List[str]] = None) -> None:
     """Dev/test helper: Drop target schemas in Unity Catalog to start fresh."""
     spark = get_spark()
     cfg = load_config()
-    catalog = cfg.get("catalog", "hospitality_catalog")
-    schemas = schemas or ["bronze", "silver", "gold"]
+    catalog = cfg.get("catalog", "databricks_langgraph")
+    schemas = schemas or ["bronze", "silver", "gold", "quarantine"]
     for s in schemas:
-        spark.sql(f"DROP SCHEMA IF EXISTS `{catalog}`.`{s}` CASCADE")
+        if s == "gold":
+            try:
+                spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`gold`")
+                tables = spark.sql(f"SHOW TABLES IN `{catalog}`.`gold`").collect()
+                for t in tables:
+                    tbl_name = t.tableName
+                    if tbl_name not in ["agent_fewshot_memory", "agent_codebase_memory"]:
+                        spark.sql(f"DROP TABLE IF EXISTS `{catalog}`.`gold`.`{tbl_name}`")
+            except Exception as e:
+                print(f"[Warning] Failed to cleanly reset gold schema tables: {e}")
+        else:
+            spark.sql(f"DROP SCHEMA IF EXISTS `{catalog}`.`{s}` CASCADE")

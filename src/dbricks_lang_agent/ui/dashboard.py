@@ -617,7 +617,7 @@ for i, stage in enumerate(stages):
 # Sidebar with Status Overview
 st.sidebar.markdown("### Ingestion Settings")
 catalog_config = load_config()
-st.sidebar.info(f"**Unity Catalog**: {catalog_config.get('catalog', 'hospitality_catalog')}\n\n**Raw Volume**: {catalog_config.get('raw_volume', 'raw/source_volume')}")
+st.sidebar.info(f"**Unity Catalog**: {catalog_config.get('catalog', 'databricks_langgraph')}\n\n**Raw Volume**: {catalog_config.get('raw_volume', 'raw/source_volume')}")
 
 # Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
@@ -893,7 +893,7 @@ with tab1:
     
     # Try fetching table statistics from Unity Catalog
     try:
-        catalog = catalog_config.get("catalog", "hospitality_catalog")
+        catalog = catalog_config.get("catalog", "databricks_langgraph")
         # List of candidate schemas to profile counts
         schemas = ["raw", "bronze", "silver", "gold"]
         counts = {}
@@ -1096,7 +1096,7 @@ with tab3:
     st.write("Below are the historical decisions logged into the few-shot memory system. The agents read this memory before executing steps to reuse your past resolutions.")
     
     try:
-        catalog = catalog_config.get("catalog", "hospitality_catalog")
+        catalog = catalog_config.get("catalog", "databricks_langgraph")
         # Try displaying from Delta table
         try:
             is_local = spark.conf.get("spark.master", "").startswith("local")

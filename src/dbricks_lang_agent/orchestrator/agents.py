@@ -419,10 +419,15 @@ def _sanitize_and_heal_code(code: str) -> str:
                 f"{indent}# Standardize boolean values safely (only for columns containing only boolean-like values)\n"
                 f"{indent}_str_cols = [__c for __c, __t in {df_var}.dtypes if __t == 'string']\n"
                 f"{indent}if _str_cols:\n"
-                f"{indent}    _aggs = [sum(when(~col(__c).isNull() & (col(__c) != '') & ~lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c) for __c in _str_cols]\n"
+                f"{indent}    _aggs = []\n"
+                f"{indent}    for __c in _str_cols:\n"
+                f"{indent}        _aggs.append(sum(when(~col(__c).isNull() & (col(__c) != '') & lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c + '_bool'))\n"
+                f"{indent}        _aggs.append(sum(when(~col(__c).isNull() & (col(__c) != '') & ~lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c + '_non_bool'))\n"
                 f"{indent}    _counts = {df_var}.select(*_aggs).collect()[0].asDict()\n"
-                f"{indent}    for __c, __count in _counts.items():\n"
-                f"{indent}        if __count == 0:\n"
+                f"{indent}    for __c in _str_cols:\n"
+                f"{indent}        _b = _counts.get(__c + '_bool') or 0\n"
+                f"{indent}        _nb = _counts.get(__c + '_non_bool') or 0\n"
+                f"{indent}        if _b > 0 and _nb == 0:\n"
                 f"{indent}            {df_var} = {df_var}.withColumn(__c, when(lower(col(__c)).isin('yes', 'y', 'true'), lit(True)).when(lower(col(__c)).isin('no', 'n', 'false'), lit(False)).otherwise(None))"
             )
             code = re.sub(r"(?m)^(\s*)" + df_var + r"\s*=\s*" + df_var + r"\.applymap\s*\(.*\)\s*$", replacement, code)
@@ -439,10 +444,15 @@ def _sanitize_and_heal_code(code: str) -> str:
                 f"{indent}# Standardize boolean values safely (only for columns containing only boolean-like values)\n"
                 f"{indent}_str_cols = [__c for __c, __t in {df_var}.dtypes if __t == 'string']\n"
                 f"{indent}if _str_cols:\n"
-                f"{indent}    _aggs = [sum(when(~col(__c).isNull() & (col(__c) != '') & ~lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c) for __c in _str_cols]\n"
+                f"{indent}    _aggs = []\n"
+                f"{indent}    for __c in _str_cols:\n"
+                f"{indent}        _aggs.append(sum(when(~col(__c).isNull() & (col(__c) != '') & lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c + '_bool'))\n"
+                f"{indent}        _aggs.append(sum(when(~col(__c).isNull() & (col(__c) != '') & ~lower(col(__c)).isin('yes', 'no', 'y', 'n', 'true', 'false'), 1).otherwise(0)).alias(__c + '_non_bool'))\n"
                 f"{indent}    _counts = {df_var}.select(*_aggs).collect()[0].asDict()\n"
-                f"{indent}    for __c, __count in _counts.items():\n"
-                f"{indent}        if __count == 0:\n"
+                f"{indent}    for __c in _str_cols:\n"
+                f"{indent}        _b = _counts.get(__c + '_bool') or 0\n"
+                f"{indent}        _nb = _counts.get(__c + '_non_bool') or 0\n"
+                f"{indent}        if _b > 0 and _nb == 0:\n"
                 f"{indent}            {df_var} = {df_var}.withColumn(__c, when(lower(col(__c)).isin('yes', 'y', 'true'), lit(True)).when(lower(col(__c)).isin('no', 'n', 'false'), lit(False)).otherwise(None))"
             )
             code = re.sub(loop_pattern, replacement, code)
@@ -522,36 +532,212 @@ def _sanitize_and_heal_code(code: str) -> str:
     return code
 
 
+def get_dataset_fingerprint(spark: SparkSession) -> str:
+    import hashlib
+    import json
+    from dbricks_lang_agent.data_platform.profiling import discover_source_tables
+    from dbricks_lang_agent.data_platform.spark_utils import load_config
+    
+    cfg = load_config()
+    vol_path = cfg.get("volume_raw_path", "/Volumes/databricks_langgraph/raw/source_volume")
+    
+    source_tables = discover_source_tables()
+    fingerprint_data = []
+    
+    for table_name, filename in sorted(source_tables.items()):
+        path = os.path.join(vol_path, filename)
+        try:
+            first_line = spark.read.text(path).limit(1).collect()[0][0]
+        except Exception as e:
+            print(f"[Warning] Failed to read header for {filename} via Spark: {e}")
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        first_line = f.readline().strip()
+                except Exception:
+                    first_line = ""
+            else:
+                first_line = ""
+        fingerprint_data.append((table_name, first_line))
+        
+    fingerprint_str = json.dumps(fingerprint_data)
+    return hashlib.sha256(fingerprint_str.encode("utf-8")).hexdigest()
+
+
+def _run_and_verify_script(script_name: str, code_str: str) -> Dict[str, Any]:
+    """Write the script to disk and execute it via exec in the same process, returning logs."""
+    code_dir = "/tmp/generated/data_platform"
+    os.makedirs(code_dir, exist_ok=True)
+    path = os.path.join(code_dir, script_name)
+    with open(path, "w") as f:
+        f.write(code_str)
+        
+    import io
+    import contextlib
+    import traceback
+    
+    stdout_io = io.StringIO()
+    stderr_io = io.StringIO()
+    exit_code = 0
+    
+    with contextlib.redirect_stdout(stdout_io):
+        with contextlib.redirect_stderr(stderr_io):
+            try:
+                globals_dict = {
+                    "__name__": "__main__",
+                    "__file__": path,
+                }
+                exec(code_str, globals_dict)
+            except Exception as e:
+                traceback.print_exc()
+                exit_code = 1
+                
+    return {
+        "exit_code": exit_code,
+        "stdout": stdout_io.getvalue()[:15000],
+        "stderr": stderr_io.getvalue()[:15000]
+    }
+
+
 def engineering_node(state: AgentState) -> Dict[str, Any]:
-    """Data Engineer writes Bronze, Silver, Gold transformation scripts."""
-    print(">>> [Data Engineer] Generates PySpark Medallion scripts...")
+    """Data Engineer writes Bronze, Silver, Gold transformation scripts with compilation-loop healing and persistent memory."""
+    print(">>> [Data Engineer] Generates and compiles PySpark Medallion scripts...")
+    
+    from dbricks_lang_agent.data_platform.spark_utils import get_spark, reset_lake
+    from dbricks_lang_agent.orchestrator import memory
+    
+    spark = get_spark()
+    
+    # 1. Initialize codebase memory table
+    memory.init_codebase_memory_table(spark)
+    
+    # 2. Compute fingerprint
+    fingerprint = get_dataset_fingerprint(spark)
+    print(f"[Codebase Memory] Computed dataset fingerprint: {fingerprint}")
+    
+    # 3. Check for stored codebase
+    reset_requested = False
+    try:
+        dbutils = globals().get("dbutils")
+        if dbutils:
+            reset_requested = dbutils.widgets.get("reset_pipeline").lower() == "true"
+    except Exception:
+        pass
+        
+    stored = None
+    if not reset_requested:
+        stored = memory.get_stored_codebase(spark, fingerprint)
+        
+    bronze = ""
+    silver = ""
+    gold = ""
+    
+    if stored:
+        print("[Codebase Memory] Found matching compiled codebase in memory. Recalling...")
+        bronze = stored["bronze_code"]
+        silver = stored["silver_code"]
+        gold = stored["gold_code"]
+    else:
+        print("[Codebase Memory] No matching compiled codebase found or reset requested. Generating first draft...")
+        contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
+        ddl_str = state["gold_ddl"]
+        
+        prompt = (
+            f"Target data contracts:\n{contracts_str}\n\n"
+            f"Target Gold DDL star schema:\n{ddl_str}"
+        )
+        if state.get("review_comments"):
+            prompt += f"\n\nHuman feedback / fix comments:\n{state['review_comments']}"
+            
+        messages = [
+            SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
+            HumanMessage(content=prompt)
+        ]
+        
+        llm = get_llm("engineering")
+        response = llm.invoke(messages)
+        parsed = parse_json_from_response(response.content)
+        
+        bronze = _sanitize_and_heal_code(parsed.get("bronze_code", ""))
+        silver = _sanitize_and_heal_code(parsed.get("silver_code", ""))
+        gold = _sanitize_and_heal_code(parsed.get("gold_code", ""))
+
+    # 4. Sequential Compilation & Self-Correction Loop
+    scripts_info = [
+        ("bronze.py", "bronze_code"),
+        ("silver.py", "silver_code"),
+        ("gold.py", "gold_code")
+    ]
+    
+    current_codes = {
+        "bronze_code": bronze,
+        "silver_code": silver,
+        "gold_code": gold
+    }
+    
+    print("[Compiler Loop] Resetting database schemas for a clean verification run...")
+    reset_lake()
     
     contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
     ddl_str = state["gold_ddl"]
-    
-    prompt = (
-        f"Target data contracts:\n{contracts_str}\n\n"
-        f"Target Gold DDL star schema:\n{ddl_str}"
-    )
-    if state.get("review_comments"):
-        prompt += f"\n\nHuman feedback / fix comments:\n{state['review_comments']}"
-    if state.get("execution_logs"):
-        prompt += f"\n\nLast execution logs and errors (if any):\n{json.dumps(state['execution_logs'], indent=2)}"
-
-    messages = [
-        SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
-        HumanMessage(content=prompt)
-    ]
-    
     llm = get_llm("engineering")
-    response = llm.invoke(messages)
     
-    parsed = parse_json_from_response(response.content)
-    bronze = _sanitize_and_heal_code(parsed.get("bronze_code", ""))
-    silver = _sanitize_and_heal_code(parsed.get("silver_code", ""))
-    gold = _sanitize_and_heal_code(parsed.get("gold_code", ""))
+    verification_logs = {}
+    compile_failed = False
+    
+    for script_name, key_name in scripts_info:
+        current_code = current_codes[key_name]
+        success = False
+        
+        for attempt in range(4): # 1 initial + 3 retries
+            print(f"[Compiler Loop] Verifying {script_name} (Attempt {attempt + 1})...")
+            res = _run_and_verify_script(script_name, current_code)
+            verification_logs[script_name] = res
+            
+            if res["exit_code"] == 0:
+                print(f"[Compiler Loop] {script_name} compiled and executed successfully!")
+                current_codes[key_name] = current_code
+                success = True
+                break
+            else:
+                print(f"[Compiler Loop] {script_name} failed with exit code {res['exit_code']}")
+                if attempt == 3:
+                    break
+                    
+                print(f"[Compiler Loop] Sending error log to Engineering agent to self-heal...")
+                fix_prompt = (
+                    f"You are a Senior Data Engineer. The generated {script_name} has failed execution.\n\n"
+                    f"Target data contracts:\n{contracts_str}\n\n"
+                    f"Target Gold DDL star schema:\n{ddl_str}\n\n"
+                    f"Current failing code for {script_name}:\n```python\n{current_code}\n```\n\n"
+                    f"Execution stderr / traceback:\n{res['stderr']}\n\n"
+                    f"Please analyze the error and output the corrected version of the code. "
+                    f"Ensure all functions and classes are fully imported and syntactically correct.\n"
+                    f"Return your corrected code as a JSON object matching this schema:\n"
+                    f"{{\n"
+                    f"  \"{key_name}\": \"Corrected PySpark code string\"\n"
+                    f"}}\n"
+                )
+                
+                messages = [
+                    SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
+                    HumanMessage(content=fix_prompt)
+                ]
+                
+                fix_response = llm.invoke(messages)
+                fix_parsed = parse_json_from_response(fix_response.content)
+                current_code = _sanitize_and_heal_code(fix_parsed.get(key_name, ""))
+                
+        if not success:
+            print(f"[Compiler Loop] CRITICAL: Failed to compile {script_name} after max retries.")
+            compile_failed = True
+            break
 
-    # Save code files to generated directory
+    # Save final code files to generated directory
+    bronze = current_codes["bronze_code"]
+    silver = current_codes["silver_code"]
+    gold = current_codes["gold_code"]
+    
     code_dir = "/tmp/generated/data_platform"
     os.makedirs(code_dir, exist_ok=True)
     with open(os.path.join(code_dir, "bronze.py"), "w") as f:
@@ -561,10 +747,18 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     with open(os.path.join(code_dir, "gold.py"), "w") as f:
         f.write(gold)
 
+    # 5. Persist successful codebase in memory
+    if not compile_failed:
+        print("[Codebase Memory] Pipeline successfully compiled! Logging codebase to Unity Catalog memory table...")
+        memory.log_codebase(spark, fingerprint, bronze, silver, gold)
+    else:
+        print("[Codebase Memory] Warning: Pipeline has compilation errors. Skipping codebase memory logging.")
+
     return {
         "bronze_code": bronze,
         "silver_code": silver,
         "gold_code": gold,
+        "execution_logs": verification_logs,
         "active_agent": "DataEngineer",
         "review_comments": ""
     }
@@ -592,32 +786,40 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     scripts = ["bronze.py", "silver.py", "gold.py"]
     logs = {}
     
-    # Set PYTHONPATH relative to execution
-    env = os.environ.copy()
-    # Resolve the src directory relative to this file's location to be robust across environments
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    src_dir = os.path.abspath(os.path.join(current_file_dir, "..", ".."))
-    project_root = os.path.abspath(os.path.join(src_dir, ".."))
-    env["PYTHONPATH"] = src_dir + os.pathsep + project_root + os.pathsep + env.get("PYTHONPATH", "")
+    import io
+    import contextlib
+    import traceback
 
     for s in scripts:
         path = os.path.join(code_dir, s)
         print(f"Executing {s}...")
         try:
-            res = subprocess.run(
-                 [sys.executable, path],
-                 capture_output=True,
-                 text=True,
-                 env=env,
-                 timeout=300
-             )
+            with open(path, "r", encoding="utf-8") as f:
+                code_content = f.read()
+                
+            stdout_io = io.StringIO()
+            stderr_io = io.StringIO()
+            exit_code = 0
+            
+            with contextlib.redirect_stdout(stdout_io):
+                with contextlib.redirect_stderr(stderr_io):
+                    try:
+                        globals_dict = {
+                            "__name__": "__main__",
+                            "__file__": path,
+                        }
+                        exec(code_content, globals_dict)
+                    except Exception as e_run:
+                        traceback.print_exc()
+                        exit_code = 1
+                        
             logs[s] = {
-                "exit_code": res.returncode,
-                "stdout": res.stdout[:15000],
-                "stderr": res.stderr[:15000]
+                "exit_code": exit_code,
+                "stdout": stdout_io.getvalue()[:15000],
+                "stderr": stderr_io.getvalue()[:15000]
             }
-            if res.returncode != 0:
-                print(f"!!! Script {s} failed with exit code {res.returncode}")
+            if exit_code != 0:
+                print(f"!!! Script {s} failed with exit code {exit_code}")
                 # Stop executing downstream scripts if upstream fails
                 break
         except Exception as e:

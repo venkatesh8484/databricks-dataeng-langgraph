@@ -55,6 +55,82 @@ dbutils.widgets.dropdown("reset_pipeline", "False", ["True", "False"], "Reset Pi
 
 # COMMAND ----------
 
+def copy_file_binary(src, dst):
+    """Copy file contents chunk by chunk without copying metadata or permissions.
+    Deletes the target file if it already exists to bypass read-only attribute constraints.
+    """
+    if os.path.exists(dst):
+        try:
+            os.chmod(dst, 0o666)
+        except Exception:
+            pass
+        try:
+            os.remove(dst)
+        except Exception:
+            pass
+    with open(src, "rb") as f_src:
+        with open(dst, "wb") as f_dst:
+            f_dst.write(f_src.read())
+
+def sync_db_from_volume():
+    """Copy checkpoint.db from UC Volume to local /tmp using Python native I/O.
+    Avoids dbutils.fs.cp which is blocked for file:/tmp/ paths on Serverless compute.
+    """
+    try:
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "databricks_langgraph")
+        raw_volume = cfg.get("raw_volume", "raw/source_volume")
+        volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
+        local_db = "/tmp/checkpoint.db"
+
+        if os.path.exists(volume_db):
+            copy_file_binary(volume_db, local_db)
+            try:
+                os.chmod(local_db, 0o666)
+            except Exception:
+                pass
+            print(f"[Info] Synced checkpoint database from Volume to local disk: {local_db}")
+        else:
+            print("[Info] No existing checkpoint database found in volume. Starting fresh.")
+    except Exception as e_sync:
+        print(f"[Warning] Local checkpoint sync from volume failed: {e_sync}")
+
+# Check if reset is requested
+try:
+    reset_requested = dbutils.widgets.get("reset_pipeline") == "True"
+    if reset_requested:
+        print("[Reset] Wiping out local and Volume checkpoint databases to start a fresh run...")
+        local_db = "/tmp/checkpoint.db"
+        if os.path.exists(local_db):
+            os.remove(local_db)
+            
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "databricks_langgraph")
+        raw_volume = cfg.get("raw_volume", "raw/source_volume")
+        volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
+        if os.path.exists(volume_db):
+            os.remove(volume_db)
+            print(f"[Reset] Deleted Volume database file: {volume_db}")
+            
+        # Try deleting via Workspace SDK as fallback
+        try:
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            w.files.delete(volume_db)
+        except Exception:
+            pass
+            
+        # Reset widget back to False for safety
+        dbutils.widgets.remove("reset_pipeline")
+        dbutils.widgets.dropdown("reset_pipeline", "False", ["True", "False"], "Reset Pipeline (Start Fresh)")
+except Exception as e_reset:
+    print(f"[Warning] Reset check skipped: {e_reset}")
+
+# Sync database from Unity Catalog Volume to local SSD before opening connection
+sync_db_from_volume()
+
 app = create_pipeline_graph()
 thread_id = "medallion_pipeline_run"
 config = {"configurable": {"thread_id": thread_id}}
@@ -120,48 +196,7 @@ def print_artifacts(state_values):
 
 # COMMAND ----------
 
-# Get active state
-# Sync database from Unity Catalog Volume to local SSD (/tmp/checkpoint.db) to prevent network database locking errors
-def copy_file_binary(src, dst):
-    """Copy file contents chunk by chunk without copying metadata or permissions.
-    Deletes the target file if it already exists to bypass read-only attribute constraints.
-    """
-    if os.path.exists(dst):
-        try:
-            os.chmod(dst, 0o666)
-        except Exception:
-            pass
-        try:
-            os.remove(dst)
-        except Exception:
-            pass
-    with open(src, "rb") as f_src:
-        with open(dst, "wb") as f_dst:
-            f_dst.write(f_src.read())
-
-def sync_db_from_volume():
-    """Copy checkpoint.db from UC Volume to local /tmp using Python native I/O.
-    Avoids dbutils.fs.cp which is blocked for file:/tmp/ paths on Serverless compute.
-    """
-    try:
-        from dbricks_lang_agent.data_platform.spark_utils import load_config
-        cfg = load_config()
-        catalog = cfg.get("catalog", "hospitality_catalog")
-        raw_volume = cfg.get("raw_volume", "raw/source_volume")
-        volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
-        local_db = "/tmp/checkpoint.db"
-
-        if os.path.exists(volume_db):
-            copy_file_binary(volume_db, local_db)
-            try:
-                os.chmod(local_db, 0o666)
-            except Exception:
-                pass
-            print(f"[Info] Synced checkpoint database from Volume to local disk: {local_db}")
-        else:
-            print("[Info] No existing checkpoint database found in volume. Starting fresh.")
-    except Exception as e_sync:
-        print(f"[Warning] Local checkpoint sync from volume failed: {e_sync}")
+# Helper functions copy_file_binary and sync_db_from_volume moved to cell 2
 
 def sync_db_to_volume():
     """Copy checkpoint.db from local /tmp back to UC Volume using Python native I/O.
@@ -171,7 +206,7 @@ def sync_db_to_volume():
     try:
         from dbricks_lang_agent.data_platform.spark_utils import load_config
         cfg = load_config()
-        catalog = cfg.get("catalog", "hospitality_catalog")
+        catalog = cfg.get("catalog", "databricks_langgraph")
         raw_volume = cfg.get("raw_volume", "raw/source_volume")
         volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
         local_db = "/tmp/checkpoint.db"
@@ -202,41 +237,10 @@ def sync_db_to_volume():
             print(f"[Warning] Checkpoint database sync to volume failed (SDK): {e_sdk}")
     except Exception as e_sync:
         print(f"[Warning] Checkpoint database sync to volume failed: {e_sync}")
+# Reset check moved before graph initialization
 
-# Check if reset is requested
-try:
-    reset_requested = dbutils.widgets.get("reset_pipeline") == "True"
-    if reset_requested:
-        print("[Reset] Wiping out local and Volume checkpoint databases to start a fresh run...")
-        local_db = "/tmp/checkpoint.db"
-        if os.path.exists(local_db):
-            os.remove(local_db)
-            
-        from dbricks_lang_agent.data_platform.spark_utils import load_config
-        cfg = load_config()
-        catalog = cfg.get("catalog", "hospitality_catalog")
-        raw_volume = cfg.get("raw_volume", "raw/source_volume")
-        volume_db = os.path.join(cfg.get("volume_raw_path", f"/Volumes/{catalog}/{raw_volume}"), "checkpoint.db")
-        if os.path.exists(volume_db):
-            os.remove(volume_db)
-            print(f"[Reset] Deleted Volume database file: {volume_db}")
-            
-        # Try deleting via Workspace SDK as fallback
-        try:
-            from databricks.sdk import WorkspaceClient
-            w = WorkspaceClient()
-            w.files.delete(volume_db)
-        except Exception:
-            pass
-            
-        # Reset widget back to False for safety
-        dbutils.widgets.remove("reset_pipeline")
-        dbutils.widgets.dropdown("reset_pipeline", "False", ["True", "False"], "Reset Pipeline (Start Fresh)")
-except Exception as e_reset:
-    print(f"[Warning] Reset check skipped: {e_reset}")
 
-# Get active state
-sync_db_from_volume()
+# DB was already synced from Volume in cell 7 before create_pipeline_graph was called
 state = app.get_state(config)
 
 if not state.values:

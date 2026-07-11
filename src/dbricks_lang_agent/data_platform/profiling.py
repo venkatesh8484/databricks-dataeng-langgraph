@@ -29,7 +29,7 @@ def discover_source_tables() -> Dict[str, str]:
     using DBUtils or Workspace Client instead.
     """
     cfg = load_config()
-    vol_path = cfg.get("volume_raw_path", "/Volumes/hospitality_catalog/raw/source_volume")
+    vol_path = cfg.get("volume_raw_path", "/Volumes/databricks_langgraph/raw/source_volume")
     
     # Check if we are running in Databricks (Notebook or App)
     is_databricks = "DATABRICKS_RUNTIME_VERSION" in os.environ or os.environ.get("DATABRICKS_APP_NAME") is not None
@@ -83,7 +83,7 @@ def load_source(spark: SparkSession, filename: str) -> DataFrame:
     Bypasses POSIX checks on Databricks Serverless.
     """
     cfg = load_config()
-    vol_path = cfg.get("volume_raw_path", "/Volumes/hospitality_catalog/raw/source_volume")
+    vol_path = cfg.get("volume_raw_path", "/Volumes/databricks_langgraph/raw/source_volume")
     
     is_databricks = "DATABRICKS_RUNTIME_VERSION" in os.environ or os.environ.get("DATABRICKS_APP_NAME") is not None
     

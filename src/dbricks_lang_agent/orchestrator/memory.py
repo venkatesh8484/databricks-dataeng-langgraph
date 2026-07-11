@@ -23,9 +23,9 @@ def get_memory_table_fqn(spark: SparkSession) -> str:
     try:
         from dbricks_lang_agent.data_platform.spark_utils import load_config
         cfg = load_config()
-        catalog = cfg.get("catalog", "hospitality_catalog")
+        catalog = cfg.get("catalog", "databricks_langgraph")
     except Exception:
-        catalog = "hospitality_catalog"
+        catalog = "databricks_langgraph"
     return f"{catalog}.gold.agent_fewshot_memory"
 
 
@@ -200,3 +200,162 @@ def get_few_shot_context(spark: SparkSession, dataset_name: str, issue_type: str
             f"  - **Human Feedback**: \"{r['human_comments'] or 'None'}\"\n"
         )
     return markdown
+
+
+LOCAL_CODEBASE_MEMORY_PATH = "./generated/config/agent_codebase_memory.json"
+
+def get_codebase_table_fqn(spark: SparkSession) -> str:
+    """Read the codebase memory table path from Spark configuration or catalog settings."""
+    try:
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "databricks_langgraph")
+    except Exception:
+        catalog = "databricks_langgraph"
+    return f"{catalog}.gold.agent_codebase_memory"
+
+
+def init_codebase_memory_table(spark: SparkSession) -> bool:
+    """Initialize the gold.agent_codebase_memory Delta Table in Unity Catalog."""
+    fqn = get_codebase_table_fqn(spark)
+    print(f"Initializing codebase memory table at: {fqn}...")
+    
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+        
+    if is_local:
+        os.makedirs(os.path.dirname(LOCAL_CODEBASE_MEMORY_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
+            with open(LOCAL_CODEBASE_MEMORY_PATH, "w") as f:
+                json.dump({}, f)
+        return True
+
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
+        
+        # Create Delta table
+        spark.sql(f"""
+            CREATE TABLE IF NOT EXISTS {fqn} (
+                dataset_fingerprint STRING,
+                bronze_code STRING,
+                silver_code STRING,
+                gold_code STRING,
+                timestamp TIMESTAMP
+            ) USING DELTA
+        """)
+        return True
+    except Exception as e:
+        print(f"[Warning] Failed to initialize UC codebase memory table: {e}. Falling back to local file.")
+        os.makedirs(os.path.dirname(LOCAL_CODEBASE_MEMORY_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
+            with open(LOCAL_CODEBASE_MEMORY_PATH, "w") as f:
+                json.dump({}, f)
+        return False
+
+
+def get_stored_codebase(spark: SparkSession, fingerprint: str) -> Optional[Dict[str, str]]:
+    """Retrieve compiled codebase for the given dataset fingerprint."""
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if not is_local:
+        try:
+            fqn = get_codebase_table_fqn(spark)
+            df = spark.read.table(fqn).filter(
+                f"dataset_fingerprint = '{fingerprint}'"
+            ).orderBy("timestamp", ascending=False).limit(1)
+            
+            rows = df.collect()
+            if rows:
+                return {
+                    "bronze_code": rows[0].bronze_code,
+                    "silver_code": rows[0].silver_code,
+                    "gold_code": rows[0].gold_code
+                }
+        except Exception as e:
+            print(f"[Warning] Failed to read from UC codebase memory: {e}. Checking local cache.")
+
+    # Local fallback
+    try:
+        if os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
+            with open(LOCAL_CODEBASE_MEMORY_PATH, "r") as f:
+                data = json.load(f)
+            if fingerprint in data:
+                return data[fingerprint]
+    except Exception as e:
+        print(f"[Warning] Failed to read from local codebase memory: {e}")
+        
+    return None
+
+
+def log_codebase(
+    spark: SparkSession,
+    fingerprint: str,
+    bronze_code: str,
+    silver_code: str,
+    gold_code: str
+) -> None:
+    """Store successfully compiled codebase in memory."""
+    timestamp = datetime.datetime.now()
+    
+    # 1. Update local cache
+    try:
+        os.makedirs(os.path.dirname(LOCAL_CODEBASE_MEMORY_PATH), exist_ok=True)
+        data = {}
+        if os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
+            with open(LOCAL_CODEBASE_MEMORY_PATH, "r") as f:
+                data = json.load(f)
+        
+        data[fingerprint] = {
+            "bronze_code": bronze_code,
+            "silver_code": silver_code,
+            "gold_code": gold_code,
+            "timestamp": timestamp.isoformat()
+        }
+        
+        with open(LOCAL_CODEBASE_MEMORY_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to log codebase to local JSON cache: {e}")
+
+    # 2. Update Delta table in Unity Catalog
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+        
+    if is_local:
+        return
+        
+    try:
+        fqn = get_codebase_table_fqn(spark)
+        schema = StructType([
+            StructField("dataset_fingerprint", StringType(), True),
+            StructField("bronze_code", StringType(), True),
+            StructField("silver_code", StringType(), True),
+            StructField("gold_code", StringType(), True),
+            StructField("timestamp", TimestampType(), True)
+        ])
+        
+        row_data = [(fingerprint, bronze_code, silver_code, gold_code, timestamp)]
+        df = spark.createDataFrame(row_data, schema=schema)
+        
+        # Merge/Upsert to keep only the latest code for this fingerprint
+        if spark.catalog.tableExists(fqn):
+            from delta.tables import DeltaTable
+            target = DeltaTable.forName(spark, fqn)
+            target.alias("t").merge(
+                df.alias("s"),
+                "t.dataset_fingerprint = s.dataset_fingerprint"
+            ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+        else:
+            df.write.format("delta").mode("overwrite").saveAsTable(fqn)
+            
+        print(f"Successfully logged codebase to Delta table '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to log codebase to Delta table: {e}")
+

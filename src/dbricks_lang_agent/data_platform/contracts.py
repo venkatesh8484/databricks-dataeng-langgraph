@@ -147,10 +147,32 @@ def validate_table(df: DataFrame, contract: Dict[str, Any], parent_dfs: Dict[str
                 rule_meta.append((colname, f"allowed_values[{col}]", av["severity"], av.get("max_fail_rate", 0.0)))
 
     # --- range ---
+    # Range bounds are always numeric (per the contract-generation prompt),
+    # but the contract-authoring LLM can still mis-attach a range rule to a
+    # non-numeric column — e.g. a TIMESTAMP column whose name merely sounds
+    # numeric (a real example: "price_band_start", which is actually a date).
+    # Comparing a non-numeric column against a numeric literal raises a hard
+    # AnalysisException that kills the entire script, so guard it here:
+    # skip that one rule (with a loud warning) instead of crashing silver.py
+    # outright. This is a safety net — the real fix is a correct contract.
+    _RANGE_NUMERIC_TYPES = (
+        "ByteType", "ShortType", "IntegerType", "LongType",
+        "FloatType", "DoubleType", "DecimalType",
+    )
     rg = rules.get("range")
     if rg:
         for col, bounds in rg.get("checks", {}).items():
             if col in work.columns:
+                col_dtype_name = type(work.schema[col].dataType).__name__
+                if not any(col_dtype_name.startswith(t) for t in _RANGE_NUMERIC_TYPES):
+                    print(
+                        f"[Contract Guard] WARNING: Skipping range rule on '{col}' — "
+                        f"column dtype is {col_dtype_name}, not numeric, so "
+                        f"min/max bounds ({bounds.get('min')}/{bounds.get('max')}) "
+                        f"cannot be compared against it. This rule was likely "
+                        f"mis-generated for this column — check the contract YAML."
+                    )
+                    continue
                 colname = f"_fail_range_{col}"
                 cond = F.col(col).isNotNull() & ((F.col(col) < bounds["min"]) | (F.col(col) > bounds["max"]))
                 work = work.withColumn(colname, cond)

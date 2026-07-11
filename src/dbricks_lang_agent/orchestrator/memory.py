@@ -281,7 +281,20 @@ def log_rejection(
         print(f"[Warning] Failed to log rejection to Delta table: {e}")
 
 
-LOCAL_CODEBASE_MEMORY_PATH = "./generated/config/agent_codebase_memory.json"
+LOCAL_CODEBASE_MEMORY_PATH = "./generated/config/agent_script_codebase_memory.json"
+
+# NOTE: this cache is keyed per (dataset_fingerprint, script_key) — one row
+# per SCRIPT, not one row per fingerprint bundling all three. Earlier this
+# was all-or-nothing: if silver failed to compile, bronze and gold (even if
+# they compiled perfectly) never got persisted, so every retry regenerated
+# all three scripts from scratch. Now each script is cached the moment IT
+# individually compiles clean, independent of its siblings' status, and
+# get_stored_codebase() below returns whatever subset is actually cached —
+# possibly 0, 1, 2, or 3 scripts. This intentionally lives in a differently
+# named table (agent_script_codebase_memory) rather than reusing the old
+# agent_codebase_memory name, since the old table (if it exists in a
+# workspace already) has an incompatible schema (one row per fingerprint
+# with bronze_code/silver_code/gold_code columns).
 
 def get_codebase_table_fqn(spark: SparkSession) -> str:
     """Read the codebase memory table path from Spark configuration or catalog settings."""
@@ -291,19 +304,19 @@ def get_codebase_table_fqn(spark: SparkSession) -> str:
         catalog = cfg.get("catalog", "databricks_langgraph")
     except Exception:
         catalog = "databricks_langgraph"
-    return f"{catalog}.gold.agent_codebase_memory"
+    return f"{catalog}.gold.agent_script_codebase_memory"
 
 
 def init_codebase_memory_table(spark: SparkSession) -> bool:
-    """Initialize the gold.agent_codebase_memory Delta Table in Unity Catalog."""
+    """Initialize the gold.agent_script_codebase_memory Delta Table in Unity Catalog."""
     fqn = get_codebase_table_fqn(spark)
-    print(f"Initializing codebase memory table at: {fqn}...")
-    
+    print(f"Initializing script codebase memory table at: {fqn}...")
+
     try:
         is_local = spark.conf.get("spark.master", "").startswith("local")
     except Exception:
         is_local = False
-        
+
     if is_local:
         os.makedirs(os.path.dirname(LOCAL_CODEBASE_MEMORY_PATH), exist_ok=True)
         if not os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
@@ -313,20 +326,18 @@ def init_codebase_memory_table(spark: SparkSession) -> bool:
 
     try:
         spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
-        
-        # Create Delta table
+
         spark.sql(f"""
             CREATE TABLE IF NOT EXISTS {fqn} (
                 dataset_fingerprint STRING,
-                bronze_code STRING,
-                silver_code STRING,
-                gold_code STRING,
+                script_key STRING,
+                code STRING,
                 timestamp TIMESTAMP
             ) USING DELTA
         """)
         return True
     except Exception as e:
-        print(f"[Warning] Failed to initialize UC codebase memory table: {e}. Falling back to local file.")
+        print(f"[Warning] Failed to initialize UC script codebase memory table: {e}. Falling back to local file.")
         os.makedirs(os.path.dirname(LOCAL_CODEBASE_MEMORY_PATH), exist_ok=True)
         if not os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
             with open(LOCAL_CODEBASE_MEMORY_PATH, "w") as f:
@@ -334,8 +345,11 @@ def init_codebase_memory_table(spark: SparkSession) -> bool:
         return False
 
 
-def get_stored_codebase(spark: SparkSession, fingerprint: str) -> Optional[Dict[str, str]]:
-    """Retrieve compiled codebase for the given dataset fingerprint."""
+def get_stored_codebase(spark: SparkSession, fingerprint: str) -> Dict[str, str]:
+    """Retrieve whichever scripts are cached (individually) for this dataset
+    fingerprint. Returns a dict with only the keys that have a known-good
+    cached entry — e.g. {'bronze_code': '...'} if only bronze has ever
+    compiled clean for this fingerprint. Returns {} if nothing is cached."""
     try:
         is_local = spark.conf.get("spark.master", "").startswith("local")
     except Exception:
@@ -344,41 +358,41 @@ def get_stored_codebase(spark: SparkSession, fingerprint: str) -> Optional[Dict[
     if not is_local:
         try:
             fqn = get_codebase_table_fqn(spark)
-            df = spark.read.table(fqn).filter(
-                f"dataset_fingerprint = '{fingerprint}'"
-            ).orderBy("timestamp", ascending=False).limit(1)
-            
+            df = spark.read.table(fqn).filter(F.col("dataset_fingerprint") == fingerprint)
             rows = df.collect()
             if rows:
-                return {
-                    "bronze_code": rows[0].bronze_code,
-                    "silver_code": rows[0].silver_code,
-                    "gold_code": rows[0].gold_code
-                }
+                # If duplicate rows exist for the same script_key (shouldn't,
+                # since we merge/upsert on write), keep the newest.
+                out: Dict[str, str] = {}
+                latest_ts: Dict[str, Any] = {}
+                for r in rows:
+                    k = r.script_key
+                    if k not in latest_ts or (r.timestamp and r.timestamp > latest_ts[k]):
+                        out[k] = r.code
+                        latest_ts[k] = r.timestamp
+                return out
         except Exception as e:
-            print(f"[Warning] Failed to read from UC codebase memory: {e}. Checking local cache.")
+            print(f"[Warning] Failed to read from UC script codebase memory: {e}. Checking local cache.")
 
     # Local fallback
     try:
         if os.path.exists(LOCAL_CODEBASE_MEMORY_PATH):
             with open(LOCAL_CODEBASE_MEMORY_PATH, "r") as f:
                 data = json.load(f)
-            if fingerprint in data:
-                return data[fingerprint]
+            entry = data.get(fingerprint, {})
+            return {k: v["code"] for k, v in entry.items() if isinstance(v, dict) and "code" in v}
     except Exception as e:
-        print(f"[Warning] Failed to read from local codebase memory: {e}")
-        
-    return None
+        print(f"[Warning] Failed to read from local script codebase memory: {e}")
+
+    return {}
 
 
-def log_codebase(
-    spark: SparkSession,
-    fingerprint: str,
-    bronze_code: str,
-    silver_code: str,
-    gold_code: str
-) -> None:
-    """Store successfully compiled codebase in memory."""
+def log_script_code(spark: SparkSession, fingerprint: str, script_key: str, code: str) -> None:
+    """Persist ONE script's code the moment it individually compiles clean —
+    called from inside the compiler loop right after a script passes
+    verification, independent of whether its siblings pass. This is what
+    lets a proven-good bronze.py stay cached even while silver.py is still
+    being iterated on."""
     timestamp = datetime.datetime.now()
 
     # 1. Update local cache
@@ -389,17 +403,16 @@ def log_codebase(
             with open(LOCAL_CODEBASE_MEMORY_PATH, "r") as f:
                 data = json.load(f)
 
-        data[fingerprint] = {
-            "bronze_code": bronze_code,
-            "silver_code": silver_code,
-            "gold_code": gold_code,
+        data.setdefault(fingerprint, {})
+        data[fingerprint][script_key] = {
+            "code": code,
             "timestamp": timestamp.isoformat()
         }
 
         with open(LOCAL_CODEBASE_MEMORY_PATH, "w") as f:
             json.dump(data, f, indent=2)
     except Exception as e:
-        print(f"[Warning] Failed to log codebase to local JSON cache: {e}")
+        print(f"[Warning] Failed to log script code to local JSON cache: {e}")
 
     # 2. Update Delta table in Unity Catalog
     try:
@@ -414,29 +427,30 @@ def log_codebase(
         fqn = get_codebase_table_fqn(spark)
         schema = StructType([
             StructField("dataset_fingerprint", StringType(), True),
-            StructField("bronze_code", StringType(), True),
-            StructField("silver_code", StringType(), True),
-            StructField("gold_code", StringType(), True),
+            StructField("script_key", StringType(), True),
+            StructField("code", StringType(), True),
             StructField("timestamp", TimestampType(), True)
         ])
 
-        row_data = [(fingerprint, bronze_code, silver_code, gold_code, timestamp)]
+        row_data = [(fingerprint, script_key, code, timestamp)]
         df = spark.createDataFrame(row_data, schema=schema)
 
-        # Merge/Upsert to keep only the latest code for this fingerprint
+        # Merge/Upsert on (fingerprint, script_key) so only this ONE script's
+        # row is replaced — siblings cached under the same fingerprint are
+        # untouched.
         if spark.catalog.tableExists(fqn):
             from delta.tables import DeltaTable
             target = DeltaTable.forName(spark, fqn)
             target.alias("t").merge(
                 df.alias("s"),
-                "t.dataset_fingerprint = s.dataset_fingerprint"
+                "t.dataset_fingerprint = s.dataset_fingerprint AND t.script_key = s.script_key"
             ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
         else:
             df.write.format("delta").mode("overwrite").saveAsTable(fqn)
 
-        print(f"Successfully logged codebase to Delta table '{fqn}'")
+        print(f"Successfully logged {script_key} to Delta table '{fqn}'")
     except Exception as e:
-        print(f"[Warning] Failed to log codebase to Delta table: {e}")
+        print(f"[Warning] Failed to log script code to Delta table: {e}")
 
 
 # ---------------------------------------------------------------------------

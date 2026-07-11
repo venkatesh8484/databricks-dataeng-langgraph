@@ -88,6 +88,8 @@ rules:
   range:
     severity: "soft"
     max_fail_rate: 0.0
+    # Only ever attach this rule to a column with a numeric "dtype" in the
+    # profiling data (see Guidelines below) — never based on the column name.
     checks:
       age_col:
         min: 0
@@ -107,6 +109,7 @@ CRITICAL YAML FORMATTING RULE: Output ONLY standard YAML block style, exactly as
 Guidelines:
 - Ground ALL rules in the profiling evidence. Use exact column names from the "Column Schema" section provided.
 - Do NOT reference a column that is not listed in the column schema for that table.
+- **"range" rules require numeric evidence, not a numeric-sounding name.** Before adding a `range` check on any column, look up that column's entry in the profiling data and confirm its `"dtype"` is one of IntegerType/LongType/DoubleType/FloatType/DecimalType/ShortType/ByteType AND it has a `"numeric_stats"` block. A column can be named something that sounds like a number or amount (e.g. "price_band_start", "level_code") while actually profiling as StringType, TimestampType, or DateType — in that case do NOT add a range rule for it, regardless of the name. When in doubt, prefer `not_null` or `allowed_values` over guessing at a `range`.
 - Be deliberate with "hard" vs "soft" severities. Critical primary keys = "hard"; optional FKs = "soft".
 - If the user provided review comments on a previous draft, incorporate the feedback — but only for tables that exist in discovered_tables.
 

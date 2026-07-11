@@ -831,7 +831,15 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     fingerprint = get_dataset_fingerprint(spark, state.get("contracts", {}), state.get("gold_ddl", ""))
     print(f"[Codebase Memory] Computed dataset fingerprint: {fingerprint}")
     
-    # 3. Check for stored codebase
+    # 3. Check for stored codebase — PER SCRIPT, not all-or-nothing. A script
+    # is only reused/patched if IT SPECIFICALLY has a proven-good cached
+    # entry; any script with no cache at all always gets a fresh generation,
+    # independent of whether its siblings are cached. This matters because
+    # log_script_code() (below, in the compiler loop) persists each script
+    # the moment IT compiles clean — so e.g. a working bronze.py stays
+    # cached and reused even while silver.py is still being iterated on,
+    # instead of the entire bundle being thrown away because one script
+    # hasn't compiled yet.
     reset_requested = False
     try:
         dbutils = globals().get("dbutils")
@@ -839,16 +847,12 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             reset_requested = dbutils.widgets.get("reset_pipeline").lower() == "true"
     except Exception:
         pass
-        
-    # A prior execution failure for this exact fingerprint means at least one
-    # generated script broke against real data. We no longer throw away the
-    # WHOLE cached codebase for this — bronze/silver/gold that already ran
-    # fine shouldn't be regenerated just because a sibling script failed.
-    # Instead: recall the cache and send ONLY the failing script(s) back to
-    # the LLM with their traceback for a targeted patch, mirroring the
-    # compiler loop's self-heal below. The patched result is re-persisted to
-    # memory so subsequent runs recall the fixed version instead of re-fixing
-    # the same bug every time.
+
+    # A prior execution failure for a given script means the cached version
+    # (if any) of THAT script is known-bad. Recall the cache and send ONLY
+    # the failing script(s) back to the LLM with their traceback for a
+    # targeted patch, mirroring the compiler loop's self-heal below. Scripts
+    # that are cached and did NOT fail are left untouched.
     prior_execution_logs = state.get("execution_logs") or {}
     had_prior_failure = any(
         (log_info or {}).get("exit_code", 0) != 0
@@ -859,26 +863,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         if (log_info or {}).get("exit_code", 0) != 0
     }
     if had_prior_failure:
-        print(f"[Codebase Memory] Previous execution attempt failed for {sorted(failed_script_names)} — will recall cache and patch only the failing script(s).")
-
-    stored = None
-    if not reset_requested and not state.get("review_comments"):
-        stored = memory.get_stored_codebase(spark, fingerprint)
-
-    bronze = ""
-    silver = ""
-    gold = ""
-
-    # Tracks, per script, WHY the code about to enter the compiler loop looks
-    # the way it does — 'cache_recalled' (untouched from Unity Catalog),
-    # 'llm_targeted_patch' (only this script was regenerated after a prior
-    # execution failure), or 'llm_fresh_generated' (no usable cache at all).
-    # Logged alongside every compile attempt below so cache-vs-regenerate
-    # behavior is auditable instead of inferred from stack traces.
-    code_source = {"bronze_code": "unknown", "silver_code": "unknown", "gold_code": "unknown"}
-
-    contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
-    ddl_str = state["gold_ddl"]
+        print(f"[Codebase Memory] Previous execution attempt failed for {sorted(failed_script_names)} — will patch only the failing script(s), reuse everything else.")
 
     script_key_map = {
         "bronze.py": "bronze_code",
@@ -886,60 +871,83 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         "gold.py": "gold_code",
     }
 
-    if stored and had_prior_failure:
-        print("[Codebase Memory] Found matching compiled codebase in memory. Recalling and patching failed script(s)...")
-        current_by_key = {
-            "bronze_code": stored["bronze_code"],
-            "silver_code": stored["silver_code"],
-            "gold_code": stored["gold_code"],
-        }
-        code_source = {"bronze_code": "cache_recalled", "silver_code": "cache_recalled", "gold_code": "cache_recalled"}
+    cached: Dict[str, str] = {}
+    if not reset_requested and not state.get("review_comments"):
+        cached = memory.get_stored_codebase(spark, fingerprint)
+        if cached:
+            print(f"[Codebase Memory] Found cached, proven-good code for: {sorted(cached.keys())}")
 
-        llm = get_llm("engineering")
-        for script_name in sorted(failed_script_names):
-            key_name = script_key_map.get(script_name)
-            if not key_name:
-                continue
-            log_info = prior_execution_logs.get(script_name, {}) or {}
-            fix_prompt = (
-                f"You are a Senior Data Engineer. The generated {script_name} failed during a real "
-                f"execution run against production data (not the compile-time sandbox check).\n\n"
-                f"Target data contracts:\n{contracts_str}\n\n"
-                f"Target Gold DDL star schema:\n{ddl_str}\n\n"
-                f"Current failing code for {script_name}:\n```python\n{current_by_key[key_name]}\n```\n\n"
-                f"Execution stdout (may contain Spark warnings):\n{log_info.get('stdout', '')[:3000]}\n\n"
-                f"Execution stderr / traceback:\n{log_info.get('stderr', '')[:5000]}\n\n"
-                f"Please analyze the error and output the corrected version of the code. "
-                f"Ensure all functions and classes are fully imported and syntactically correct.\n"
-                f"Return your corrected code as a JSON object matching this schema:\n"
-                f"{{\n"
-                f"  \"{key_name}\": \"Corrected PySpark code string\"\n"
-                f"}}\n"
-            )
-            messages = [
-                SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
-                HumanMessage(content=fix_prompt)
-            ]
-            try:
-                fix_response = llm.invoke(messages)
-                fix_parsed = parse_json_from_response(fix_response.content, fallback_key=key_name)
-                current_by_key[key_name] = _sanitize_and_heal_code(fix_parsed.get(key_name, current_by_key[key_name]))
-                code_source[key_name] = "llm_targeted_patch"
-            except ValueError as e_parse:
-                print(f"[Codebase Memory] WARNING: Could not parse targeted fix response for {script_name}: {e_parse}. Keeping cached code as-is; compiler loop below will retry.")
-                code_source[key_name] = "cache_recalled_patch_failed"
+    contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
+    ddl_str = state["gold_ddl"]
 
-        bronze = current_by_key["bronze_code"]
-        silver = current_by_key["silver_code"]
-        gold = current_by_key["gold_code"]
-    elif stored:
-        print("[Codebase Memory] Found matching compiled codebase in memory. Recalling...")
-        bronze = stored["bronze_code"]
-        silver = stored["silver_code"]
-        gold = stored["gold_code"]
-        code_source = {"bronze_code": "cache_recalled", "silver_code": "cache_recalled", "gold_code": "cache_recalled"}
-    else:
-        print("[Codebase Memory] No matching compiled codebase found or reset requested/rejected. Generating first draft...")
+    # Tracks, per script, WHY the code about to enter the compiler loop looks
+    # the way it does — 'cache_recalled' (untouched from Unity Catalog),
+    # 'llm_targeted_patch' (only this script was regenerated after a prior
+    # execution failure), or 'llm_fresh_generated' (no cache exists for it
+    # yet). Logged alongside every compile attempt below so cache-vs-
+    # regenerate behavior is auditable instead of inferred from stack traces.
+    code_source = {"bronze_code": "unknown", "silver_code": "unknown", "gold_code": "unknown"}
+    current_by_key = {
+        "bronze_code": cached.get("bronze_code", ""),
+        "silver_code": cached.get("silver_code", ""),
+        "gold_code": cached.get("gold_code", ""),
+    }
+    for k in current_by_key:
+        if cached.get(k):
+            code_source[k] = "cache_recalled"
+
+    # Cached scripts whose last real execution failed need a targeted patch.
+    scripts_to_patch = [
+        script_key_map[s] for s in failed_script_names
+        if script_key_map.get(s) and cached.get(script_key_map[s])
+    ]
+    # Scripts with no cache at all need a full fresh generation.
+    scripts_needing_fresh = [k for k in ("bronze_code", "silver_code", "gold_code") if not cached.get(k)]
+
+    llm = get_llm("engineering")
+
+    # 3a. Targeted patch — only for cached scripts whose last execution failed.
+    for key_name in scripts_to_patch:
+        script_name = next(s for s, k in script_key_map.items() if k == key_name)
+        log_info = prior_execution_logs.get(script_name, {}) or {}
+        fix_prompt = (
+            f"You are a Senior Data Engineer. The generated {script_name} failed during a real "
+            f"execution run against production data (not the compile-time sandbox check).\n\n"
+            f"Target data contracts:\n{contracts_str}\n\n"
+            f"Target Gold DDL star schema:\n{ddl_str}\n\n"
+            f"Current failing code for {script_name}:\n```python\n{current_by_key[key_name]}\n```\n\n"
+            f"Execution stdout (may contain Spark warnings):\n{log_info.get('stdout', '')[:3000]}\n\n"
+            f"Execution stderr / traceback:\n{log_info.get('stderr', '')[:5000]}\n\n"
+            f"Please analyze the error and output the corrected version of the code. "
+            f"Ensure all functions and classes are fully imported and syntactically correct.\n"
+            f"Return your corrected code as a JSON object matching this schema:\n"
+            f"{{\n"
+            f"  \"{key_name}\": \"Corrected PySpark code string\"\n"
+            f"}}\n"
+        )
+        messages = [
+            SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
+            HumanMessage(content=fix_prompt)
+        ]
+        try:
+            fix_response = llm.invoke(messages)
+            fix_parsed = parse_json_from_response(fix_response.content, fallback_key=key_name)
+            current_by_key[key_name] = _sanitize_and_heal_code(fix_parsed.get(key_name, current_by_key[key_name]))
+            code_source[key_name] = "llm_targeted_patch"
+        except ValueError as e_parse:
+            print(f"[Codebase Memory] WARNING: Could not parse targeted fix response for {script_name}: {e_parse}. Keeping cached code as-is; compiler loop below will retry.")
+            code_source[key_name] = "cache_recalled_patch_failed"
+
+    # 3b. Fresh generation — only for scripts with no cache at all. The LLM
+    # always returns all three scripts in one JSON response (its system
+    # prompt requires it), but we only ADOPT the ones that actually needed
+    # it — cached/patched scripts from 3a stay untouched even though the LLM
+    # also generated something for them in this same response.
+    if scripts_needing_fresh:
+        if reset_requested or state.get("review_comments"):
+            print("[Codebase Memory] Reset requested or human review comments present — generating fresh draft for all scripts...")
+        else:
+            print(f"[Codebase Memory] No cache for: {sorted(scripts_needing_fresh)} — generating fresh...")
 
         prompt = (
             f"Target data contracts:\n{contracts_str}\n\n"
@@ -966,14 +974,16 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             HumanMessage(content=prompt)
         ]
 
-        llm = get_llm("engineering")
         response = llm.invoke(messages)
         parsed = parse_json_from_response(response.content)
 
-        bronze = _sanitize_and_heal_code(parsed.get("bronze_code", ""))
-        silver = _sanitize_and_heal_code(parsed.get("silver_code", ""))
-        gold = _sanitize_and_heal_code(parsed.get("gold_code", ""))
-        code_source = {"bronze_code": "llm_fresh_generated", "silver_code": "llm_fresh_generated", "gold_code": "llm_fresh_generated"}
+        for key_name in scripts_needing_fresh:
+            current_by_key[key_name] = _sanitize_and_heal_code(parsed.get(key_name, ""))
+            code_source[key_name] = "llm_fresh_generated"
+
+    bronze = current_by_key["bronze_code"]
+    silver = current_by_key["silver_code"]
+    gold = current_by_key["gold_code"]
 
     # 4. Sequential Compilation & Self-Correction Loop
     scripts_info = [
@@ -1030,6 +1040,14 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
                 print(f"[Compiler Loop] {script_name} compiled and executed successfully!")
                 current_codes[key_name] = current_code
                 success = True
+                # Persist THIS script immediately — independent of whether its
+                # siblings go on to compile. This is what stops a proven-good
+                # bronze.py from being thrown away and regenerated just
+                # because silver.py is still failing.
+                try:
+                    memory.log_script_code(spark, fingerprint, key_name, current_code)
+                except Exception as e_cache:
+                    print(f"[Codebase Memory] WARNING: Failed to cache {script_name}: {e_cache}")
                 break
             else:
                 print(f"[Compiler Loop] {script_name} failed with exit code {res['exit_code']}")
@@ -1087,12 +1105,11 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     with open(os.path.join(code_dir, "gold.py"), "w") as f:
         f.write(gold)
 
-    # 5. Persist successful codebase in memory
-    if not compile_failed:
-        print("[Codebase Memory] Pipeline successfully compiled! Logging codebase to Unity Catalog memory table...")
-        memory.log_codebase(spark, fingerprint, bronze, silver, gold)
-    else:
-        print("[Codebase Memory] Warning: Pipeline has compilation errors. Skipping codebase memory logging.")
+    # 5. Codebase memory is now persisted per-script inline in the compiler
+    # loop above (memory.log_script_code), the moment each script compiles
+    # clean — no bundled all-or-nothing write needed here.
+    if compile_failed:
+        print("[Codebase Memory] Pipeline has compilation errors — any script(s) that DID compile clean were still cached individually above.")
 
     return {
         "bronze_code": bronze,

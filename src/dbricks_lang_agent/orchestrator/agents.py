@@ -1164,11 +1164,17 @@ def chat_with_data_agent(
             "Orchestrator":      ("execution_review_gate",    "execution"),
         }
         if not active_agent:
+            # Pipeline hasn't started yet — offer to launch it from scratch
+            action = {
+                "gate": "__start__",
+                "step": "pipeline_start",
+                "description": "Launch the Medallion Pipeline from scratch (Profiler → DQ → Contracts → Modeler → Engineer → Executor)."
+            }
             return (
-                "The pipeline hasn't been started yet. Please use the **Action Center** tab "
-                "to kick off the first run, or ask me to start it and I'll prompt you to confirm.",
+                "The pipeline hasn't started yet. I can kick it off for you right now! "
+                "Click **▶ Yes, Proceed** below to launch the full Medallion Pipeline from the beginning.",
                 False,
-                None
+                action
             )
         if active_agent not in gate_map:
             return (

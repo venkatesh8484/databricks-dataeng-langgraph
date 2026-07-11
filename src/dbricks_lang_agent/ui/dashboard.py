@@ -833,41 +833,67 @@ with tab0:
                         except Exception:
                             pass
 
-                    # Build updated approvals — use boolean True so routing
-                    # functions (which check `is True`) correctly advance
-                    current_state = app.get_state(config)
-                    current_approved = dict(current_state.values.get("approved_steps", {}))
-                    current_approved[step] = True  # Must be boolean, not string
+                    if gate == "__start__":
+                        # ── Cold start: kick off a fresh pipeline run ────────
+                        with st.spinner("🚀 Launching pipeline from scratch… this may take a few minutes."):
+                            try:
+                                events = app.stream({}, config, stream_mode="values")
+                                for event in events:
+                                    pass
+                            except KeyError as e_key:
+                                if "__end__" not in str(e_key):
+                                    raise
 
-                    app.update_state(
-                        config,
-                        {"approved_steps": current_approved}
-                    )
+                        sync_db_to_volume()
 
-                    # Stream the graph forward (same as HITL Action Center)
-                    with st.spinner("Resuming pipeline… this may take a moment."):
-                        try:
-                            events = app.stream(None, config, stream_mode="values")
-                            for event in events:
-                                pass
-                        except KeyError as e_key:
-                            if "__end__" not in str(e_key):
-                                raise
+                        msg = (
+                            "🚀 **Pipeline launched!** The Profiler agent is now running. "
+                            "Switch to the **Action Center (HITL)** tab to approve each stage as it completes."
+                        )
+                        st.session_state["chat_history"].append({
+                            "role": "assistant", "content": msg, "profiling_triggered": False
+                        })
+                        st.session_state["pending_pipeline_action"] = None
+                        refresh_graph_checkpoint()
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        # ── Mid-run: approve the current gate ───────────────
+                        # Build updated approvals — use boolean True so routing
+                        # functions (which check `is True`) correctly advance
+                        current_state = app.get_state(config)
+                        current_approved = dict(current_state.values.get("approved_steps", {}))
+                        current_approved[step] = True  # Must be boolean, not string
 
-                    # Persist to Volume
-                    sync_db_to_volume()
+                        app.update_state(
+                            config,
+                            {"approved_steps": current_approved}
+                        )
 
-                    msg = (
-                        f"✅ The **{step.title()}** step is approved and the pipeline has resumed. "
-                        "Switch to the **Ingestion Monitoring** tab to track progress."
-                    )
-                    st.session_state["chat_history"].append({
-                        "role": "assistant", "content": msg, "profiling_triggered": False
-                    })
-                    st.session_state["pending_pipeline_action"] = None
-                    refresh_graph_checkpoint()
-                    st.success(msg)
-                    st.rerun()
+                        # Stream the graph forward
+                        with st.spinner("Resuming pipeline… this may take a moment."):
+                            try:
+                                events = app.stream(None, config, stream_mode="values")
+                                for event in events:
+                                    pass
+                            except KeyError as e_key:
+                                if "__end__" not in str(e_key):
+                                    raise
+
+                        # Persist to Volume
+                        sync_db_to_volume()
+
+                        msg = (
+                            f"✅ The **{step.title()}** step is approved and the pipeline has resumed. "
+                            "Switch to the **Ingestion Monitoring** tab to track progress."
+                        )
+                        st.session_state["chat_history"].append({
+                            "role": "assistant", "content": msg, "profiling_triggered": False
+                        })
+                        st.session_state["pending_pipeline_action"] = None
+                        refresh_graph_checkpoint()
+                        st.success(msg)
+                        st.rerun()
                 except Exception as e_proceed:
                     st.error(f"Failed to trigger pipeline: {e_proceed}")
                     st.exception(e_proceed)

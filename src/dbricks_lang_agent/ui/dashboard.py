@@ -556,6 +556,78 @@ app = get_or_create_graph()
 thread_id = "medallion_pipeline_run"
 config = {"configurable": {"thread_id": thread_id}}
 
+def rollback_to_node(target_node: str) -> bool:
+    """Roll back the LangGraph state checkpoints to the point before target_node runs."""
+    try:
+        # If targeting the first node and no checkpoints exist, or we want to start fresh:
+        if target_node == "profiler":
+            local_db = get_checkpoint_db_path()
+            has_checkpoints = False
+            if os.path.exists(local_db):
+                import sqlite3
+                conn = sqlite3.connect(local_db)
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM checkpoints")
+                    if cursor.fetchone()[0] > 0:
+                        has_checkpoints = True
+                except Exception:
+                    pass
+                conn.close()
+            
+            if not has_checkpoints:
+                volume_db = get_volume_db_path()
+                for db_path in [local_db, volume_db]:
+                    if os.path.exists(db_path):
+                        try:
+                            os.remove(db_path)
+                        except Exception:
+                            pass
+                sync_db_to_volume()
+                return True
+
+        history = list(app.get_state_history(config))
+        target_checkpoint_id = None
+        
+        # Search from newest to oldest for a checkpoint where target_node is about to run next
+        for h in history:
+            if h.next and target_node in h.next:
+                target_checkpoint_id = h.config["configurable"]["checkpoint_id"]
+                break
+                
+        # If not found in h.next, check if the first checkpoint can be used for 'profiler'
+        if not target_checkpoint_id and target_node == "profiler":
+            target_checkpoint_id = history[-1].config["configurable"]["checkpoint_id"] if history else None
+
+        if target_checkpoint_id:
+            local_db = get_checkpoint_db_path()
+            if os.path.exists(local_db):
+                import sqlite3
+                conn = sqlite3.connect(local_db)
+                cursor = conn.cursor()
+                
+                # Get all checkpoint IDs created after our target checkpoint
+                newer_ids = []
+                for h in history:
+                    cid = h.config["configurable"]["checkpoint_id"]
+                    if cid == target_checkpoint_id:
+                        break
+                    newer_ids.append(cid)
+                
+                if newer_ids:
+                    placeholders = ",".join(["?"] * len(newer_ids))
+                    cursor.execute(f"DELETE FROM checkpoints WHERE thread_id = ? AND checkpoint_id IN ({placeholders})", [thread_id] + newer_ids)
+                    cursor.execute(f"DELETE FROM writes WHERE thread_id = ? AND checkpoint_id IN ({placeholders})", [thread_id] + newer_ids)
+                    conn.commit()
+                conn.close()
+                
+                # Sync back to Volume to notify downstream notebook or app containers
+                sync_db_to_volume()
+                return True
+    except Exception as e:
+        print(f"[Warning] Rollback to {target_node} failed: {e}")
+    return False
+
 # ----------------- Dashboard Layout -----------------
 
 st.markdown("""
@@ -650,7 +722,7 @@ for i, stage in enumerate(stages):
                 padding: 12px 10px 10px;
                 text-align: center;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                margin-bottom: 16px;
+                margin-bottom: 8px;
             ">
                 <div style="
                     display:inline-flex; align-items:center; gap:4px;
@@ -668,6 +740,25 @@ for i, stage in enumerate(stages):
                 </div>
             </div>
         """, unsafe_allow_html=True)
+
+        # Trigger Rerun from this specific stage
+        gate_to_next_node = {
+            "profile_review_gate": "profiler",
+            "data_quality_review_gate": "data_quality",
+            "contracts_review_gate": "contracts",
+            "modeling_review_gate": "modeling",
+            "engineering_review_gate": "engineering",
+            "execution_review_gate": "execution"
+        }
+        target_node = gate_to_next_node.get(stage["gate"])
+        if st.button("🔄 Rerun", key=f"btn_rerun_{stage['gate']}", use_container_width=True):
+            with st.spinner(f"Rolling back pipeline state to '{stage['name']}'..."):
+                if rollback_to_node(target_node):
+                    st.success("State updated successfully! Reloading...")
+                    refresh_graph_checkpoint()
+                    st.rerun()
+                else:
+                    st.error("Cannot rerun: no historical checkpoint found for this stage.")
 
 # Sidebar with Status Overview
 st.sidebar.markdown("### Ingestion Settings")

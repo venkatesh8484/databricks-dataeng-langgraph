@@ -157,7 +157,7 @@ class PureSqliteSaver(BaseCheckpointSaver):
             )
         # No explicit commit needed — autocommit mode is active.
 
-    def list(self, config: dict, *, before: dict = None, limit: int = None) -> Iterator[CheckpointTuple]:
+    def list(self, config: dict, *, before: dict = None, limit: int = None, **kwargs) -> Iterator[CheckpointTuple]:
         cursor = self.conn.cursor()
         thread_id = config["configurable"]["thread_id"]
         query = "SELECT checkpoint_id, parent_checkpoint_id, checkpoint_format, checkpoint_bytes, metadata_format, metadata_bytes FROM checkpoints WHERE thread_id = ?"

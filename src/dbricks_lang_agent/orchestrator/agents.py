@@ -17,7 +17,7 @@ from typing import Dict, Any, List
 from databricks_langchain import ChatDatabricks
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from dbricks_lang_agent.data_platform.spark_utils import load_config, get_spark
+from dbricks_lang_agent.data_platform.spark_utils import load_config, get_spark, GENERATED_ROOT
 from dbricks_lang_agent.data_platform import profiling
 from dbricks_lang_agent.orchestrator import memory
 from .state import AgentState
@@ -215,6 +215,37 @@ def parse_json_from_response(content: str, fallback_key: str = None) -> dict:
     import re
     content_str = content.strip()
 
+    def _fix_python_triple_quoted_values(text: str) -> str:
+        # Repair a recurring LLM mistake: wrapping a JSON string value in
+        # Python-style triple double-quotes (a Python docstring delimiter)
+        # instead of a normal JSON-escaped string. That's not valid JSON — the
+        # third quote character closes an (empty) string early and the rest
+        # desyncs the decoder — so raw_decode fails on it even after
+        # sanitize_json_string, since sanitize's quote-toggling logic assumes
+        # ordinary single-quote-pair JSON strings. Detect the triple-quoted
+        # value shape and rewrite the body as a properly escaped JSON string
+        # before any other parsing is attempted.
+        #
+        # The generated code itself frequently contains its OWN triple-quoted
+        # Python docstring (e.g. gold.py's `def main(): """Gold layer
+        # builder..."""`). A plain non-greedy `.*?"""` stops at that INNER
+        # docstring's closing quotes — not the real end of the JSON value —
+        # truncating the code and corrupting everything after it. The
+        # lookahead below only accepts a `"""` as the real closing delimiter
+        # when it's actually followed by the next JSON structural token (a
+        # comma + another quoted key, or the object's closing brace), so
+        # triple-quotes nested inside the code body are treated as plain
+        # characters and skipped over instead.
+        pattern = re.compile(
+            r'"(\w+)"\s*:\s*"""(.*?)"""(?=\s*(?:,\s*"\w+"\s*:|\s*\}))',
+            re.DOTALL,
+        )
+
+        def _replace(m):
+            return f'"{m.group(1)}": {json.dumps(m.group(2))}'
+
+        return pattern.sub(_replace, text)
+
     def _raw_decode_from_first_brace(text: str):
         start = text.find("{")
         if start == -1:
@@ -232,14 +263,16 @@ def parse_json_from_response(content: str, fallback_key: str = None) -> dict:
     # very start of the response).
     code_block_match = re.search(r"```(?:json)?\s*\n?(.*?)```", content_str, re.DOTALL)
     if code_block_match:
-        sanitized = sanitize_json_string(code_block_match.group(1).strip())
+        fixed = _fix_python_triple_quoted_values(code_block_match.group(1).strip())
+        sanitized = sanitize_json_string(fixed)
         result = _raw_decode_from_first_brace(sanitized)
         if result is not None:
             return result
 
     # 2. Try the whole response directly — covers responses with no fence at
     # all, or where the fence regex above didn't match cleanly.
-    sanitized_full = sanitize_json_string(content_str)
+    fixed_full = _fix_python_triple_quoted_values(content_str)
+    sanitized_full = sanitize_json_string(fixed_full)
     result = _raw_decode_from_first_brace(sanitized_full)
     if result is not None:
         return result
@@ -312,8 +345,21 @@ def _is_reset_requested() -> bool:
     """Shared check for the notebook's 'reset_pipeline' dbutils widget. When
     set, every caching node below skips its cache lookup and generates fresh,
     mirroring a full pipeline reset."""
+    # NOTE: dbutils is injected into the NOTEBOOK's namespace, never into this
+    # imported module's globals() — so we resolve it via IPython's user
+    # namespace (works in Databricks notebooks) with the old globals() lookup
+    # kept as a harmless fallback. Previously only globals() was checked,
+    # which always came back empty, so the reset widget silently never worked.
+    dbutils = globals().get("dbutils")
+    if dbutils is None:
+        try:
+            from IPython import get_ipython
+            ip = get_ipython()
+            if ip is not None:
+                dbutils = ip.user_ns.get("dbutils")
+        except Exception:
+            dbutils = None
     try:
-        dbutils = globals().get("dbutils")
         if dbutils:
             return dbutils.widgets.get("reset_pipeline").lower() == "true"
     except Exception:
@@ -630,7 +676,7 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
         contracts = parsed.get("contracts", {})
 
         # Write the YAML contracts to disk — validate each one first to prevent downstream crashes
-        contracts_dir = "/tmp/generated/config/contracts"
+        contracts_dir = os.path.join(GENERATED_ROOT, "config", "contracts")
         os.makedirs(contracts_dir, exist_ok=True)
         valid_contracts = {}
         for table, yaml_str in contracts.items():
@@ -657,7 +703,7 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
     else:
         # Cache hit — still (re)write the YAML files to disk since downstream
         # nodes/scripts read contracts from /tmp, not directly from state.
-        contracts_dir = "/tmp/generated/config/contracts"
+        contracts_dir = os.path.join(GENERATED_ROOT, "config", "contracts")
         os.makedirs(contracts_dir, exist_ok=True)
         for table, yaml_str in valid_contracts.items():
             try:
@@ -775,7 +821,7 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
     # Write SQL and Markdown DDL files (needed on disk regardless of cache hit/miss —
     # downstream engineering_node's generated scripts don't read these directly, but
     # keeping this mirrors bronze/silver/gold artifact conventions elsewhere)
-    ddl_dir = "/tmp/generated/data_model"
+    ddl_dir = os.path.join(GENERATED_ROOT, "data_model")
     os.makedirs(ddl_dir, exist_ok=True)
     with open(os.path.join(ddl_dir, "gold_ddl.sql"), "w") as f:
         f.write(gold_ddl or "")
@@ -901,7 +947,11 @@ def _sanitize_and_heal_code(code: str) -> str:
             )
             code = re.sub(loop_pattern, replacement, code)
 
-    # 1.12. Fix scd2_merge return assignment (it returns table name string instead of DataFrame)
+    # 1.12. Legacy heal for scd2_merge return assignment. scd2_merge NOW returns the
+    # post-merge DataFrame directly (see spark_utils), so `df = scd2_merge(...)` is
+    # already valid; this rewrite (merge + explicit read_table) is redundant but
+    # still semantically correct, and is kept so older cached scripts that relied
+    # on the rewritten shape keep compiling identically.
     if "scd2_merge" in code:
         import re
         scd2_pattern = r"(?m)^(\s*)(\w+)\s*=\s*scd2_merge\s*\(([^,]+),\s*(['\"][^'\"]+['\"]),\s*(['\"][^'\"]+['\"]),\s*(.*?)\)"
@@ -1025,26 +1075,71 @@ def get_schema_fingerprint(spark) -> str:
     cfg = load_config()
     vol_path = cfg.get("volume_raw_path", "/Volumes/databricks_langgraph/raw/source_volume")
 
+    def _read_header_line(path: str) -> str:
+        """Deterministically read a CSV's first (header) line.
+
+        Order matters for cross-environment stability: the notebook, the
+        Databricks App, and Databricks Connect must all resolve the SAME
+        header text for the same file, or the fingerprint (and therefore
+        every cache) diverges between environments. POSIX read and
+        dbutils.fs.head/SDK download are byte-deterministic; the Spark
+        read (last resort) is kept only because it needs a running
+        cluster anyway and small CSVs read in file order in practice.
+        """
+        # 1. Direct POSIX read (works locally and on POSIX-mounted UC Volumes)
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.readline().strip()
+        except Exception:
+            pass
+        # 2. dbutils.fs.head (notebooks)
+        try:
+            from pyspark.dbutils import DBUtils
+            dbu = DBUtils(spark)
+            head = dbu.fs.head(f"dbfs:{path}" if not path.startswith("dbfs:") else path, 65536)
+            return head.splitlines()[0].strip() if head else ""
+        except Exception:
+            pass
+        # 3. Databricks SDK file download (Apps / Databricks Connect)
+        try:
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            resp = w.files.download(path)
+            chunk = resp.contents.read(65536)
+            text = chunk.decode("utf-8", errors="replace")
+            return text.splitlines()[0].strip() if text else ""
+        except Exception:
+            pass
+        # 4. Last resort: Spark text read (row order not strictly guaranteed)
+        try:
+            return (spark.read.text(path).limit(1).collect()[0][0] or "").strip()
+        except Exception as e:
+            print(f"[Fingerprint] WARNING: All header-read strategies failed for {path}: {e}")
+            return ""
+
     source_tables = discover_source_tables()
     fingerprint_data = []
+    unreadable = []
 
     for table_name, filename in sorted(source_tables.items()):
         path = os.path.join(vol_path, filename)
-        try:
-            first_line = spark.read.text(path).limit(1).collect()[0][0]
-        except Exception as e:
-            print(f"[Warning] Failed to read header for {filename} via Spark: {e}")
-            if os.path.exists(path):
-                try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        first_line = f.readline().strip()
-                except Exception:
-                    first_line = ""
-            else:
-                first_line = ""
+        first_line = _read_header_line(path)
+        if not first_line:
+            unreadable.append(table_name)
         fingerprint_data.append((table_name, first_line))
 
-    return hashlib.sha256(json.dumps(fingerprint_data).encode("utf-8")).hexdigest()
+    if unreadable:
+        # An empty header silently collapses distinct schemas into the same
+        # fingerprint component AND diverges from environments that CAN read
+        # the header — flag it loudly since it undermines cache correctness.
+        print(
+            f"[Fingerprint] WARNING: header unreadable for {unreadable} — fingerprint may not "
+            "match runs from environments where these headers are readable."
+        )
+    fp = hashlib.sha256(json.dumps(fingerprint_data).encode("utf-8")).hexdigest()
+    print(f"[Fingerprint] tables={ [t for t, _ in fingerprint_data] } -> {fp[:16]}...")
+    return fp
 
 
 def get_dataset_fingerprint(spark, contracts: Dict[str, str] = None, gold_ddl: str = "") -> str:
@@ -1101,22 +1196,46 @@ def get_dataset_fingerprint(spark, contracts: Dict[str, str] = None, gold_ddl: s
     return hashlib.sha256(fingerprint_str.encode("utf-8")).hexdigest()
 
 
-def _run_and_verify_script(script_name: str, code_str: str) -> Dict[str, Any]:
-    """Write the script to disk and execute it via exec in the same process, returning logs."""
-    code_dir = "/tmp/generated/data_platform"
+def _run_and_verify_script(script_name: str, code_str: str, mode: str = "compile") -> Dict[str, Any]:
+    """Write the script to disk and verify it, returning {exit_code, stdout, stderr}.
+
+    mode="compile" (default): syntax-only verification via compile(). Fast,
+    side-effect free — does NOT touch the lake and does NOT run LLM-generated
+    code. Runtime errors are instead surfaced by execution_node's single real
+    run, whose failures route back here for a targeted patch.
+
+    mode="execute": legacy behavior — exec() the script in-process. SECURITY /
+    SAFETY NOTE: this runs LLM-generated code with the full privileges of the
+    driver process (Spark session, UC credentials, filesystem). Only enable it
+    (config: engineering.verify_mode: "execute") in a sandboxed dev catalog you
+    are willing to have dropped and rebuilt on every verification pass.
+    """
+    code_dir = os.path.join(GENERATED_ROOT, "data_platform")
     os.makedirs(code_dir, exist_ok=True)
     path = os.path.join(code_dir, script_name)
     with open(path, "w") as f:
         f.write(code_str)
-        
+
+    if mode == "compile":
+        try:
+            compile(code_str, script_name, "exec")
+            return {"exit_code": 0, "stdout": f"[verify:compile] {script_name} compiled OK.", "stderr": ""}
+        except SyntaxError as e:
+            import traceback
+            return {
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": f"[verify:compile] SyntaxError in {script_name}:\n{traceback.format_exc()[:5000]}",
+            }
+
     import io
     import contextlib
     import traceback
-    
+
     stdout_io = io.StringIO()
     stderr_io = io.StringIO()
     exit_code = 0
-    
+
     with contextlib.redirect_stdout(stdout_io):
         with contextlib.redirect_stderr(stderr_io):
             try:
@@ -1128,12 +1247,23 @@ def _run_and_verify_script(script_name: str, code_str: str) -> Dict[str, Any]:
             except Exception as e:
                 traceback.print_exc()
                 exit_code = 1
-                
+
     return {
         "exit_code": exit_code,
         "stdout": stdout_io.getvalue()[:15000],
         "stderr": stderr_io.getvalue()[:15000]
     }
+
+
+def _is_dq_halt_failure(log_info: Dict[str, Any]) -> bool:
+    """True when an execution 'failure' was actually the data-quality safety
+    net halting Silver promotion (halted_at set in silver_summary.json) — a
+    DATA problem, not a CODE problem. Patching or regenerating proven-good
+    cached code in response to bad source rows only churns the cache without
+    fixing anything; the correct remediation is upstream data cleanup or a
+    contract-threshold change."""
+    stderr = (log_info or {}).get("stderr", "") or ""
+    return "halted_at" in stderr and "Orchestrator Safety Net" in stderr
 
 
 def engineering_node(state: AgentState) -> Dict[str, Any]:
@@ -1193,14 +1323,24 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     # targeted patch, mirroring the compiler loop's self-heal below. Scripts
     # that are cached and did NOT fail are left untouched.
     prior_execution_logs = state.get("execution_logs") or {}
-    had_prior_failure = any(
-        (log_info or {}).get("exit_code", 0) != 0
-        for log_info in prior_execution_logs.values()
-    )
+    # Data-quality halts are excluded: the code is fine, the data isn't.
+    # Regenerating/patching cached code for those would churn the cache
+    # without fixing anything (see _is_dq_halt_failure).
+    dq_halt_scripts = {
+        script_name for script_name, log_info in prior_execution_logs.items()
+        if (log_info or {}).get("exit_code", 0) != 0 and _is_dq_halt_failure(log_info)
+    }
     failed_script_names = {
         script_name for script_name, log_info in prior_execution_logs.items()
-        if (log_info or {}).get("exit_code", 0) != 0
+        if (log_info or {}).get("exit_code", 0) != 0 and script_name not in dq_halt_scripts
     }
+    had_prior_failure = bool(failed_script_names)
+    if dq_halt_scripts:
+        print(
+            f"[Codebase Memory] {sorted(dq_halt_scripts)} halted on DATA-QUALITY thresholds (halted_at), "
+            "not a code bug — keeping cached code untouched. Fix the source data or adjust contract "
+            "severities/thresholds, then re-run execution."
+        )
     if had_prior_failure:
         print(f"[Codebase Memory] Previous execution attempt failed for {sorted(failed_script_names)} — will patch only the failing script(s), reuse everything else.")
 
@@ -1355,23 +1495,37 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         "gold_code": gold
     }
     
-    print("[Compiler Loop] Resetting database schemas for a clean verification run...")
-    reset_lake()
-    
+    # Verification mode (config: engineering.verify_mode):
+    #   "compile" (default) — syntax-only check. No lake reset, no execution of
+    #       LLM-generated code here; execution_node performs the ONE real run,
+    #       and any runtime failure routes back for a targeted patch. This
+    #       removes both the destructive reset_lake() on every engineering pass
+    #       and the double full-pipeline execution per run.
+    #   "execute" — legacy behavior: reset the lake and exec each script
+    #       in-process as a full dress rehearsal (see _run_and_verify_script's
+    #       safety note). Only for sandboxed dev catalogs.
+    cfg_eng = (load_config().get("engineering") or {})
+    verify_mode = cfg_eng.get("verify_mode", "compile")
+    if verify_mode == "execute":
+        print("[Compiler Loop] verify_mode=execute — resetting database schemas for a clean verification run...")
+        reset_lake()
+    else:
+        print("[Compiler Loop] verify_mode=compile — syntax-only verification (lake untouched; execution_node does the real run).")
+
     contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
     ddl_str = state["gold_ddl"]
     llm = get_llm("engineering")
-    
+
     verification_logs = {}
     compile_failed = False
-    
+
     for script_name, key_name in scripts_info:
         current_code = current_codes[key_name]
         success = False
-        
+
         for attempt in range(4): # 1 initial + 3 retries
-            print(f"[Compiler Loop] Verifying {script_name} (Attempt {attempt + 1})...")
-            res = _run_and_verify_script(script_name, current_code)
+            print(f"[Compiler Loop] Verifying {script_name} (Attempt {attempt + 1}, mode={verify_mode})...")
+            res = _run_and_verify_script(script_name, current_code, mode=verify_mode)
             verification_logs[script_name] = res
 
             # Audit every attempt: attempt 0 is tagged with how this script's
@@ -1453,7 +1607,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     silver = current_codes["silver_code"]
     gold = current_codes["gold_code"]
     
-    code_dir = "/tmp/generated/data_platform"
+    code_dir = os.path.join(GENERATED_ROOT, "data_platform")
     os.makedirs(code_dir, exist_ok=True)
     with open(os.path.join(code_dir, "bronze.py"), "w") as f:
         f.write(bronze)
@@ -1510,7 +1664,17 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
 
 
 def execution_node(state: AgentState) -> Dict[str, Any]:
-    """Runs the generated scripts and compiles the final orchestrator report."""
+    """Runs the generated scripts and compiles the final orchestrator report.
+
+    SECURITY / SAFETY NOTE: this exec()s LLM-generated PySpark with the full
+    privileges of the driver process (Spark session, Unity Catalog grants,
+    filesystem). Guardrails: code only reaches this node after passing the
+    engineering compile verification AND an explicit human approval at the
+    engineering review gate; every executed script's exact code + SHA-256 is
+    audit-logged to gold.agent_compile_audit. Run the pipeline's service
+    identity with least-privilege UC grants (its own catalog) — do not point
+    it at a catalog holding unrelated production data.
+    """
     print(">>> [Orchestrator] Executing PySpark scripts on Databricks...")
 
     # Mint a run id up front (reused below for the run-history row) and set
@@ -1529,7 +1693,7 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     except Exception as e:
         print(f"[Compile Audit] WARNING: Could not initialize compile audit context: {e}")
 
-    code_dir = "/tmp/generated/data_platform"
+    code_dir = os.path.join(GENERATED_ROOT, "data_platform")
     os.makedirs(code_dir, exist_ok=True)
     
     # Re-create script files on disk in case we are resuming from a checkpoint 
@@ -1682,8 +1846,9 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     
     final_report = response.content
 
-    # Save final report to generated directory
-    reports_dir = "./generated/reports"
+    # Save final report to the shared generated-artifacts root (NOT CWD-relative,
+    # which differed between the notebook and the dashboard app)
+    reports_dir = os.path.join(GENERATED_ROOT, "reports")
     os.makedirs(reports_dir, exist_ok=True)
     with open(os.path.join(reports_dir, "final_run_report.md"), "w") as f:
         f.write(final_report)
@@ -1961,17 +2126,21 @@ def _build_context(intent: str, state: AgentState, profiling_report: Dict[str, A
         approved = state.get("approved_steps", {})
         next_gate = None
         # Map active_agent to the gate it is waiting at
+        # Keys MUST match the active_agent values the nodes actually set
+        # ("DataQualityAgent"/"ContractSteward", not "DataQuality"/"Contracts"),
+        # and step keys must match approved_steps ("report" for the final gate).
         gate_map = {
             "Profiler": ("profile_review_gate", "profile"),
-            "DataQuality": ("data_quality_review_gate", "dq"),
-            "Contracts": ("contracts_review_gate", "contracts"),
+            "DataQualityAgent": ("data_quality_review_gate", "dq"),
+            "ContractSteward": ("contracts_review_gate", "contracts"),
             "DimensionalModeler": ("modeling_review_gate", "modeling"),
             "DataEngineer": ("engineering_review_gate", "engineering"),
-            "Orchestrator": ("execution_review_gate", "execution"),
+            "Orchestrator": ("execution_review_gate", "report"),
         }
         if active_agent and active_agent in gate_map:
             gate, step = gate_map[active_agent]
-            already_approved = approved.get(step, "") == "approved"
+            # approved_steps stores booleans (True/False), not the string "approved"
+            already_approved = approved.get(step) is True
             next_gate = None if already_approved else {"gate": gate, "step": step}
         parts.append(
             f"PIPELINE CONTROL CONTEXT:\n"
@@ -2058,13 +2227,15 @@ def chat_with_data_agent(
     if intent == "pipeline_control":
         active_agent = state.get("active_agent", None)
         approved = state.get("approved_steps", {})
+        # Keys MUST match the active_agent values the nodes actually set, and
+        # step keys must match approved_steps (final gate's step key is "report").
         gate_map = {
-            "Profiler":          ("profile_review_gate",      "profile"),
-            "DataQuality":       ("data_quality_review_gate", "dq"),
-            "Contracts":         ("contracts_review_gate",    "contracts"),
-            "DimensionalModeler":("modeling_review_gate",     "modeling"),
-            "DataEngineer":      ("engineering_review_gate",  "engineering"),
-            "Orchestrator":      ("execution_review_gate",    "execution"),
+            "Profiler":           ("profile_review_gate",      "profile"),
+            "DataQualityAgent":   ("data_quality_review_gate", "dq"),
+            "ContractSteward":    ("contracts_review_gate",    "contracts"),
+            "DimensionalModeler": ("modeling_review_gate",     "modeling"),
+            "DataEngineer":       ("engineering_review_gate",  "engineering"),
+            "Orchestrator":       ("execution_review_gate",    "report"),
         }
         if not active_agent:
             # Pipeline hasn't started yet — offer to launch it from scratch
@@ -2087,7 +2258,8 @@ def chat_with_data_agent(
                 None
             )
         gate, step = gate_map[active_agent]
-        if approved.get(step) == "approved":
+        # approved_steps stores booleans (True/False), not the string "approved"
+        if approved.get(step) is True:
             return (
                 f"The **{step}** step has already been approved. "
                 "The pipeline should be advancing automatically. "

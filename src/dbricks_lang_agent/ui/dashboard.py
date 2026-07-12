@@ -304,377 +304,437 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Enterprise Design System CSS
+# ── Enterprise Design System ─────────────────────────────────────────────
+# Design tokens + component styling for the whole app.
+# Palette: deep navy chrome (#0B1B33), cool slate surfaces on #F4F6FA,
+# primary blue #2563EB, semantic emerald/amber/red/sky status colors,
+# medallion accents (bronze/silver/gold) for layer metrics.
+# Typography: Inter (UI) + JetBrains Mono (code).
 st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
-        /* ── Base ────────────────────────────────────────────────── */
+        :root {
+            --bg: #F4F6FA;
+            --surface: #FFFFFF;
+            --border: #E3E8F0;
+            --border-strong: #CBD5E1;
+            --text: #0F1E33;
+            --text-2: #5A6B82;
+            --text-3: #94A3B8;
+            --primary: #2563EB;
+            --primary-dark: #1D4ED8;
+            --primary-soft: #EFF4FF;
+            --navy: #0B1B33;
+            --navy-2: #12274A;
+            --success: #059669;  --success-soft: #ECFDF5;  --success-text: #065F46;
+            --warning: #D97706;  --warning-soft: #FFF8EB;  --warning-text: #92400E;
+            --danger:  #DC2626;  --danger-soft:  #FEF2F2;  --danger-text:  #991B1B;
+            --info:    #0284C7;  --info-soft:    #EFF8FF;  --info-text:    #075985;
+            --shadow-sm: 0 1px 2px rgba(15,30,51,0.06);
+            --shadow-md: 0 2px 8px rgba(15,30,51,0.08), 0 1px 2px rgba(15,30,51,0.05);
+        }
+
+        /* ── Base ──────────────────────────────────────────────────────── */
         [data-testid="stAppViewContainer"],
         [data-testid="stAppViewBlockContainer"],
-        [data-testid="stMain"] {
-            background-color: #F8FAFC !important;
-        }
+        [data-testid="stMain"] { background-color: var(--bg) !important; }
+        [data-testid="stHeader"] { background: transparent !important; }
+        #MainMenu, footer { visibility: hidden; }
+        .block-container { padding-top: 1.1rem !important; max-width: 1440px; }
 
         html, body, [class*="css"] {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
             -webkit-font-smoothing: antialiased;
         }
 
-        /* ── Global text — all paragraph/list/label content must be readable ── */
         p, label,
         .stMarkdown p, .stMarkdown li, .stMarkdown ol, .stMarkdown ul,
         [data-testid="stMarkdownContainer"] p,
         [data-testid="stMarkdownContainer"] li,
         [data-testid="stMarkdownContainer"] span {
-            color: #1E293B !important;
-            font-size: 0.925rem !important;
+            color: var(--text) !important;
+            font-size: 0.92rem !important;
             line-height: 1.6 !important;
-        }
-
-        /* ── Chat message containers ─────────────────────────────── */
-        /* Ensure all text inside native st.chat_message() is visible */
-        [data-testid="stChatMessage"] { background: transparent !important; }
-        [data-testid="stChatMessageContent"] { background: transparent !important; }
-        [data-testid="stChatMessage"] p,
-        [data-testid="stChatMessage"] span,
-        [data-testid="stChatMessage"] li,
-        [data-testid="stChatMessage"] div,
-        [data-testid="stChatMessage"] .stMarkdown p,
-        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p,
-        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] span,
-        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li {
-            color: #1E293B !important;
-            font-size: 0.9rem !important;
-        }
-        /* Caption text inside chat stays muted */
-        [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] p,
-        [data-testid="stChatMessage"] small {
-            color: #64748B !important;
-            font-size: 0.78rem !important;
-        }
-
-        /* Code blocks: let Streamlit's own theme handle colours/background.
-           Only set the monospace font; do NOT override color or background-color
-           or syntax highlighting will be stripped and it renders as plain text. */
-        code, pre,
-        [data-testid="stCode"] code,
-        .stCodeBlock code {
-            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace !important;
-        }
-
-        /* Ensure horizontal + vertical scroll on code blocks */
-        [data-testid="stCode"] pre,
-        .stCodeBlock pre {
-            overflow: auto !important;
-            max-height: 600px !important;
-            white-space: pre !important;
         }
 
         h1, h2, h3, h4, h5, h6 {
             font-family: 'Inter', sans-serif !important;
-            color: #0F172A !important;
-            font-weight: 600 !important;
+            color: var(--text) !important;
+            font-weight: 650 !important;
             letter-spacing: -0.02em !important;
         }
 
-        /* ── Sidebar ─────────────────────────────────────────────── */
-        [data-testid="stSidebar"] {
-            background-color: #FFFFFF !important;
-            border-right: 1px solid #E2E8F0 !important;
+        hr { border-color: var(--border) !important; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+        /* ── Hero header ───────────────────────────────────────────────── */
+        .hero {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 16px; flex-wrap: wrap;
+            background: linear-gradient(120deg, #0B1B33 0%, #12274A 55%, #1D4ED8 145%);
+            border-radius: 14px; padding: 20px 24px; margin-bottom: 18px;
+            box-shadow: 0 8px 24px rgba(11,27,51,0.18);
         }
+        .hero-left { display: flex; align-items: center; gap: 14px; }
+        .hero-logo {
+            width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
+            background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+            color: #FFFFFF !important; font-size: 1.05rem; font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+        }
+        .hero-title {
+            color: #FFFFFF !important; font-size: 1.35rem; font-weight: 700;
+            letter-spacing: -0.02em; line-height: 1.2;
+        }
+        .hero-sub { color: #9DB2D6 !important; font-size: 0.82rem; margin-top: 3px; }
+        .hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
+        .hero-chip {
+            display: inline-flex; align-items: center; gap: 7px;
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
+            color: #DBE6F5 !important; font-size: 0.75rem; font-weight: 600;
+            padding: 5px 12px; border-radius: 100px; letter-spacing: 0.02em;
+        }
+        .chip-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+        /* ── Section label ─────────────────────────────────────────────── */
+        .section-label { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; }
+        .section-label span {
+            font-size: 0.7rem !important; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.09em; color: var(--text-2) !important;
+        }
+        .section-line { flex: 1; height: 1px; background: var(--border); }
+
+        /* ── Pipeline stepper ──────────────────────────────────────────── */
+        .stepper { display: flex; align-items: flex-start; margin: 4px 0 6px; }
+        .step-cell {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; text-align: center; min-width: 0;
+        }
+        .step-track { display: flex; align-items: center; width: 100%; }
+        .step-line { flex: 1; height: 2px; border-radius: 2px; }
+        .step-line.hidden { visibility: hidden; }
+        .step-circle {
+            width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; margin: 0 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.82rem; font-weight: 700; border: 2px solid transparent;
+        }
+        .step-circle.completed {
+            background: var(--success); color: #FFFFFF;
+            box-shadow: 0 2px 6px rgba(5,150,105,0.35);
+        }
+        .step-circle.review {
+            background: var(--warning); color: #FFFFFF;
+            animation: pulse-review 1.8s ease-out infinite;
+        }
+        .step-circle.pending {
+            background: var(--surface); color: var(--text-3);
+            border-color: var(--border-strong);
+        }
+        @keyframes pulse-review {
+            0%   { box-shadow: 0 0 0 0 rgba(217,119,6,0.35); }
+            70%  { box-shadow: 0 0 0 9px rgba(217,119,6,0); }
+            100% { box-shadow: 0 0 0 0 rgba(217,119,6,0); }
+        }
+        .step-name {
+            margin-top: 8px; font-size: 0.8rem; font-weight: 600;
+            color: var(--text); letter-spacing: -0.01em;
+        }
+        .step-name.pending { color: var(--text-3); }
+        .step-pill {
+            margin-top: 5px; display: inline-block;
+            font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.07em; padding: 2px 9px; border-radius: 100px;
+        }
+
+        /* ── Sidebar (dark navy) ───────────────────────────────────────── */
+        [data-testid="stSidebar"] {
+            background-color: var(--navy) !important;
+            border-right: 1px solid rgba(255,255,255,0.06) !important;
+        }
+        [data-testid="stSidebar"] > div { background: transparent !important; }
         [data-testid="stSidebar"] *,
         [data-testid="stSidebar"] div,
         [data-testid="stSidebar"] span,
         [data-testid="stSidebar"] label,
         [data-testid="stSidebar"] p {
             background-color: transparent !important;
-            color: #334155 !important;
-            font-size: 0.875rem !important;
+            color: #C9D6EA !important;
+            font-size: 0.84rem !important;
         }
-        [data-testid="stSidebar"] h1,
-        [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3 {
-            color: #0F172A !important;
-            font-size: 0.875rem !important;
-            font-weight: 600 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.06em !important;
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+            color: #F4F8FF !important; font-size: 0.85rem !important;
+        }
+        .side-brand {
+            display: flex; align-items: center; gap: 10px;
+            padding: 6px 0 14px; margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .side-brand-logo {
+            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+            background: linear-gradient(135deg, #3B82F6, #8B5CF6) !important;
+            display: flex; align-items: center; justify-content: center;
+            color: #FFFFFF !important; font-weight: 700;
+        }
+        .side-brand-name { color: #FFFFFF !important; font-weight: 700; font-size: 0.95rem !important; letter-spacing: -0.01em; }
+        .side-brand-sub { color: #8FA6C9 !important; font-size: 0.72rem !important; }
+        .side-section {
+            font-size: 0.66rem !important; font-weight: 700; letter-spacing: 0.1em;
+            text-transform: uppercase; color: #7E95BC !important; margin: 14px 0 6px;
+        }
+        .side-kv {
+            display: flex; justify-content: space-between; align-items: center; gap: 8px;
+            padding: 7px 10px; border-radius: 8px; margin-bottom: 6px;
+            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .side-kv span { color: #8FA6C9 !important; font-size: 0.72rem !important; font-weight: 600; }
+        .side-kv code {
+            color: #DBE6F5 !important; background: transparent !important;
+            font-size: 0.72rem !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        [data-testid="stSidebar"] [data-testid="stButton"] > button {
+            width: 100%;
+            background: rgba(255,255,255,0.06) !important;
+            color: #DBE6F5 !important;
+            border: 1px solid rgba(255,255,255,0.14) !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stButton"] > button:hover {
+            background: rgba(255,255,255,0.12) !important;
+            border-color: rgba(255,255,255,0.3) !important;
+            color: #FFFFFF !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stExpander"] details {
+            background: rgba(255,255,255,0.04) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            border-radius: 8px !important;
         }
 
-        /* ── Page header ─────────────────────────────────────────── */
-        .main-title {
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: #0F172A;
-            letter-spacing: -0.03em;
-            margin-bottom: 2px;
-            line-height: 1.2;
+        /* ── Tabs (segmented pill control) ─────────────────────────────── */
+        div[data-testid="stTabs"] div[data-baseweb="tab-list"] {
+            background: #E8EDF5; padding: 4px; border-radius: 12px;
+            gap: 2px; width: fit-content; max-width: 100%;
         }
-        .subtitle {
-            font-size: 0.875rem;
-            color: #64748B;
-            font-weight: 400;
-            margin-bottom: 1.25rem;
-            letter-spacing: 0;
-        }
-
-        /* ── Tabs ────────────────────────────────────────────────── */
         button[data-baseweb="tab"] {
-            color: #64748B !important;
-            font-size: 0.875rem !important;
-            font-weight: 500 !important;
-            opacity: 1 !important;
-            letter-spacing: 0 !important;
-            padding: 10px 16px !important;
+            background: transparent !important;
+            border-radius: 9px !important;
+            color: var(--text-2) !important;
+            font-size: 0.85rem !important; font-weight: 600 !important;
+            padding: 8px 16px !important;
+            border-bottom: none !important;
+            opacity: 1 !important; letter-spacing: 0 !important;
         }
         button[data-baseweb="tab"][aria-selected="true"] {
-            color: #4F46E5 !important;
-            border-bottom: 2px solid #4F46E5 !important;
-            font-weight: 600 !important;
+            background: var(--surface) !important;
+            color: var(--primary-dark) !important;
+            box-shadow: var(--shadow-sm) !important;
         }
-        button[data-baseweb="tab"]:hover {
-            color: #1E293B !important;
-            background: #F1F5F9 !important;
-        }
+        button[data-baseweb="tab"]:hover { color: var(--text) !important; }
+        div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] { display: none !important; }
 
-        /* ── Alerts ──────────────────────────────────────────────── */
-        .stAlert, [data-testid="stNotification"], [data-testid="stAlert"] {
-            background-color: #EFF6FF !important;
-            border: 1px solid #BFDBFE !important;
-            border-left: 3px solid #3B82F6 !important;
-            border-radius: 6px !important;
-        }
-        .stAlert p, [data-testid="stNotification"] p, [data-testid="stAlert"] p,
-        .stAlert div, [data-testid="stNotification"] div {
-            color: #1E40AF !important;
-            font-weight: 500 !important;
-            font-size: 0.875rem !important;
-        }
-
-        /* ── Buttons ─────────────────────────────────────────────── */
-        div[data-testid="stButton"] button {
-            background-color: #FFFFFF !important;
-            color: #374151 !important;
-            border: 1px solid #D1D5DB !important;
-            border-radius: 6px !important;
-            font-weight: 500 !important;
-            font-size: 0.85rem !important;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
-            transition: all 0.15s ease !important;
+        /* ── Buttons ───────────────────────────────────────────────────── */
+        [data-testid="stButton"] > button,
+        [data-testid="stFormSubmitButton"] > button {
+            border-radius: 8px !important;
+            font-weight: 600 !important; font-size: 0.84rem !important;
             letter-spacing: 0 !important;
+            transition: all 0.15s ease !important;
         }
-        div[data-testid="stButton"] button:hover {
-            background-color: #F9FAFB !important;
-            border-color: #9CA3AF !important;
-            color: #111827 !important;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+        [data-testid="stButton"] > button[kind="secondary"],
+        [data-testid="stFormSubmitButton"] > button[kind="secondary"] {
+            background: var(--surface) !important;
+            color: #33445E !important;
+            border: 1px solid var(--border-strong) !important;
+            box-shadow: var(--shadow-sm) !important;
+        }
+        [data-testid="stButton"] > button[kind="secondary"]:hover,
+        [data-testid="stFormSubmitButton"] > button[kind="secondary"]:hover {
+            border-color: var(--primary) !important;
+            color: var(--primary-dark) !important;
+            background: var(--primary-soft) !important;
+        }
+        [data-testid="stButton"] > button[kind="primary"],
+        [data-testid="stFormSubmitButton"] > button[kind="primary"] {
+            background: linear-gradient(180deg, #2F6BFF, #1D4ED8) !important;
+            color: #FFFFFF !important;
+            border: 1px solid #1D4ED8 !important;
+            box-shadow: 0 2px 6px rgba(29,78,216,0.35) !important;
+        }
+        [data-testid="stButton"] > button[kind="primary"]:hover,
+        [data-testid="stFormSubmitButton"] > button[kind="primary"]:hover {
+            filter: brightness(1.07);
+            box-shadow: 0 3px 10px rgba(29,78,216,0.45) !important;
         }
 
-        /* ── Metric cards ────────────────────────────────────────── */
+        /* ── Alerts (semantic variants) ────────────────────────────────── */
+        div[data-testid="stAlert"], .stAlert {
+            border-radius: 10px !important;
+            border: 1px solid #BAE0F7 !important;
+            border-left: 3px solid var(--info) !important;
+            background: var(--info-soft) !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stAlert"] p, .stAlert p {
+            font-size: 0.86rem !important; font-weight: 500 !important;
+            color: var(--info-text) !important;
+        }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) {
+            background: var(--success-soft) !important;
+            border-color: #B7E5D0 !important; border-left-color: var(--success) !important;
+        }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) p { color: var(--success-text) !important; }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) {
+            background: var(--warning-soft) !important;
+            border-color: #F3DCB2 !important; border-left-color: var(--warning) !important;
+        }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) p { color: var(--warning-text) !important; }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) {
+            background: var(--danger-soft) !important;
+            border-color: #F2C4C4 !important; border-left-color: var(--danger) !important;
+        }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) p { color: var(--danger-text) !important; }
+        /* Legacy fallbacks for older Streamlit DOM */
+        .stSuccess [data-testid="stMarkdownContainer"] p { color: var(--success-text) !important; }
+        .stWarning [data-testid="stMarkdownContainer"] p { color: var(--warning-text) !important; }
+        .stError   [data-testid="stMarkdownContainer"] p { color: var(--danger-text) !important; }
+        .stInfo    [data-testid="stMarkdownContainer"] p { color: var(--info-text) !important; }
+
+        /* ── Metric cards ──────────────────────────────────────────────── */
         .metric-card {
-            background: #FFFFFF;
-            padding: 1.25rem 1.5rem;
-            border-radius: 8px;
-            border: 1px solid #E2E8F0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-            text-align: center;
+            background: var(--surface);
+            padding: 1.05rem 1.25rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+        .metric-kicker {
+            font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.09em; margin-bottom: 6px;
         }
         .metric-value {
-            font-size: 1.875rem;
-            font-weight: 700;
-            color: #0F172A;
-            letter-spacing: -0.03em;
-            line-height: 1.2;
+            font-size: 1.7rem; font-weight: 750; color: var(--text);
+            letter-spacing: -0.03em; line-height: 1.15;
+            font-variant-numeric: tabular-nums;
         }
-        .metric-label {
-            font-size: 0.7rem;
-            color: #64748B;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            margin-top: 6px;
-            font-weight: 600;
-        }
+        .metric-label { font-size: 0.74rem; color: var(--text-2); margin-top: 4px; font-weight: 500; }
 
-        /* ── Agent badge ─────────────────────────────────────────── */
+        /* ── Agent / type badge ────────────────────────────────────────── */
         .agent-badge {
-            background-color: #F1F5F9;
-            border: 1px solid #CBD5E1;
-            color: #475569;
-            padding: 2px 10px;
-            border-radius: 100px;
-            font-weight: 500;
-            display: inline-block;
-            font-size: 0.78rem;
-            letter-spacing: 0.01em;
+            background-color: var(--primary-soft);
+            border: 1px solid #C7DAFB;
+            color: var(--primary-dark);
+            padding: 2px 10px; border-radius: 100px;
+            font-weight: 600; display: inline-block;
+            font-size: 0.75rem; letter-spacing: 0.02em;
         }
 
-        /* ── Talk to Data Chat UI ────────────────────────────────── */
-        .chat-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            padding: 16px 4px;
-            max-height: 520px;
-            overflow-y: auto;
-            scroll-behavior: smooth;
+        /* ── Expanders / bordered containers / dataframes ──────────────── */
+        [data-testid="stExpander"] details {
+            background: var(--surface) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 10px !important;
         }
-        .chat-container::-webkit-scrollbar { width: 4px; }
-        .chat-container::-webkit-scrollbar-track { background: transparent; }
-        .chat-container::-webkit-scrollbar-thumb {
-            background: #CBD5E1;
-            border-radius: 4px;
+        [data-testid="stExpander"] summary { font-weight: 600 !important; color: var(--text) !important; }
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border: 1px solid var(--border) !important;
+            border-radius: 12px !important;
+            background: var(--surface);
+            box-shadow: var(--shadow-sm);
         }
-
-        .chat-bubble-wrapper {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-        .chat-bubble-wrapper.user { flex-direction: row-reverse; }
-
-        .chat-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.95rem;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-        .chat-avatar.bot {
-            background: #4F46E5;
-            color: #fff;
-            font-size: 0.8rem;
-            font-weight: 700;
-            letter-spacing: 0;
-        }
-        .chat-avatar.user {
-            background: #0F172A;
-            color: #fff;
-            font-size: 0.8rem;
-            font-weight: 600;
+        [data-testid="stDataFrame"] {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--surface);
         }
 
-        .chat-bubble {
-            max-width: 72%;
-            padding: 11px 15px;
+        /* ── Chat ──────────────────────────────────────────────────────── */
+        [data-testid="stChatMessage"] {
+            background: var(--surface) !important;
+            border: 1px solid var(--border);
             border-radius: 12px;
-            font-size: 0.9rem;
-            line-height: 1.6;
+            padding: 12px 16px;
+            box-shadow: var(--shadow-sm);
         }
-        .chat-bubble.bot {
-            background: #FFFFFF;
-            border: 1px solid #E2E8F0;
-            border-bottom-left-radius: 3px;
-            color: #1E293B;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-        }
-        .chat-bubble.user {
-            background: #4F46E5;
-            color: #FFFFFF;
-            border-bottom-right-radius: 3px;
-        }
-
-        .chat-profiling-badge {
-            font-size: 0.72rem;
-            color: #64748B;
-            margin-top: 5px;
-            padding-left: 44px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .chat-empty-state {
-            text-align: center;
-            padding: 48px 24px;
-        }
-        .chat-empty-state .chat-empty-icon {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            opacity: 0.4;
-        }
-        .chat-empty-state p {
+        [data-testid="stChatMessageContent"] { background: transparent !important; }
+        [data-testid="stChatMessage"] p,
+        [data-testid="stChatMessage"] span,
+        [data-testid="stChatMessage"] li,
+        [data-testid="stChatMessage"] div,
+        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p {
+            color: var(--text) !important;
             font-size: 0.9rem !important;
-            color: #94A3B8 !important;
         }
-
-        .chat-input-area {
-            border-top: 1px solid #E2E8F0;
-            padding-top: 16px;
-            margin-top: 4px;
+        [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] p,
+        [data-testid="stChatMessage"] small {
+            color: var(--text-3) !important; font-size: 0.78rem !important;
         }
-
-        .chat-suggestions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 4px;
+        [data-testid="stChatInput"] {
+            border: 1px solid var(--border-strong) !important;
+            border-radius: 12px !important;
+            background: var(--surface) !important;
         }
-        .chat-suggestions span {
-            display: inline-block;
-            background: #FFFFFF;
-            border: 1px solid #E2E8F0;
-            color: #475569;
-            border-radius: 6px;
-            padding: 5px 12px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: border-color 0.15s, color 0.15s;
-        }
-        .chat-suggestions span:hover {
-            border-color: #4F46E5;
-            color: #4F46E5;
-        }
-
-        /* ── Streamlit chat input (st.chat_input dark pill) ────────────────── */
         [data-testid="stChatInput"] textarea {
-            background: #1E293B !important;
-            color: #F1F5F9 !important;
-            border-radius: 8px !important;
+            background: var(--surface) !important;
+            color: var(--text) !important;
+            border-radius: 10px !important;
             font-size: 0.9rem !important;
         }
-        [data-testid="stChatInput"] textarea::placeholder {
-            color: #94A3B8 !important;
-        }
+        [data-testid="stChatInput"] textarea::placeholder { color: var(--text-3) !important; }
         [data-testid="stChatInput"] button {
-            background: #4F46E5 !important;
+            background: var(--primary) !important;
             color: #FFFFFF !important;
-            border-radius: 6px !important;
+            border-radius: 8px !important;
         }
 
-        /* ── Streamlit form text input override ─────────────────────────────── */
-        [data-testid="stTextInput"] input {
-            border-radius: 6px !important;
-            border: 1px solid #D1D5DB !important;
+        /* ── Inputs ────────────────────────────────────────────────────── */
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea {
+            border-radius: 8px !important;
+            border: 1px solid var(--border-strong) !important;
             font-size: 0.9rem !important;
-            color: #0F172A !important;
-            background: #FFFFFF !important;
-            padding: 10px 14px !important;
+            color: var(--text) !important;
+            background: var(--surface) !important;
         }
-        [data-testid="stTextInput"] input:focus {
-            border-color: #4F46E5 !important;
-            box-shadow: 0 0 0 3px rgba(79,70,229,0.12) !important;
+        [data-testid="stTextInput"] input:focus,
+        [data-testid="stTextArea"] textarea:focus {
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.14) !important;
             outline: none !important;
         }
-        [data-testid="stTextInput"] input::placeholder { color: #94A3B8 !important; }
-
-        /* ── Caption / small text ──────────────────────────────────────────── */
-        [data-testid="stCaptionContainer"] p,
-        .stCaption p {
-            color: #64748B !important;
-            font-size: 0.8rem !important;
+        [data-testid="stTextInput"] input::placeholder,
+        [data-testid="stTextArea"] textarea::placeholder { color: var(--text-3) !important; }
+        [data-baseweb="select"] > div {
+            border-radius: 8px !important;
+            border-color: var(--border-strong) !important;
+            background: var(--surface) !important;
         }
 
-        /* ── Alert type text colours ───────────────────────────────────────── */
-        .stSuccess [data-testid="stMarkdownContainer"] p  { color: #065F46 !important; }
-        .stWarning [data-testid="stMarkdownContainer"] p  { color: #92400E !important; }
-        .stError   [data-testid="stMarkdownContainer"] p  { color: #991B1B !important; }
-        .stInfo    [data-testid="stMarkdownContainer"] p  { color: #1E40AF !important; }
+        /* ── Captions ──────────────────────────────────────────────────── */
+        [data-testid="stCaptionContainer"] p, .stCaption p {
+            color: var(--text-2) !important; font-size: 0.78rem !important;
+        }
+
+        /* ── Code ──────────────────────────────────────────────────────── */
+        /* Let Streamlit's own theme handle code colours/background — only set
+           the monospace font, or syntax highlighting gets stripped. */
+        code, pre,
+        [data-testid="stCode"] code,
+        .stCodeBlock code {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace !important;
+        }
+        [data-testid="stCode"] pre,
+        .stCodeBlock pre {
+            overflow: auto !important;
+            max-height: 600px !important;
+            white-space: pre !important;
+            border-radius: 10px !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -798,13 +858,34 @@ def rollback_to_node(target_node: str) -> bool:
 
 # ----------------- Dashboard Layout -----------------
 
-st.markdown("""
-<div style="display:flex; align-items:center; gap:12px; margin-bottom:2px;">
-  <div style="width:36px; height:36px; background:#4F46E5; border-radius:8px; display:flex;
-              align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0;">🤖</div>
-  <p class="main-title" style="margin:0;">Medallion Agent Control Center</p>
+# Branded hero header with live pipeline status + environment chips
+_hero_state = app.get_state(config)
+if not _hero_state.values:
+    _status_label, _status_dot = "Not Started", "#94A3B8"
+elif _hero_state.next:
+    _hero_gate = _hero_state.next[0]
+    _hero_stage = next((s["name"].split(". ", 1)[-1] for s in STAGE_DEFS if s["gate"] == _hero_gate), "Review")
+    _status_label, _status_dot = f"Awaiting Review &middot; {_hero_stage}", "#FBBF24"
+elif _hero_state.values.get("final_report"):
+    _status_label, _status_dot = "Pipeline Completed", "#34D399"
+else:
+    _status_label, _status_dot = "Idle", "#94A3B8"
+
+_hero_cfg = load_config()
+st.markdown(f"""
+<div class="hero">
+  <div class="hero-left">
+    <div class="hero-logo">&#9670;</div>
+    <div>
+      <div class="hero-title">Medallion Agent Control Center</div>
+      <div class="hero-sub">Multi-agent data engineering &nbsp;&middot;&nbsp; Bronze &rarr; Silver &rarr; Gold &nbsp;&middot;&nbsp; LangGraph on Databricks</div>
+    </div>
+  </div>
+  <div class="hero-right">
+    <span class="hero-chip"><span class="chip-dot" style="background:{_status_dot};"></span>{_status_label}</span>
+    <span class="hero-chip">Unity Catalog &middot; {_hero_cfg.get("catalog", "databricks_langgraph")}</span>
+  </div>
 </div>
-<p class="subtitle" style="padding-left:48px;">Unity Catalog · Multi-Agent Data Engineering · LangGraph Orchestration</p>
 """, unsafe_allow_html=True)
 
 # Fetch Current Graph State
@@ -840,68 +921,47 @@ else:
             else:
                 stage_statuses.append("pending")
 
-# Render progress lineage columns
+# ── Pipeline stage stepper ───────────────────────────────────────────────
 st.markdown("""
-<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
-  <span style="font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em;
-               color:#64748B;">Pipeline Progress</span>
-  <div style="flex:1; height:1px; background:#E2E8F0;"></div>
+<div class="section-label">
+  <span>Pipeline Progress</span>
+  <div class="section-line"></div>
 </div>
 """, unsafe_allow_html=True)
+
+_STEP_META = {
+    "completed": {"pill_bg": "#ECFDF5", "pill_fg": "#065F46", "label": "Completed"},
+    "review":    {"pill_bg": "#FFF8EB", "pill_fg": "#92400E", "label": "In Review"},
+    "pending":   {"pill_bg": "#F1F5F9", "pill_fg": "#94A3B8", "label": "Pending"},
+}
+_cells_html = []
+for _i, _stage in enumerate(stages):
+    _status = stage_statuses[_i]
+    _meta = _STEP_META[_status]
+    _icon = "&#10003;" if _status == "completed" else str(_i + 1)
+    _line_l_cls = " hidden" if _i == 0 else ""
+    _line_r_cls = " hidden" if _i == len(stages) - 1 else ""
+    _line_l_color = "#059669" if _i > 0 and stage_statuses[_i - 1] == "completed" else "#E3E8F0"
+    _line_r_color = "#059669" if _status == "completed" else "#E3E8F0"
+    _display_name = _stage["name"].split(". ", 1)[-1]
+    _name_cls = " pending" if _status == "pending" else ""
+    _cells_html.append(
+        f'<div class="step-cell">'
+        f'<div class="step-track">'
+        f'<div class="step-line{_line_l_cls}" style="background:{_line_l_color};"></div>'
+        f'<div class="step-circle {_status}">{_icon}</div>'
+        f'<div class="step-line{_line_r_cls}" style="background:{_line_r_color};"></div>'
+        f'</div>'
+        f'<div class="step-name{_name_cls}">{_display_name}</div>'
+        f'<span class="step-pill" style="background:{_meta["pill_bg"]}; color:{_meta["pill_fg"]};">{_meta["label"]}</span>'
+        f'</div>'
+    )
+st.markdown('<div class="stepper">' + "".join(_cells_html) + '</div>', unsafe_allow_html=True)
+
+# Per-stage actions, aligned under the stepper nodes
 cols = st.columns(len(stages))
 for i, stage in enumerate(stages):
-    status = stage_statuses[i]
-    if status == "completed":
-        accent      = "#059669"   # emerald
-        badge_bg    = "#ECFDF5"
-        badge_color = "#065F46"
-        badge_text  = "Completed"
-        dot         = "&#9679;"   # filled circle
-        name_color  = "#0F172A"
-    elif status == "review":
-        accent      = "#D97706"   # amber
-        badge_bg    = "#FFFBEB"
-        badge_color = "#92400E"
-        badge_text  = "In Review"
-        dot         = "&#9679;"
-        name_color  = "#0F172A"
-    else:
-        accent      = "#CBD5E1"   # slate
-        badge_bg    = "#F8FAFC"
-        badge_color = "#94A3B8"
-        badge_text  = "Pending"
-        dot         = "&#9675;"   # open circle
-        name_color  = "#94A3B8"
-
     with cols[i]:
-        st.markdown(f"""
-            <div style="
-                background: #FFFFFF;
-                border: 1px solid #E2E8F0;
-                border-top: 3px solid {accent};
-                border-radius: 8px;
-                padding: 12px 10px 10px;
-                text-align: center;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                margin-bottom: 8px;
-            ">
-                <div style="
-                    display:inline-flex; align-items:center; gap:4px;
-                    background:{badge_bg}; color:{badge_color};
-                    font-size:0.65rem; font-weight:600;
-                    text-transform:uppercase; letter-spacing:0.06em;
-                    padding:2px 7px; border-radius:100px;
-                    margin-bottom:7px;
-                ">
-                    <span style="color:{accent}; font-size:0.55rem;">{dot}</span>
-                    {badge_text}
-                </div>
-                <div style="font-size:0.82rem; font-weight:600; color:{name_color}; letter-spacing:-0.01em;">
-                    {stage["name"]}
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
         # Trigger Rerun from this specific stage
         gate_to_next_node = {
             "profile_review_gate": "profiler",
@@ -994,10 +1054,27 @@ if selected_stage_key:
             else:
                 st.info("No pipeline state yet — start the pipeline to generate output.")
 
-# Sidebar with Status Overview
-st.sidebar.markdown("### Ingestion Settings")
+# Sidebar: brand, environment, actions
 catalog_config = load_config()
-st.sidebar.info(f"**Unity Catalog**: {catalog_config.get('catalog', 'databricks_langgraph')}\n\n**Raw Volume**: {catalog_config.get('raw_volume', 'raw/source_volume')}")
+st.sidebar.markdown("""
+<div class="side-brand">
+  <div class="side-brand-logo">&#9670;</div>
+  <div>
+    <div class="side-brand-name">Medallion Agents</div>
+    <div class="side-brand-sub">Pipeline Control Center</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="side-section">Environment</div>', unsafe_allow_html=True)
+_llm_ep = ((catalog_config.get("llm") or {}).get("endpoint") or "&mdash;")
+st.sidebar.markdown(f"""
+<div class="side-kv"><span>Catalog</span><code>{catalog_config.get("catalog", "databricks_langgraph")}</code></div>
+<div class="side-kv"><span>Raw Volume</span><code>{os.path.basename(catalog_config.get("volume_raw_path", "source_volume"))}</code></div>
+<div class="side-kv"><span>LLM</span><code>{_llm_ep[:26]}</code></div>
+""", unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="side-section">Actions</div>', unsafe_allow_html=True)
 
 # Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
@@ -1027,7 +1104,7 @@ if st.sidebar.button("🗑️ Reset Pipeline / Start Fresh", type="secondary"):
     # 3. Try deleting via Workspace SDK
     try:
         from databricks.sdk import WorkspaceClient
-        w = WorkspaceClient(profile="venkatesh8484")
+        w = WorkspaceClient()  # default auth (App service principal / local profile)
         w.files.delete(volume_db)
     except Exception:
         pass
@@ -1322,13 +1399,13 @@ with tab1:
             
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.markdown(f'<div class="metric-card"><div class="metric-value">{counts["raw"][1]}</div><div class="metric-label">Raw Source Files Rows</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card" style="border-top:3px solid #0284C7;"><div class="metric-kicker" style="color:#0284C7;">Raw Layer</div><div class="metric-value">{counts["raw"][1]:,}</div><div class="metric-label">source rows staged in Volume</div></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown(f'<div class="metric-card"><div class="metric-value">{counts["bronze"][1]}</div><div class="metric-label">Bronze Delta Tables Rows ({counts["bronze"][0]} tables)</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card" style="border-top:3px solid #B45309;"><div class="metric-kicker" style="color:#B45309;">Bronze Layer</div><div class="metric-value">{counts["bronze"][1]:,}</div><div class="metric-label">rows across {counts["bronze"][0]} Delta tables</div></div>', unsafe_allow_html=True)
         with col3:
-            st.markdown(f'<div class="metric-card"><div class="metric-value">{counts["silver"][1]}</div><div class="metric-label">Silver Validated Rows ({counts["silver"][0]} tables)</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card" style="border-top:3px solid #64748B;"><div class="metric-kicker" style="color:#64748B;">Silver Layer</div><div class="metric-value">{counts["silver"][1]:,}</div><div class="metric-label">validated rows across {counts["silver"][0]} tables</div></div>', unsafe_allow_html=True)
         with col4:
-            st.markdown(f'<div class="metric-card"><div class="metric-value">{counts["gold"][1]}</div><div class="metric-label">Gold Star Schema Rows ({counts["gold"][0]} tables)</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-card" style="border-top:3px solid #B7791F;"><div class="metric-kicker" style="color:#B7791F;">Gold Layer</div><div class="metric-value">{counts["gold"][1]:,}</div><div class="metric-label">star-schema rows across {counts["gold"][0]} tables</div></div>', unsafe_allow_html=True)
             
     except Exception as e:
         st.warning(f"Unable to query live table metrics: {e}")

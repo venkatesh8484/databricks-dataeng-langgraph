@@ -15,8 +15,12 @@ from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import StructType, StructField, StringType, ArrayType, TimestampType
 
-# Local fallback path for development sandbox runs
-LOCAL_MEMORY_PATH = "./generated/config/agent_fewshot_memory.json"
+from dbricks_lang_agent.data_platform.spark_utils import GENERATED_ROOT
+
+# Local fallback paths for development sandbox runs. All rooted at
+# GENERATED_ROOT (default /tmp/generated) — NOT CWD-relative — so the
+# notebook and the dashboard app (different CWDs) share the same files.
+LOCAL_MEMORY_PATH = os.path.join(GENERATED_ROOT, "config", "agent_fewshot_memory.json")
 
 
 def get_memory_table_fqn(spark: SparkSession) -> str:
@@ -281,7 +285,7 @@ def log_rejection(
         print(f"[Warning] Failed to log rejection to Delta table: {e}")
 
 
-LOCAL_CODEBASE_MEMORY_PATH = "./generated/config/agent_script_codebase_memory.json"
+LOCAL_CODEBASE_MEMORY_PATH = os.path.join(GENERATED_ROOT, "config", "agent_script_codebase_memory.json")
 
 # NOTE: this cache is keyed per (dataset_fingerprint, script_key) — one row
 # per SCRIPT, not one row per fingerprint bundling all three. Earlier this
@@ -465,7 +469,7 @@ def log_script_code(spark: SparkSession, fingerprint: str, script_key: str, code
 # trace line numbers. Always append — never overwrite — one row per attempt.
 # ---------------------------------------------------------------------------
 
-LOCAL_COMPILE_AUDIT_PATH = "./generated/config/agent_compile_audit.json"
+LOCAL_COMPILE_AUDIT_PATH = os.path.join(GENERATED_ROOT, "config", "agent_compile_audit.json")
 
 
 def get_compile_audit_table_fqn(spark: SparkSession) -> str:
@@ -667,7 +671,7 @@ def get_compile_audit(
 # logs individual human approve/reject decisions, not full run outcomes).
 # ---------------------------------------------------------------------------
 
-LOCAL_RUN_HISTORY_PATH = "./generated/config/agent_run_history.json"
+LOCAL_RUN_HISTORY_PATH = os.path.join(GENERATED_ROOT, "config", "agent_run_history.json")
 
 
 def get_run_history_table_fqn(spark: SparkSession) -> str:
@@ -868,7 +872,7 @@ def get_run_history(spark: SparkSession, limit: int = 200) -> List[Dict[str, Any
 # all stages of the same end-to-end run can be grouped together.
 # ---------------------------------------------------------------------------
 
-LOCAL_STAGE_REVIEW_PATH = "./generated/config/agent_stage_review_log.json"
+LOCAL_STAGE_REVIEW_PATH = os.path.join(GENERATED_ROOT, "config", "agent_stage_review_log.json")
 
 
 def get_stage_review_table_fqn(spark: SparkSession) -> str:
@@ -1131,9 +1135,9 @@ def was_previously_approved(
 # blank page.
 # ---------------------------------------------------------------------------
 
-LOCAL_DQ_CACHE_PATH = "./generated/config/agent_dq_cache.json"
-LOCAL_CONTRACTS_CACHE_PATH = "./generated/config/agent_contracts_cache.json"
-LOCAL_MODELING_CACHE_PATH = "./generated/config/agent_modeling_cache.json"
+LOCAL_DQ_CACHE_PATH = os.path.join(GENERATED_ROOT, "config", "agent_dq_cache.json")
+LOCAL_CONTRACTS_CACHE_PATH = os.path.join(GENERATED_ROOT, "config", "agent_contracts_cache.json")
+LOCAL_MODELING_CACHE_PATH = os.path.join(GENERATED_ROOT, "config", "agent_modeling_cache.json")
 
 
 def _cache_table_fqn(spark: SparkSession, table_name: str) -> str:
@@ -1531,6 +1535,4 @@ def upsert_modeling_cache(spark: SparkSession, schema_fingerprint: str, gold_ddl
         print(f"[Agent Output Cache] Upserted modeling output for fingerprint {schema_fingerprint[:12]}... to '{fqn}'")
     except Exception as e:
         print(f"[Warning] Failed to upsert UC modeling cache: {e}")
-
-    return []
 

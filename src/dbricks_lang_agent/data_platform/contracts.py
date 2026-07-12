@@ -15,12 +15,12 @@ import yaml
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from .spark_utils import load_config
+from .spark_utils import load_config, GENERATED_ROOT
 
 def get_contracts_dir() -> str:
     """Find the directory containing the YAML contracts."""
-    # 1. Check the /tmp/generated path first (always used in Databricks environments)
-    tmp_candidate = "/tmp/generated/config/contracts"
+    # 1. Check the shared GENERATED_ROOT path first (same base the agents write to)
+    tmp_candidate = os.path.join(GENERATED_ROOT, "config", "contracts")
     if os.path.exists(tmp_candidate):
         return tmp_candidate
 
@@ -36,8 +36,8 @@ def get_contracts_dir() -> str:
             return ref_candidate
         cur_dir = os.path.dirname(cur_dir)
         
-    # Fallback to local default relative path
-    return "./generated/config/contracts"
+    # Fallback to the shared generated root (created on demand by callers)
+    return os.path.join(GENERATED_ROOT, "config", "contracts")
 
 
 def load_contract(table: str) -> Dict[str, Any]:

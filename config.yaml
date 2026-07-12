@@ -14,6 +14,18 @@ schemas:
 # (Make sure this directory contains the raw CSV files to profile and ingest)
 volume_raw_path: "/Volumes/databricks_langgraph/raw/source_volume"
 
+# Data Engineer verification behavior
+engineering:
+  # "compile" (default): syntax-only verification of generated bronze/silver/gold
+  #   scripts. The lake is NOT reset and generated code is NOT executed during
+  #   the engineering stage — execution_node performs the single real run, and
+  #   any runtime failure routes back to the engineer for a targeted patch.
+  # "execute": legacy dress-rehearsal mode — resets bronze/silver/gold/quarantine
+  #   and exec()s each generated script in-process during engineering. Runs
+  #   LLM-generated code with full driver privileges; use only against a
+  #   sandboxed dev catalog.
+  verify_mode: "compile"
+
 # Databricks Model Serving Endpoint configuration
 # Use foundation model endpoints or custom serving endpoints hosted on Databricks
 llm:

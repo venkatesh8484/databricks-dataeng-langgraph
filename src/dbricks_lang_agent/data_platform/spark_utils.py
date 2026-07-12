@@ -18,6 +18,13 @@ from pyspark.sql import Window
 _spark: Optional[SparkSession] = None
 _config: Optional[dict] = None
 
+# Single base directory for ALL generated artifacts (code, contracts, DDL,
+# reports, local JSON cache fallbacks). Previously some modules wrote under
+# "/tmp/generated" while others used CWD-relative "./generated" — and since
+# the notebook and the Databricks App run with different CWDs, their local
+# caches/artifacts silently didn't share. Env-overridable for tests.
+GENERATED_ROOT = os.environ.get("AGENT_GENERATED_ROOT", "/tmp/generated")
+
 
 def load_config() -> dict:
     """Load config.yaml from the project root folder."""
@@ -197,10 +204,12 @@ def scd2_merge(
     surrogate_key_col: str,
     as_of_ts_col: str = "_load_ts",
     initial_load_sentinel_start: str = "1900-01-01 00:00:00",
-) -> str:
+) -> DataFrame:
     """
     Generic slowly changing dimension (SCD) Type 2 merge for Unity Catalog Delta Tables.
-    
+
+    Returns the post-merge target table as a DataFrame (via read_table).
+
     Behavior:
       - First load: Creates table, populates surrogate key, sets eff_start_ts to 1900-01-01.
       - Incremental loads: Updates historical versions where hashes changed, inserts new versions.
@@ -308,7 +317,16 @@ def reset_lake(schemas: Optional[List[str]] = None) -> None:
                 tables = spark.sql(f"SHOW TABLES IN `{catalog}`.`gold`").collect()
                 for t in tables:
                     tbl_name = t.tableName
-                    if tbl_name not in ["agent_fewshot_memory", "agent_codebase_memory"]:
+                    # Preserve ALL agent memory/cache/audit tables (agent_fewshot_memory,
+                    # agent_script_codebase_memory, agent_dq_cache, agent_contracts_cache,
+                    # agent_modeling_cache, agent_stage_review_log, agent_run_history,
+                    # agent_compile_audit, ...). A stale hardcoded two-name preserve-list
+                    # here used to silently DROP every other agent_* table on each
+                    # engineering_node verification run — wiping the schema-fingerprint
+                    # caches and prior-approval log, which is exactly what made the
+                    # "reuse previously generated code when the schema is unchanged"
+                    # behavior never work. Never drop agent_* tables during a lake reset.
+                    if not tbl_name.startswith("agent_"):
                         spark.sql(f"DROP TABLE IF EXISTS `{catalog}`.`gold`.`{tbl_name}`")
             except Exception as e:
                 print(f"[Warning] Failed to cleanly reset gold schema tables: {e}")

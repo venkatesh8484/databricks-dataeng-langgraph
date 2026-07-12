@@ -32,8 +32,12 @@ checkpoint*.db-shm
 downloaded_checkpoint*
 *.db-wal
 
+# Generated artifacts (agent outputs live in Unity Catalog / GENERATED_ROOT)
+generated/
+
 # Editor / OS artifacts
 .vscode/
+.idea/
 .fuse_hidden*
 
 # Local raw source data staged for pipeline testing (not source code)

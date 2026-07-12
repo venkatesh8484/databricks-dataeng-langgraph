@@ -866,6 +866,18 @@ _reuse_chip = (
 )
 
 _cfg_cb = load_config()
+# Build the right-side chips as ONE flat, unindented string. Streamlit runs HTML
+# through a markdown parser even with unsafe_allow_html=True: when _reuse_chip is
+# empty it leaves a blank line, and the following 4-space-indented <span> is then
+# parsed as an indented code block and shown as literal text. Joining the chips
+# on a single line with no leading whitespace avoids that entirely.
+_right_chips = "".join(
+    c for c in [
+        f'<span class="chip {_status_cls}"><span class="chip-dot"></span>{_status_label}</span>',
+        _reuse_chip,
+        f'<span class="chip neutral">{_cfg_cb.get("catalog", "databricks_langgraph")}</span>',
+    ] if c
+)
 st.markdown(f"""
 <div class="cmdbar">
   <div class="cmdbar-left">
@@ -875,11 +887,7 @@ st.markdown(f"""
       <div class="cmd-sub">Multi-agent data engineering on Databricks &mdash; Bronze / Silver / Gold</div>
     </div>
   </div>
-  <div class="cmdbar-right">
-    <span class="chip {_status_cls}"><span class="chip-dot"></span>{_status_label}</span>
-    {_reuse_chip}
-    <span class="chip neutral">{_cfg_cb.get("catalog", "databricks_langgraph")}</span>
-  </div>
+  <div class="cmdbar-right">{_right_chips}</div>
 </div>
 """, unsafe_allow_html=True)
 

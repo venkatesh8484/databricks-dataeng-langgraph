@@ -1072,6 +1072,39 @@ def _sanitize_and_heal_code(code: str) -> str:
             fixed_lines.append(line)
         code = "\n".join(fixed_lines)
 
+    # 1.15. Strip Column-method names that the LLM hallucinates as importable
+    # functions. Names like `isin`, `alias`, `cast`, `between`, `like` are METHODS
+    # on Column objects (e.g. `col("x").isin(...)`), NOT members of
+    # pyspark.sql.functions. A line such as
+    #     from pyspark.sql.functions import col, when, isin, lit
+    # raises `ImportError: cannot import name 'isin' from 'pyspark.sql.functions'`
+    # at module load, killing the whole script before any DataFrame work runs.
+    # The prompt tells the model to "apply isin", which it over-eagerly imports.
+    # Remove the offending names from the import list (the method call itself is
+    # left untouched and stays valid); drop the import line entirely if nothing
+    # importable remains.
+    _COLUMN_ONLY_METHODS = {
+        "isin", "alias", "cast", "between", "like", "rlike", "ilike",
+        "contains", "startswith", "endswith", "substr", "getItem", "getField",
+        "isNull", "isNotNull", "isNaN", "bitwiseAND", "bitwiseOR", "bitwiseXOR",
+        "dropFields", "withField", "eqNullSafe", "name",
+    }
+
+    def _strip_column_methods_from_import(m):
+        names = [n.strip() for n in m.group(1).split(",") if n.strip()]
+        kept = [n for n in names if n.split(" as ")[0].strip() not in _COLUMN_ONLY_METHODS]
+        if not kept:
+            return ""  # whole line was Column-only methods; drop it
+        return "from pyspark.sql.functions import " + ", ".join(kept)
+
+    code = re.sub(
+        r"(?m)^[ \t]*from\s+pyspark\.sql\.functions\s+import\s+([^\n(]+)$",
+        _strip_column_methods_from_import,
+        code,
+    )
+    # Collapse any blank line left behind by a fully-removed import line.
+    code = re.sub(r"\n{3,}", "\n\n", code)
+
     # 2. Inject commonly used PySpark SQL functions if referenced but not imported
     common_funcs = [
         "current_timestamp", "lit", "col", "when", "expr", "coalesce", 

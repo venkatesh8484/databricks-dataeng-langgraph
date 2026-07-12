@@ -1156,8 +1156,26 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         "gold.py": "gold_code",
     }
 
+    # IMPORTANT: engineering_node is re-entered from TWO different upstream
+    # events that both leave review_comments non-empty, but only one of them
+    # means "the human rejected the CODE itself":
+    #   1. A human explicitly rejected the Engineering review gate — THIS is
+    #      "throw everything out and reconsider it against my feedback."
+    #   2. execution_review_gate's route_after_execution auto-bounces back
+    #      here whenever a script failed at real runtime — the human hasn't
+    #      necessarily reviewed the code at all; they may have just rejected
+    #      the Orchestrator/report gate (or nothing was rejected — the router
+    #      auto-routes back on ANY execution failure, human decision or not).
+    # Treating both cases identically used to mean any rejection anywhere
+    # downstream wiped out the entire codebase cache and regenerated
+    # bronze/silver/gold from scratch — even scripts that never failed and
+    # had nothing to do with the rejection. Only case 1 should bypass the
+    # cache; case 2 should flow through the existing targeted-patch path
+    # below (failed_script_names), which fixes only what's actually broken.
+    engineering_explicitly_rejected = state.get("approved_steps", {}).get("engineering") is False
+
     cached: Dict[str, str] = {}
-    if not reset_requested and not state.get("review_comments"):
+    if not reset_requested and not engineering_explicitly_rejected:
         cached = memory.get_stored_codebase(spark, fingerprint)
         if cached:
             print(f"[Codebase Memory] Found cached, proven-good code for: {sorted(cached.keys())}")
@@ -1203,7 +1221,8 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             f"Current failing code for {script_name}:\n```python\n{current_by_key[key_name]}\n```\n\n"
             f"Execution stdout (may contain Spark warnings):\n{log_info.get('stdout', '')[:3000]}\n\n"
             f"Execution stderr / traceback:\n{log_info.get('stderr', '')[:5000]}\n\n"
-            f"Please analyze the error and output the corrected version of the code. "
+            + (f"Human feedback / fix comments:\n{state['review_comments']}\n\n" if state.get("review_comments") else "")
+            + f"Please analyze the error and output the corrected version of the code. "
             f"Ensure all functions and classes are fully imported and syntactically correct.\n"
             f"Return your corrected code as a JSON object matching this schema:\n"
             f"{{\n"
@@ -1229,8 +1248,8 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     # it — cached/patched scripts from 3a stay untouched even though the LLM
     # also generated something for them in this same response.
     if scripts_needing_fresh:
-        if reset_requested or state.get("review_comments"):
-            print("[Codebase Memory] Reset requested or human review comments present — generating fresh draft for all scripts...")
+        if reset_requested or engineering_explicitly_rejected:
+            print("[Codebase Memory] Reset requested or Engineering stage explicitly rejected — generating fresh draft for all scripts...")
         else:
             print(f"[Codebase Memory] No cache for: {sorted(scripts_needing_fresh)} — generating fresh...")
 

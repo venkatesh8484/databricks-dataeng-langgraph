@@ -689,6 +689,26 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
                 if parsed_yaml.get("table") != table:
                     print(f"[Contract Steward] WARNING: YAML table name '{parsed_yaml.get('table')}' != dict key '{table}' — correcting.")
                     parsed_yaml["table"] = table
+
+                # Deterministically reconcile the LLM-authored rules with what the
+                # profiler actually saw, BEFORE caching/approval. Stops the two
+                # false-HALT patterns at the source: a hard not_null on a
+                # legitimately-nullable column (the accommodations halt), and a
+                # numeric range rule on a non-numeric/nonexistent column (the
+                # price_band_start warning). See contracts.sanitize_contract_rules.
+                try:
+                    from dbricks_lang_agent.data_platform.contracts import sanitize_contract_rules
+                    _table_cols = tables_profile.get(table, {}).get("columns", {})
+                    parsed_yaml, _contract_changes = sanitize_contract_rules(parsed_yaml, _table_cols)
+                    if _contract_changes:
+                        print(f"[Contract Steward] Sanitized '{table}' contract against profiled schema:")
+                        for _chg in _contract_changes:
+                            print(f"    - {_chg}")
+                        import yaml as _yaml_dump
+                        yaml_str = _yaml_dump.safe_dump(parsed_yaml, sort_keys=False)
+                except Exception as _e_sanitize:
+                    print(f"[Contract Steward] WARNING: contract sanitation skipped for '{table}': {_e_sanitize}")
+
                 with open(os.path.join(contracts_dir, f"{table}.yaml"), "w") as f:
                     f.write(yaml_str)
                 valid_contracts[table] = yaml_str

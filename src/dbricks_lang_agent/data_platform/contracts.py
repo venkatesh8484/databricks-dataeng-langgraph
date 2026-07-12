@@ -17,6 +17,120 @@ from pyspark.sql import functions as F
 
 from .spark_utils import load_config, GENERATED_ROOT
 
+# Spark dtype-string fragments that a numeric `range` rule can legitimately be
+# compared against. `dtype` values come from profiling as str(field.dataType),
+# e.g. "IntegerType()", "DoubleType()", "DecimalType(10,2)".
+_NUMERIC_DTYPE_FRAGMENTS = (
+    "ByteType", "ShortType", "IntegerType", "LongType",
+    "FloatType", "DoubleType", "DecimalType",
+)
+
+
+def _dtype_is_numeric(dtype_str: str) -> bool:
+    return any(frag in (dtype_str or "") for frag in _NUMERIC_DTYPE_FRAGMENTS)
+
+
+def sanitize_contract_rules(contract: dict, columns: Dict[str, Dict[str, Any]]) -> Tuple[dict, List[str]]:
+    """Deterministically reconcile an LLM-authored contract with what the
+    profiler actually observed in the source, BEFORE it gets cached/approved and
+    used to gate silver promotion. Prevents the two mis-generation patterns that
+    cause false HALTs:
+
+      1. A `range` rule attached to a non-numeric or nonexistent column
+         (e.g. a numeric 0..1000000 bound on the TIMESTAMP `price_band_start`).
+         Such a check can't be evaluated and is dropped.
+      2. A hard `not_null` (or any rule) listing a column that the profiler
+         shows is legitimately nullable — i.e. its observed null_pct exceeds the
+         rule's own max_fail_rate. That column is removed from the not_null list
+         so a naturally-nullable field (postcode, region, miles_from_sea, …)
+         doesn't halt the whole pipeline. Columns that ARE non-null in the
+         source keep their not_null guarantee.
+
+    Also drops any rule reference to a column the profiler never saw. `columns`
+    is {col_name: {"dtype": str, "null_pct": float(0-100), "distinct_count": int}}.
+    Returns (sanitized_contract, list_of_change_descriptions). The input is not
+    mutated. If `columns` is empty (no profile), the contract is returned as-is
+    to avoid destroying rules we can't verify."""
+    import copy
+    contract = copy.deepcopy(contract)
+    changes: List[str] = []
+    if not columns:
+        return contract, changes
+
+    known = set(columns.keys())
+    rules = contract.get("rules")
+    if not isinstance(rules, dict):
+        return contract, changes
+
+    def _max_rate(rule: dict) -> float:
+        try:
+            return float(rule.get("max_fail_rate", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    # --- not_null (and structurally identical column-list rules) ---
+    for rule_key in ("not_null", "unique"):
+        rule = rules.get(rule_key)
+        if isinstance(rule, dict) and isinstance(rule.get("columns"), list):
+            max_rate = _max_rate(rule)
+            kept = []
+            for col in rule["columns"]:
+                if col not in known:
+                    changes.append(f"{rule_key}: dropped '{col}' (not in source schema)")
+                    continue
+                if rule_key == "not_null":
+                    null_frac = (columns[col].get("null_pct", 0.0) or 0.0) / 100.0
+                    if null_frac > max_rate:
+                        changes.append(
+                            f"not_null: dropped '{col}' — source is {null_frac*100:.1f}% null "
+                            f"(> max_fail_rate {max_rate:.2%}); column is legitimately nullable"
+                        )
+                        continue
+                kept.append(col)
+            if kept:
+                rule["columns"] = kept
+            else:
+                rules.pop(rule_key, None)
+                changes.append(f"{rule_key}: removed entirely (no valid columns left)")
+
+    # --- range: numeric + existing columns only ---
+    rg = rules.get("range")
+    if isinstance(rg, dict) and isinstance(rg.get("checks"), dict):
+        kept_checks = {}
+        for col, bounds in rg["checks"].items():
+            if col not in known:
+                changes.append(f"range: dropped '{col}' (not in source schema)")
+                continue
+            if not _dtype_is_numeric(columns[col].get("dtype", "")):
+                changes.append(
+                    f"range: dropped '{col}' — dtype {columns[col].get('dtype')} is not numeric, "
+                    f"cannot compare against bounds {bounds}"
+                )
+                continue
+            kept_checks[col] = bounds
+        if kept_checks:
+            rg["checks"] = kept_checks
+        else:
+            rules.pop("range", None)
+            changes.append("range: removed entirely (no valid numeric columns left)")
+
+    # --- allowed_values / regex: drop refs to nonexistent columns only ---
+    for rule_key in ("allowed_values", "regex"):
+        rule = rules.get(rule_key)
+        if isinstance(rule, dict) and isinstance(rule.get("checks"), dict):
+            kept = {c: v for c, v in rule["checks"].items() if c in known}
+            dropped = set(rule["checks"]) - set(kept)
+            for c in sorted(dropped):
+                changes.append(f"{rule_key}: dropped '{c}' (not in source schema)")
+            if kept:
+                rule["checks"] = kept
+            else:
+                rules.pop(rule_key, None)
+                changes.append(f"{rule_key}: removed entirely (no valid columns left)")
+
+    return contract, changes
+
+
 def get_contracts_dir() -> str:
     """Find the directory containing the YAML contracts."""
     # 1. Check the shared GENERATED_ROOT path first (same base the agents write to)
@@ -241,6 +355,17 @@ def validate_table(df: DataFrame, contract: Dict[str, Any], parent_dfs: Dict[str
                 "blocked": blocked
             })
             report["promotion_blocked"] = report["promotion_blocked"] or blocked
+
+        # Human-readable reason naming EXACTLY which hard rule(s) blocked
+        # promotion and at what rate — so the silver.py RuntimeError and the
+        # final report say "not_null[postcode] failed 12.5% > 0.0%" instead of a
+        # generic "hard rule failure" the reviewer then has to go dig for.
+        _blocking = [
+            f"{r['rule']} failed {r['fail_rate']*100:.2f}% (> allowed "
+            f"{next((m[3] for m in rule_meta if m[1] == r['rule']), 0.0)*100:.2f}%)"
+            for r in report["rule_results"] if r["blocked"]
+        ]
+        report["blocking_reason"] = "; ".join(_blocking) if _blocking else ""
 
         reason_cols = [F.when(F.col(c), F.lit(c.replace("_fail_", ""))) for c in bad_masks]
         work = work.withColumn(

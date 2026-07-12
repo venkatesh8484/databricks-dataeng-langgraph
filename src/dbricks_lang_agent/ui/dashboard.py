@@ -1190,8 +1190,24 @@ if st.sidebar.button("Reset pipeline / start fresh", type="secondary"):
         w.files.delete(volume_db)
     except Exception:
         pass
-        
-    st.session_state["sync_logs"] = ["Pipeline reset. Database deleted from local disk and UC Volume."]
+
+    # 4. Clear the agent OUTPUT caches (codebase / dq / contracts / modeling /
+    #    stage approvals). Deleting only the checkpoint above resets the graph
+    #    state but leaves these caches intact, so the Engineer stage would
+    #    otherwise recall the SAME (possibly broken) cached scripts and it would
+    #    look like the reset did nothing. This is the piece that makes "start
+    #    fresh" actually regenerate code.
+    cache_logs = []
+    try:
+        cache_logs = memory.reset_agent_caches(spark)
+    except Exception as e_cache:
+        cache_logs = [f"Cache reset failed: {e_cache}"]
+
+    st.session_state["sync_logs"] = (
+        ["Pipeline reset. Checkpoint deleted from local disk and UC Volume."]
+        + ["Agent output caches cleared:"]
+        + [f"  • {line}" for line in cache_logs]
+    )
     refresh_graph_checkpoint()
     st.rerun()
 

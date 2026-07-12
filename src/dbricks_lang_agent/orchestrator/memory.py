@@ -1536,3 +1536,111 @@ def upsert_modeling_cache(spark: SparkSession, schema_fingerprint: str, gold_ddl
     except Exception as e:
         print(f"[Warning] Failed to upsert UC modeling cache: {e}")
 
+
+# ---------------------------------------------------------------------------
+# CACHE RESET
+# ---------------------------------------------------------------------------
+# The dashboard's "Reset pipeline / start fresh" button historically deleted
+# ONLY the LangGraph checkpoint (graph state). It did NOT touch the agent
+# OUTPUT caches — codebase (bronze/silver/gold code), DQ report, contracts,
+# modeling DDL — nor the per-stage approval log. So after a "reset" the graph
+# re-ran from the top, but the Engineer stage happily recalled the SAME cached
+# (and possibly broken) scripts from Unity Catalog / local JSON, making it look
+# like the reset did nothing. reset_agent_caches() clears those output caches so
+# a reset genuinely forces fresh regeneration.
+#
+# Deliberately NOT cleared by default: run_history and compile_audit (audit
+# trails you want to keep across resets) and the few-shot memory (cross-run
+# learning from past approvals/rejections — not a per-run output cache). Pass
+# include_fewshot=True to wipe that too for a total cold start.
+
+# (name, get_fqn_callable_or_None, local_json_path) for every OUTPUT cache.
+def _output_cache_targets():
+    return [
+        ("codebase (bronze/silver/gold code)", get_codebase_table_fqn, LOCAL_CODEBASE_MEMORY_PATH),
+        ("dq_report", get_dq_cache_table_fqn, LOCAL_DQ_CACHE_PATH),
+        ("contracts", get_contracts_cache_table_fqn, LOCAL_CONTRACTS_CACHE_PATH),
+        ("modeling_ddl", get_modeling_cache_table_fqn, LOCAL_MODELING_CACHE_PATH),
+        ("stage_review_approvals", get_stage_review_table_fqn, LOCAL_STAGE_REVIEW_PATH),
+    ]
+
+
+def reset_agent_caches(
+    spark: Optional[SparkSession] = None,
+    fingerprint: Optional[str] = None,
+    include_fewshot: bool = False,
+) -> List[str]:
+    """Clear the agent OUTPUT caches so the pipeline regenerates from scratch.
+
+    - spark: active session. If None (or local), only the local JSON fallbacks
+      are cleared. If a real UC session is passed, the Delta cache tables are
+      cleared too.
+    - fingerprint: if given, only rows for that dataset fingerprint are removed
+      from the UC tables and that key is dropped from the local JSON. If None,
+      ALL rows / the whole local file are cleared (full reset).
+    - include_fewshot: also wipe the cross-run few-shot learning memory.
+
+    Returns a list of human-readable log lines describing what was cleared,
+    suitable for surfacing in the dashboard.
+    """
+    logs: List[str] = []
+    targets = _output_cache_targets()
+    if include_fewshot:
+        targets = targets + [("fewshot_memory", get_memory_table_fqn, LOCAL_MEMORY_PATH)]
+
+    use_uc = spark is not None and not _is_local_spark(spark)
+
+    for label, fqn_fn, local_path in targets:
+        # 1. Unity Catalog Delta table
+        if use_uc:
+            try:
+                fqn = fqn_fn(spark)
+                if spark.catalog.tableExists(fqn):
+                    if fingerprint:
+                        # Both codebase and the stage caches key on a fingerprint
+                        # column, but the column name differs per table. Try the
+                        # known names and fall back to a full delete if none match.
+                        deleted = False
+                        for col in ("dataset_fingerprint", "schema_fingerprint"):
+                            try:
+                                spark.sql(f"DELETE FROM {fqn} WHERE {col} = '{fingerprint}'")
+                                deleted = True
+                                break
+                            except Exception:
+                                continue
+                        if not deleted:
+                            spark.sql(f"DELETE FROM {fqn}")
+                        logs.append(f"UC: cleared {label} rows for fingerprint {fingerprint[:12]}… ({fqn})")
+                    else:
+                        spark.sql(f"DELETE FROM {fqn}")
+                        logs.append(f"UC: cleared ALL {label} rows ({fqn})")
+                else:
+                    logs.append(f"UC: {label} table absent, nothing to clear")
+            except Exception as e:
+                logs.append(f"UC: FAILED to clear {label}: {e}")
+
+        # 2. Local JSON fallback
+        try:
+            if os.path.exists(local_path):
+                if fingerprint:
+                    try:
+                        with open(local_path, "r") as f:
+                            data = json.load(f)
+                        if isinstance(data, dict) and fingerprint in data:
+                            del data[fingerprint]
+                            with open(local_path, "w") as f:
+                                json.dump(data, f, indent=2)
+                            logs.append(f"local: dropped fingerprint {fingerprint[:12]}… from {os.path.basename(local_path)}")
+                    except Exception:
+                        os.remove(local_path)
+                        logs.append(f"local: removed {os.path.basename(local_path)} (could not surgically edit)")
+                else:
+                    os.remove(local_path)
+                    logs.append(f"local: removed {os.path.basename(local_path)}")
+        except Exception as e:
+            logs.append(f"local: FAILED to clear {os.path.basename(local_path)}: {e}")
+
+    if not logs:
+        logs.append("No caches found to clear.")
+    return logs
+

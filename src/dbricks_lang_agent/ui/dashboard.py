@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import yaml
+import uuid
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -20,9 +21,141 @@ sys.path.append(os.path.abspath("src"))
 from dbricks_lang_agent.data_platform.spark_utils import get_spark, load_config
 from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph, get_checkpoint_db_path
 from dbricks_lang_agent.orchestrator import memory
-from dbricks_lang_agent.orchestrator.agents import chat_with_data_agent, clear_profiling_cache
+from dbricks_lang_agent.orchestrator.agents import chat_with_data_agent, clear_profiling_cache, get_dataset_fingerprint
 from databricks.sdk import WorkspaceClient
 import io
+
+# ----------------- Shared Stage Metadata -----------------
+# Single source of truth for the six pipeline stages: display name, the gate
+# node LangGraph pauses at, the step key used in `approved_steps`, and the
+# agent name stamped into `active_agent` while that stage is in review. Used
+# by the progress lineage cards, the Action Center review panel, and the
+# clickable "View Output" viewer so all three stay in sync.
+STAGE_DEFS = [
+    {"name": "1. Profiler",      "gate": "profile_review_gate",     "step_key": "profile",     "agent_name": "Profiler",           "node": "profiler"},
+    {"name": "2. Data Quality",  "gate": "data_quality_review_gate","step_key": "dq",          "agent_name": "DataQualityAgent",   "node": "data_quality"},
+    {"name": "3. Contracts",     "gate": "contracts_review_gate",   "step_key": "contracts",   "agent_name": "ContractSteward",    "node": "contracts"},
+    {"name": "4. Modeler",       "gate": "modeling_review_gate",    "step_key": "modeling",    "agent_name": "DimensionalModeler", "node": "modeling"},
+    {"name": "5. Engineer",      "gate": "engineering_review_gate", "step_key": "engineering", "agent_name": "DataEngineer",       "node": "engineering"},
+    {"name": "6. Orchestrator",  "gate": "execution_review_gate",   "step_key": "report",       "agent_name": "Orchestrator",       "node": "execution"},
+]
+
+
+def get_stage_artifacts(step_key: str, state_values: dict) -> dict:
+    """Pull out just the fields relevant to one stage from the (cumulative)
+    LangGraph state. Used both for on-screen rendering and for the audit
+    snapshot written to gold.agent_stage_review_log."""
+    state_values = state_values or {}
+    if step_key == "profile":
+        return {
+            "discovered_tables": state_values.get("discovered_tables", {}),
+            "profiling_report": state_values.get("profiling_report", {}),
+            "profiler_error": state_values.get("profiler_error", ""),
+        }
+    elif step_key == "dq":
+        return {"dq_report": state_values.get("dq_report", "")}
+    elif step_key == "contracts":
+        return {
+            "contracts": state_values.get("contracts", {}),
+            "contracts_error": state_values.get("contracts_error", ""),
+        }
+    elif step_key == "modeling":
+        return {
+            "gold_ddl": state_values.get("gold_ddl", ""),
+            "data_dictionary": state_values.get("data_dictionary", ""),
+        }
+    elif step_key == "engineering":
+        return {
+            "bronze_code": state_values.get("bronze_code", ""),
+            "silver_code": state_values.get("silver_code", ""),
+            "gold_code": state_values.get("gold_code", ""),
+        }
+    elif step_key == "report":
+        return {
+            "execution_logs": state_values.get("execution_logs", {}),
+            "final_report": state_values.get("final_report", ""),
+        }
+    return {}
+
+
+def render_agent_output(agent_name: str, state_values: dict) -> None:
+    """Render the artifacts produced by one agent stage. Pulled out of the
+    Action Center review flow so the SAME rendering can be reused by the
+    clickable stage viewer (which shows a stage's output at any point,
+    regardless of which gate is currently active) and by the audit tab
+    (which replays a past review's output snapshot)."""
+    state_values = state_values or {}
+
+    if agent_name == "Profiler":
+        profiler_error = state_values.get("profiler_error", "")
+        if profiler_error:
+            st.error(profiler_error)
+            diagnostics = state_values.get("profiling_report", {}).get("discovery_diagnostics", [])
+            if diagnostics:
+                with st.expander("🔍 Raw discovery trail (DBUtils / SDK / POSIX attempts)", expanded=True):
+                    st.code("\n".join(diagnostics), language="text")
+        st.markdown("### Inferred Source Table Schemas:")
+        st.json(state_values.get("discovered_tables", {}))
+        st.markdown("### Dynamic Profiling Report:")
+        st.markdown(state_values.get("profiling_report", {}).get("profiler_narration", "No report narrative found."))
+
+    elif agent_name == "DataQualityAgent":
+        st.markdown("### Data Quality Assessment Report:")
+        st.markdown(state_values.get("dq_report", "No DQ report found."))
+
+    elif agent_name == "ContractSteward":
+        contracts_error = state_values.get("contracts_error", "")
+        if contracts_error:
+            st.error(contracts_error)
+        st.markdown("### Generated YAML Data Contracts:")
+        contracts = state_values.get("contracts", {})
+        if not contracts:
+            if not contracts_error:
+                st.info("No contracts were generated and no error was recorded — this looks like an unexpected empty result. Check the app logs for '[Contract Steward]' entries.")
+        for tbl, contract_yaml in contracts.items():
+            st.subheader(f"Table Contract: {tbl}")
+            st.code(contract_yaml, language="yaml")
+
+    elif agent_name == "DimensionalModeler":
+        st.markdown("### Inferred Star Schema SQL DDL:")
+        st.code(state_values.get("gold_ddl", ""), language="sql")
+        st.markdown("### Star Schema Data Dictionary:")
+        st.markdown(state_values.get("data_dictionary", ""))
+
+    elif agent_name == "DataEngineer":
+        st.markdown("### Generated PySpark Code Blocks:")
+        st.caption("Each tab shows the full generated script. Scroll horizontally/vertically inside the code block.")
+        bronze_code = state_values.get("bronze_code", "")
+        silver_code = state_values.get("silver_code", "")
+        gold_code   = state_values.get("gold_code", "")
+        code_tab1, code_tab2, code_tab3 = st.tabs([
+            "🥉 Bronze — bronze.py",
+            "🥈 Silver — silver.py",
+            "🥇 Gold — gold.py",
+        ])
+        with code_tab1:
+            if bronze_code:
+                st.code(bronze_code, language="python", line_numbers=True)
+            else:
+                st.info("Bronze code not yet generated.")
+        with code_tab2:
+            if silver_code:
+                st.code(silver_code, language="python", line_numbers=True)
+            else:
+                st.info("Silver code not yet generated.")
+        with code_tab3:
+            if gold_code:
+                st.code(gold_code, language="python", line_numbers=True)
+            else:
+                st.info("Gold code not yet generated.")
+
+    elif agent_name == "Orchestrator":
+        st.markdown("### Executed Script Logs:")
+        st.json(state_values.get("execution_logs", {}))
+        st.markdown("### Final Run Summary Report:")
+        st.markdown(state_values.get("final_report", ""))
+    else:
+        st.info("No output available yet for this stage — it hasn't run in the current pipeline thread.")
 
 def get_volume_db_path() -> str:
     """Return the Volume POSIX path for the checkpoint database.
@@ -556,6 +689,23 @@ app = get_or_create_graph()
 thread_id = "medallion_pipeline_run"
 config = {"configurable": {"thread_id": thread_id}}
 
+def get_or_assign_run_id() -> str:
+    """Return the current pipeline's stable run ID, assigning one lazily if
+    this thread doesn't have one yet (e.g. a pipeline started before this
+    field existed). Every stage's audit row in gold.agent_stage_review_log
+    is tagged with this ID so all six stages of one end-to-end run can be
+    grouped together in the audit UI."""
+    current_state = app.get_state(config)
+    existing = (current_state.values or {}).get("pipeline_run_id")
+    if existing:
+        return existing
+    new_run_id = str(uuid.uuid4())
+    try:
+        app.update_state(config, {"pipeline_run_id": new_run_id})
+    except Exception as e:
+        print(f"[Warning] Failed to persist pipeline_run_id: {e}")
+    return new_run_id
+
 def rollback_to_node(target_node: str) -> bool:
     """Roll back the LangGraph state checkpoints to the point before target_node runs."""
     try:
@@ -643,14 +793,7 @@ st.markdown("""
 state = app.get_state(config)
 
 # ----------------- Pipeline Lineage Status Bar -----------------
-stages = [
-    {"name": "1. Profiler", "gate": "profile_review_gate"},
-    {"name": "2. Data Quality", "gate": "data_quality_review_gate"},
-    {"name": "3. Contracts", "gate": "contracts_review_gate"},
-    {"name": "4. Modeler", "gate": "modeling_review_gate"},
-    {"name": "5. Engineer", "gate": "engineering_review_gate"},
-    {"name": "6. Orchestrator", "gate": "execution_review_gate"}
-]
+stages = STAGE_DEFS
 
 # Calculate stage statuses: completed (Green), review (Amber), pending (Grey)
 stage_statuses = []
@@ -751,15 +894,32 @@ for i, stage in enumerate(stages):
             "execution_review_gate": "execution"
         }
         target_node = gate_to_next_node.get(stage["gate"])
+
+        # Make the widget clickable: view whatever this agent has produced so
+        # far, even if the pipeline has already moved past this gate. State
+        # values accumulate across the whole thread, so this works regardless
+        # of which stage is currently active.
+        if st.button("👁️ View Output", key=f"btn_view_{stage['gate']}", use_container_width=True):
+            if st.session_state.get("selected_stage_key") == stage["step_key"]:
+                st.session_state["selected_stage_key"] = None  # toggle closed
+            else:
+                st.session_state["selected_stage_key"] = stage["step_key"]
+            st.rerun()
+
         if st.button("🔄 Rerun", key=f"btn_rerun_{stage['gate']}", use_container_width=True):
             with st.spinner(f"Rolling back and running '{stage['name']}'..."):
                 if rollback_to_node(target_node):
                     # Force reload the graph app connection to bind to the modified database state
                     refresh_graph_checkpoint()
                     app_to_use = get_or_create_graph()
-                    
+
                     # Run/stream the graph forward to execute the target agent node
                     try:
+                        # Note: intentionally NOT injecting a fresh pipeline_run_id here — this
+                        # path also covers rolling back to an earlier checkpoint WITHIN the same
+                        # run, which should keep its existing run ID. A brand-new ID is only
+                        # needed after a full Reset, and get_or_assign_run_id() lazily assigns one
+                        # the next time a review decision is submitted if none is present yet.
                         inputs = {} if target_node == "profiler" else None
                         events = app_to_use.stream(inputs, config, stream_mode="values")
                         for event in events:
@@ -767,7 +927,7 @@ for i, stage in enumerate(stages):
                     except Exception as e_stream:
                         if not (isinstance(e_stream, KeyError) and "__end__" in str(e_stream)):
                             st.error(f"Stream execution error: {e_stream}")
-                    
+
                     # Sync updated state back to Volume and reload page
                     sync_db_to_volume()
                     refresh_graph_checkpoint()
@@ -775,6 +935,27 @@ for i, stage in enumerate(stages):
                     st.rerun()
                 else:
                     st.error("Cannot rerun: no historical checkpoint found for this stage.")
+
+# ----------------- Clickable Stage Output Viewer -----------------
+# Opens when a "View Output" button above is clicked. Shows that stage's
+# artifacts from the live thread state — independent of the current review
+# gate — so approving/rejecting a later stage no longer hides earlier output.
+selected_stage_key = st.session_state.get("selected_stage_key")
+if selected_stage_key:
+    selected_stage = next((s for s in STAGE_DEFS if s["step_key"] == selected_stage_key), None)
+    if selected_stage:
+        with st.container(border=True):
+            header_col, close_col = st.columns([6, 1])
+            with header_col:
+                st.markdown(f"#### 👁️ Output — {selected_stage['name']} ({selected_stage['agent_name']})")
+            with close_col:
+                if st.button("✕ Close", key="close_stage_viewer"):
+                    st.session_state["selected_stage_key"] = None
+                    st.rerun()
+            if state.values:
+                render_agent_output(selected_stage["agent_name"], state.values)
+            else:
+                st.info("No pipeline state yet — start the pipeline to generate output.")
 
 # Sidebar with Status Overview
 st.sidebar.markdown("### Ingestion Settings")
@@ -942,9 +1123,10 @@ with tab0:
 
                     if gate == "__start__":
                         # ── Cold start: kick off a fresh pipeline run ────────
+                        new_pipeline_run_id = str(uuid.uuid4())
                         with st.spinner("🚀 Launching pipeline from scratch… this may take a few minutes."):
                             try:
-                                events = app.stream({}, config, stream_mode="values")
+                                events = app.stream({"pipeline_run_id": new_pipeline_run_id}, config, stream_mode="values")
                                 for event in events:
                                     pass
                             except KeyError as e_key:
@@ -1143,87 +1325,14 @@ with tab2:
         
         st.warning(f"⚠️ **Action Required**: Pipeline is suspended BEFORE running node: **`{current_node}`**")
         st.markdown(f"Review the artifacts generated by the previous agent (**{active_agent}**) below:")
-        
-        # Define step mappings for user actions
-        step_mapping = {
-            "profile_review_gate": "profile",
-            "data_quality_review_gate": "dq",
-            "contracts_review_gate": "contracts",
-            "modeling_review_gate": "modeling",
-            "engineering_review_gate": "engineering",
-            "execution_review_gate": "report"
-        }
-        step_key = step_mapping.get(current_node)
-        
-        # Render specific artifact content based on what node is paused
-        if active_agent == "Profiler":
-            profiler_error = state.values.get("profiler_error", "")
-            if profiler_error:
-                st.error(profiler_error)
-                diagnostics = state.values.get("profiling_report", {}).get("discovery_diagnostics", [])
-                if diagnostics:
-                    with st.expander("🔍 Raw discovery trail (DBUtils / SDK / POSIX attempts)", expanded=True):
-                        st.code("\n".join(diagnostics), language="text")
-            st.markdown("### Inferred Source Table Schemas:")
-            st.json(state.values.get("discovered_tables", {}))
-            st.markdown("### Dynamic Profiling Report:")
-            st.markdown(state.values.get("profiling_report", {}).get("profiler_narration", "No report narrative found."))
-            
-        elif active_agent == "DataQualityAgent":
-            st.markdown("### Data Quality Assessment Report:")
-            st.markdown(state.values.get("dq_report", "No DQ report found."))
-            
-        elif active_agent == "ContractSteward":
-            contracts_error = state.values.get("contracts_error", "")
-            if contracts_error:
-                st.error(contracts_error)
-            st.markdown("### Generated YAML Data Contracts:")
-            contracts = state.values.get("contracts", {})
-            if not contracts:
-                if not contracts_error:
-                    st.info("No contracts were generated and no error was recorded — this looks like an unexpected empty result. Check the app logs for '[Contract Steward]' entries.")
-            for tbl, contract_yaml in contracts.items():
-                st.subheader(f"Table Contract: {tbl}")
-                st.code(contract_yaml, language="yaml")
 
-        elif active_agent == "DimensionalModeler":
-            st.markdown("### Inferred Star Schema SQL DDL:")
-            st.code(state.values.get("gold_ddl", ""), language="sql")
-            st.markdown("### Star Schema Data Dictionary:")
-            st.markdown(state.values.get("data_dictionary", ""))
-            
-        elif active_agent == "DataEngineer":
-            st.markdown("### Generated PySpark Code Blocks:")
-            st.caption("Each tab shows the full generated script. Scroll horizontally/vertically inside the code block.")
-            bronze_code = state.values.get("bronze_code", "")
-            silver_code = state.values.get("silver_code", "")
-            gold_code   = state.values.get("gold_code", "")
-            code_tab1, code_tab2, code_tab3 = st.tabs([
-                "🥉 Bronze — bronze.py",
-                "🥈 Silver — silver.py",
-                "🥇 Gold — gold.py",
-            ])
-            with code_tab1:
-                if bronze_code:
-                    st.code(bronze_code, language="python", line_numbers=True)
-                else:
-                    st.info("Bronze code not yet generated.")
-            with code_tab2:
-                if silver_code:
-                    st.code(silver_code, language="python", line_numbers=True)
-                else:
-                    st.info("Silver code not yet generated.")
-            with code_tab3:
-                if gold_code:
-                    st.code(gold_code, language="python", line_numbers=True)
-                else:
-                    st.info("Gold code not yet generated.")
-                
-        elif active_agent == "Orchestrator":
-            st.markdown("### Executed Script Logs:")
-            st.json(state.values.get("execution_logs", {}))
-            st.markdown("### Final Run Summary Report:")
-            st.markdown(state.values.get("final_report", ""))
+        # Define step mappings for user actions
+        step_mapping = {s["gate"]: s["step_key"] for s in STAGE_DEFS}
+        step_key = step_mapping.get(current_node)
+
+        # Render specific artifact content based on what node is paused
+        # (shared with the clickable stage viewer above and the audit tab)
+        render_agent_output(active_agent, state.values)
 
         st.markdown("---")
         st.markdown("#### Submit Decision")
@@ -1262,7 +1371,34 @@ with tab2:
                             memory.log_rejection(spark, dataset, issue_type, feedback, step_key)
                         except Exception as e:
                             st.warning(f"Unable to log rejection to memory table: {e}")
-                        
+
+                    # Log the full agent output + decision to the Unity Catalog audit
+                    # table (gold.agent_stage_review_log) so it stays reviewable —
+                    # filterable by date, grouped by run — even after this thread
+                    # advances past this stage or is later reset.
+                    try:
+                        run_id_for_audit = get_or_assign_run_id()
+                        try:
+                            fingerprint = get_dataset_fingerprint(
+                                spark, state.values.get("contracts", {}), state.values.get("gold_ddl", "")
+                            )
+                        except Exception:
+                            fingerprint = ""
+                        stage_output = get_stage_artifacts(step_key, state.values)
+                        memory.init_stage_review_table(spark)
+                        memory.log_stage_review(
+                            spark,
+                            pipeline_run_id=run_id_for_audit,
+                            stage_key=step_key,
+                            agent_name=active_agent,
+                            decision="approved" if action == "Approve" else "rejected",
+                            reviewer_comments=feedback,
+                            output=stage_output,
+                            dataset_fingerprint=fingerprint,
+                        )
+                    except Exception as e:
+                        st.warning(f"Unable to log stage output to audit table: {e}")
+
                     # Update graph checkpointer state
                     app.update_state(
                         config,
@@ -1304,7 +1440,9 @@ with tab3:
     st.markdown("### 🕓 Run History & Review Decisions")
     st.caption("Every pipeline execution attempt and every human review decision, kept for auditing — even after the live thread moves on or is reset.")
 
-    hist_subtab, decisions_subtab = st.tabs(["📜 Pipeline Run History", "✅ Review Decisions"])
+    hist_subtab, decisions_subtab, outputs_subtab = st.tabs([
+        "📜 Pipeline Run History", "✅ Review Decisions", "🗂️ Agent Outputs & Reviews"
+    ])
 
     # ---- Sub-tab: Pipeline Run History (gold.agent_run_history) ----
     with hist_subtab:
@@ -1502,3 +1640,127 @@ with tab3:
 
         except Exception as e:
             st.warning(f"Could not load review decisions: {e}")
+
+    # ---- Sub-tab: Agent Outputs & Reviews (gold.agent_stage_review_log) ----
+    with outputs_subtab:
+        st.caption(
+            "Full audit trail: what each agent produced at every review gate, the human "
+            "decision, and any review comments — stored in Unity Catalog and filterable by date."
+        )
+
+        try:
+            stage_reviews = memory.get_stage_reviews(spark, limit=1000)
+        except Exception as e:
+            stage_reviews = []
+            st.warning(f"Could not load agent output audit log: {e}")
+
+        if not stage_reviews:
+            st.info(
+                "No agent outputs logged yet. Every time you approve or reject a step in the "
+                "Action Center tab, that stage's full output is captured here."
+            )
+        else:
+            audit_df = pd.DataFrame(stage_reviews)
+            audit_df["review_timestamp"] = pd.to_datetime(audit_df["review_timestamp"])
+            audit_df["review_date"] = pd.to_datetime(audit_df["review_date"]).dt.date
+
+            agent_name_by_step = {s["step_key"]: s["agent_name"] for s in STAGE_DEFS}
+            stage_label_by_step = {s["step_key"]: s["name"] for s in STAGE_DEFS}
+
+            a1, a2, a3, a4 = st.columns([1.3, 1, 1, 1.7])
+            with a1:
+                amin, amax = audit_df["review_date"].min(), audit_df["review_date"].max()
+                audit_date_range = st.date_input(
+                    "Date range", value=(amin, amax), min_value=amin, max_value=amax, key="audit_date_range"
+                )
+            with a2:
+                audit_decision_filter = st.multiselect(
+                    "Decision", ["approved", "rejected"], default=["approved", "rejected"], key="audit_decision"
+                )
+            with a3:
+                audit_stage_options = sorted(audit_df["stage_key"].dropna().unique().tolist())
+                audit_stage_filter = st.multiselect(
+                    "Stage", audit_stage_options,
+                    default=audit_stage_options,
+                    format_func=lambda k: stage_label_by_step.get(k, k),
+                    key="audit_stage",
+                )
+            with a4:
+                audit_run_filter = st.text_input(
+                    "Filter by Run ID (optional, exact or partial)", key="audit_run_id_search"
+                )
+
+            filtered_a = audit_df.copy()
+            if isinstance(audit_date_range, tuple) and len(audit_date_range) == 2:
+                asd, aed = audit_date_range
+                filtered_a = filtered_a[(filtered_a["review_date"] >= asd) & (filtered_a["review_date"] <= aed)]
+            if audit_decision_filter:
+                filtered_a = filtered_a[filtered_a["decision"].isin(audit_decision_filter)]
+            if audit_stage_filter:
+                filtered_a = filtered_a[filtered_a["stage_key"].isin(audit_stage_filter)]
+            if audit_run_filter:
+                filtered_a = filtered_a[filtered_a["pipeline_run_id"].str.contains(audit_run_filter, case=False, na=False)]
+
+            filtered_a = filtered_a.sort_values("review_timestamp", ascending=False)
+            st.caption(f"Showing {len(filtered_a)} of {len(audit_df)} reviewed outputs.")
+
+            summary_cols = ["review_timestamp", "decision", "stage_key", "agent_name", "reviewer_comments", "pipeline_run_id"]
+            summary_cols = [c for c in summary_cols if c in filtered_a.columns]
+            st.dataframe(
+                filtered_a[summary_cols],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "review_timestamp": st.column_config.DatetimeColumn("When"),
+                    "decision": "Decision",
+                    "stage_key": "Stage",
+                    "agent_name": "Agent",
+                    "reviewer_comments": "Comments",
+                    "pipeline_run_id": "Run ID",
+                },
+            )
+
+            st.markdown("#### 🔍 Inspect a Reviewed Output")
+            if len(filtered_a) > 0:
+                row_options = filtered_a.index.tolist()
+                row_labels = {
+                    idx: (
+                        f"{r['review_timestamp'].strftime('%Y-%m-%d %H:%M')} · "
+                        f"{'✅' if r['decision'] == 'approved' else '🚫'} {r['decision']} · "
+                        f"{stage_label_by_step.get(r['stage_key'], r['stage_key'])} · "
+                        f"run {str(r.get('pipeline_run_id') or '')[:8]}"
+                    )
+                    for idx, r in filtered_a.iterrows()
+                }
+                selected_idx = st.selectbox(
+                    "Select a reviewed output", row_options, format_func=lambda i: row_labels.get(i, str(i)),
+                    key="audit_selected_row",
+                )
+                sel_row = filtered_a.loc[selected_idx]
+
+                decision_icon = "✅" if sel_row["decision"] == "approved" else "🚫"
+                st.markdown(
+                    f"**{decision_icon} {sel_row['decision'].upper()}** — "
+                    f"{stage_label_by_step.get(sel_row['stage_key'], sel_row['stage_key'])} "
+                    f"(**{sel_row['agent_name']}**) — {sel_row['review_timestamp']}"
+                )
+                if sel_row.get("dataset_fingerprint"):
+                    st.caption(f"Dataset fingerprint: `{sel_row['dataset_fingerprint']}` · Run ID: `{sel_row.get('pipeline_run_id', '')}`")
+
+                if sel_row.get("reviewer_comments"):
+                    st.markdown(f"**Reviewer comments:** {sel_row['reviewer_comments']}")
+                else:
+                    st.caption("No reviewer comments were entered for this decision.")
+
+                with st.expander("📦 Agent Output at Time of Review", expanded=True):
+                    try:
+                        output_dict = json.loads(sel_row.get("output_json") or "{}")
+                    except Exception:
+                        output_dict = {}
+                    agent_name_for_render = sel_row.get("agent_name") or agent_name_by_step.get(sel_row["stage_key"])
+                    if output_dict:
+                        render_agent_output(agent_name_for_render, output_dict)
+                    else:
+                        st.info("No output snapshot was captured for this review.")
+            else:
+                st.info("No reviewed outputs match the current filters.")

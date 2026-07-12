@@ -30,6 +30,8 @@ class AgentState(TypedDict):
     final_report: str                   # Executive run report (markdown)
     dq_report: str                      # Data Quality Assessment report (markdown)
     last_run_id: str                    # ID of the most recent execution_node attempt, for audit lookup in gold.agent_run_history
+    pipeline_run_id: str                # Stable ID for this end-to-end pipeline run (assigned at cold start), used to
+                                         # group every per-stage review/output audit row in gold.agent_stage_review_log
 
     # Human-in-the-Loop review and orchestration state
     active_agent: str                   # Name of the currently executing agent node

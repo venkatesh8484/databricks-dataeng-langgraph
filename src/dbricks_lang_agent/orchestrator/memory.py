@@ -850,3 +850,207 @@ def get_run_history(spark: SparkSession, limit: int = 200) -> List[Dict[str, Any
 
     return []
 
+
+# ---------------------------------------------------------------------------
+# Stage Review Log — append-only audit record of every human approve/reject
+# decision made at a review gate, PLUS a full snapshot of the agent output
+# that was on screen at the moment of that decision (profiling report, DQ
+# report, contracts, DDL/data dictionary, generated code, execution logs /
+# final report). This is what powers the dashboard's "Agent Outputs &
+# Reviews" audit view: filter by date, open any past run, and see exactly
+# what each agent produced and what the reviewer decided/commented — even
+# long after the live checkpoint thread has moved on or been reset.
+#
+# Distinct from agent_fewshot_memory (short resolution text used as
+# few-shot context for the agents) and agent_run_history (one row per
+# execution_node/Orchestrator attempt only). This table has one row per
+# review decision at ANY of the six gates, tagged with pipeline_run_id so
+# all stages of the same end-to-end run can be grouped together.
+# ---------------------------------------------------------------------------
+
+LOCAL_STAGE_REVIEW_PATH = "./generated/config/agent_stage_review_log.json"
+
+
+def get_stage_review_table_fqn(spark: SparkSession) -> str:
+    """Read the stage review log table path from Spark configuration or catalog settings."""
+    try:
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "databricks_langgraph")
+    except Exception:
+        catalog = "databricks_langgraph"
+    return f"{catalog}.gold.agent_stage_review_log"
+
+
+def init_stage_review_table(spark: SparkSession) -> bool:
+    """Initialize the gold.agent_stage_review_log Delta Table in Unity Catalog."""
+    fqn = get_stage_review_table_fqn(spark)
+    print(f"Initializing stage review log table at: {fqn}...")
+
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if is_local:
+        os.makedirs(os.path.dirname(LOCAL_STAGE_REVIEW_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_STAGE_REVIEW_PATH):
+            with open(LOCAL_STAGE_REVIEW_PATH, "w") as f:
+                json.dump([], f)
+        return True
+
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
+
+        spark.sql(f"""
+            CREATE TABLE IF NOT EXISTS {fqn} (
+                review_id STRING,
+                pipeline_run_id STRING,
+                review_date DATE,
+                review_timestamp TIMESTAMP,
+                stage_key STRING,
+                agent_name STRING,
+                decision STRING,
+                reviewer_comments STRING,
+                dataset_fingerprint STRING,
+                output_json STRING
+            ) USING DELTA
+        """)
+        return True
+    except Exception as e:
+        print(f"[Warning] Failed to initialize UC stage review log table: {e}. Falling back to local file.")
+        os.makedirs(os.path.dirname(LOCAL_STAGE_REVIEW_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_STAGE_REVIEW_PATH):
+            with open(LOCAL_STAGE_REVIEW_PATH, "w") as f:
+                json.dump([], f)
+        return False
+
+
+def log_stage_review(
+    spark: SparkSession,
+    pipeline_run_id: str,
+    stage_key: str,
+    agent_name: str,
+    decision: str,
+    reviewer_comments: str,
+    output: Dict[str, Any],
+    dataset_fingerprint: str = "",
+) -> None:
+    """Append one row every time a human approves or rejects a review gate.
+
+    `output` should be the full artifact(s) produced by that agent (e.g. the
+    profiling report, DQ report, contracts, DDL, generated code, or final
+    report) — whatever was visible to the reviewer at decision time. Stored
+    as JSON so it can be rendered back in the audit UI. Failures here are
+    swallowed (print/warn-only) so audit logging never blocks the pipeline.
+    """
+    import uuid
+    timestamp = datetime.datetime.now()
+    review_date = timestamp.date()
+    review_id = str(uuid.uuid4())
+
+    try:
+        output_json = json.dumps(output or {}, default=str)
+    except Exception:
+        output_json = "{}"
+    # Cap size defensively so a huge code blob can't blow up a single audit row.
+    output_json = output_json[:200000]
+
+    # 1. Always update local JSON cache
+    try:
+        os.makedirs(os.path.dirname(LOCAL_STAGE_REVIEW_PATH), exist_ok=True)
+        records = []
+        if os.path.exists(LOCAL_STAGE_REVIEW_PATH):
+            with open(LOCAL_STAGE_REVIEW_PATH, "r") as f:
+                records = json.load(f)
+
+        records.append({
+            "review_id": review_id,
+            "pipeline_run_id": pipeline_run_id,
+            "review_date": review_date.isoformat(),
+            "review_timestamp": timestamp.isoformat(),
+            "stage_key": stage_key,
+            "agent_name": agent_name,
+            "decision": decision,
+            "reviewer_comments": reviewer_comments or "",
+            "dataset_fingerprint": dataset_fingerprint or "",
+            "output_json": output_json,
+        })
+
+        with open(LOCAL_STAGE_REVIEW_PATH, "w") as f:
+            json.dump(records, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to log stage review to local JSON cache: {e}")
+
+    # 2. Try Spark/Delta table log
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if is_local:
+        return
+
+    try:
+        fqn = get_stage_review_table_fqn(spark)
+        schema = StructType([
+            StructField("review_id", StringType(), True),
+            StructField("pipeline_run_id", StringType(), True),
+            StructField("review_date", StringType(), True),  # cast to date below
+            StructField("review_timestamp", TimestampType(), True),
+            StructField("stage_key", StringType(), True),
+            StructField("agent_name", StringType(), True),
+            StructField("decision", StringType(), True),
+            StructField("reviewer_comments", StringType(), True),
+            StructField("dataset_fingerprint", StringType(), True),
+            StructField("output_json", StringType(), True),
+        ])
+
+        row_data = [(
+            review_id, pipeline_run_id, review_date.isoformat(), timestamp, stage_key,
+            agent_name, decision, reviewer_comments or "", dataset_fingerprint or "", output_json,
+        )]
+        df = spark.createDataFrame(row_data, schema=schema).withColumn("review_date", F.col("review_date").cast("date"))
+        df.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable(fqn)
+        print(f"Successfully logged stage review ({stage_key}, {decision}) to Delta table '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to log stage review to Delta table: {e}")
+
+
+def get_stage_reviews(
+    spark: SparkSession,
+    limit: int = 500,
+    pipeline_run_id: str = None,
+) -> List[Dict[str, Any]]:
+    """Retrieve stage review log rows, newest first, optionally filtered to a
+    single pipeline run. Used by the dashboard's 'Agent Outputs & Reviews'
+    audit tab. output_json is left as a string for the caller to parse."""
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if not is_local:
+        try:
+            fqn = get_stage_review_table_fqn(spark)
+            df = spark.read.table(fqn)
+            if pipeline_run_id:
+                df = df.filter(F.col("pipeline_run_id") == pipeline_run_id)
+            df = df.orderBy(F.col("review_timestamp").desc()).limit(limit)
+            return [r.asDict() for r in df.collect()]
+        except Exception as e:
+            print(f"[Warning] Failed to read from UC stage review log table: {e}. Checking local cache.")
+
+    try:
+        if os.path.exists(LOCAL_STAGE_REVIEW_PATH):
+            with open(LOCAL_STAGE_REVIEW_PATH, "r") as f:
+                records = json.load(f)
+            if pipeline_run_id:
+                records = [r for r in records if r.get("pipeline_run_id") == pipeline_run_id]
+            records = sorted(records, key=lambda r: r.get("review_timestamp", ""), reverse=True)
+            return records[:limit]
+    except Exception as e:
+        print(f"[Warning] Failed to read from local stage review log cache: {e}")
+
+    return []
+

@@ -1481,17 +1481,24 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     if not reset_requested and not engineering_explicitly_rejected:
         cached = memory.get_stored_codebase(spark, fingerprint)
         if cached:
-            # Self-repair the cache on read: unwrap any entry that is actually a
-            # stored JSON wrapper (see _unwrap_pseudo_json_code) and DROP any
+            # Self-repair the cache on read: run the FULL sanitizer/healer on
+            # every cached entry (not just the JSON-wrapper unwrap) and DROP any
             # entry that fails structural validation, so a poisoned cache row
             # forces a fresh generation instead of being reused forever.
+            # Running _sanitize_and_heal_code here (it unwraps JSON internally as
+            # its first step) is what lets deterministic fixes — e.g. stripping a
+            # hallucinated `from pyspark.sql.functions import isin` that compiles
+            # fine but raises ImportError at real execution — reach OLD cached
+            # code too. Without this, compile-only verify mode keeps re-running
+            # the same broken cached script forever, since compile() never sees
+            # the runtime ImportError.
             repaired: Dict[str, str] = {}
             for k, v in cached.items():
-                fixed = _unwrap_pseudo_json_code(v or "")
+                fixed = _sanitize_and_heal_code(v or "")
                 ok, reason = _validate_script_structure(fixed, k)
                 if ok:
                     if fixed != v:
-                        print(f"[Codebase Memory] Repaired cached {k} (unwrapped a stored JSON wrapper) — re-persisting the clean version.")
+                        print(f"[Codebase Memory] Repaired cached {k} (sanitized/healed cached code) — re-persisting the clean version.")
                         try:
                             memory.log_script_code(spark, fingerprint, k, fixed)
                         except Exception as e_fix:

@@ -1054,3 +1054,483 @@ def get_stage_reviews(
 
     return []
 
+
+def was_previously_approved(
+    spark: SparkSession,
+    stage_key: str,
+    schema_fingerprint: str,
+) -> bool:
+    """True if a human has already approved THIS EXACT stage output for THIS
+    EXACT schema fingerprint at some point in the past (queries
+    gold.agent_stage_review_log). Used to decide whether an exact cache hit
+    can auto-advance past its review gate instead of pausing for a redundant
+    re-approval of content a human has already signed off on.
+
+    Deliberately conservative: only ever returns True for an exact
+    (stage_key, schema_fingerprint) match with decision == 'approved'. A
+    schema change produces a different fingerprint, so it can never
+    accidentally match a stale approval — and content that was only ever
+    generated but never actually reviewed (first run at a new fingerprint)
+    correctly returns False, so the pipeline still pauses for that first
+    real human decision.
+    """
+    try:
+        is_local = spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        is_local = False
+
+    if not is_local:
+        try:
+            fqn = get_stage_review_table_fqn(spark)
+            df = (
+                spark.read.table(fqn)
+                .filter(
+                    (F.col("stage_key") == stage_key)
+                    & (F.col("dataset_fingerprint") == schema_fingerprint)
+                    & (F.col("decision") == "approved")
+                )
+                .limit(1)
+            )
+            return df.count() > 0
+        except Exception as e:
+            print(f"[Warning] Failed to check prior approval in UC stage review log: {e}. Checking local cache.")
+
+    try:
+        if os.path.exists(LOCAL_STAGE_REVIEW_PATH):
+            with open(LOCAL_STAGE_REVIEW_PATH, "r") as f:
+                records = json.load(f)
+            for r in records:
+                if (
+                    r.get("stage_key") == stage_key
+                    and r.get("dataset_fingerprint") == schema_fingerprint
+                    and r.get("decision") == "approved"
+                ):
+                    return True
+    except Exception as e:
+        print(f"[Warning] Failed to check prior approval in local stage review cache: {e}")
+
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Agent Output Cache — DQ report / Contracts / Modeling (Gold DDL + Data
+# Dictionary), keyed by the STRUCTURAL schema fingerprint
+# (agents.get_schema_fingerprint — table names + column headers only, no LLM
+# content, no row data). This is what lets "generate once, reuse forever
+# until the schema actually changes" work: as long as the source tables'
+# columns haven't changed, every one of these caches hits and the
+# corresponding LLM call is skipped entirely — only Profiler (which
+# legitimately reflects new row-level data every run) is exempt from this
+# scheme by design.
+#
+# Each cache keeps the FULL history (append/upsert per fingerprint, never
+# delete), so "get the most recent entry regardless of fingerprint" is
+# always available to drive the patch-not-regenerate flow when the schema
+# DOES change: the node feeds the LLM the last known-good output plus
+# what's different now, and asks it to update rather than start from a
+# blank page.
+# ---------------------------------------------------------------------------
+
+LOCAL_DQ_CACHE_PATH = "./generated/config/agent_dq_cache.json"
+LOCAL_CONTRACTS_CACHE_PATH = "./generated/config/agent_contracts_cache.json"
+LOCAL_MODELING_CACHE_PATH = "./generated/config/agent_modeling_cache.json"
+
+
+def _cache_table_fqn(spark: SparkSession, table_name: str) -> str:
+    try:
+        from dbricks_lang_agent.data_platform.spark_utils import load_config
+        cfg = load_config()
+        catalog = cfg.get("catalog", "databricks_langgraph")
+    except Exception:
+        catalog = "databricks_langgraph"
+    return f"{catalog}.gold.{table_name}"
+
+
+def _is_local_spark(spark: SparkSession) -> bool:
+    try:
+        return spark.conf.get("spark.master", "").startswith("local")
+    except Exception:
+        return False
+
+
+# ---- DQ report cache (schema_fingerprint -> dq_report) ----
+
+def get_dq_cache_table_fqn(spark: SparkSession) -> str:
+    return _cache_table_fqn(spark, "agent_dq_cache")
+
+
+def init_dq_cache_table(spark: SparkSession) -> bool:
+    fqn = get_dq_cache_table_fqn(spark)
+    if _is_local_spark(spark):
+        os.makedirs(os.path.dirname(LOCAL_DQ_CACHE_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_DQ_CACHE_PATH):
+            with open(LOCAL_DQ_CACHE_PATH, "w") as f:
+                json.dump({}, f)
+        return True
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
+        spark.sql(f"""
+            CREATE TABLE IF NOT EXISTS {fqn} (
+                schema_fingerprint STRING,
+                dq_report STRING,
+                updated_ts TIMESTAMP
+            ) USING DELTA
+        """)
+        return True
+    except Exception as e:
+        print(f"[Warning] Failed to initialize UC DQ cache table: {e}. Falling back to local file.")
+        os.makedirs(os.path.dirname(LOCAL_DQ_CACHE_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_DQ_CACHE_PATH):
+            with open(LOCAL_DQ_CACHE_PATH, "w") as f:
+                json.dump({}, f)
+        return False
+
+
+def get_dq_cache(spark: SparkSession, schema_fingerprint: str) -> Optional[str]:
+    """Exact-fingerprint lookup. Returns the cached dq_report, or None on a miss."""
+    if not _is_local_spark(spark):
+        try:
+            fqn = get_dq_cache_table_fqn(spark)
+            df = spark.read.table(fqn).filter(F.col("schema_fingerprint") == schema_fingerprint).orderBy(F.col("updated_ts").desc()).limit(1)
+            rows = df.collect()
+            if rows:
+                return rows[0]["dq_report"]
+            return None
+        except Exception as e:
+            print(f"[Warning] Failed to read UC DQ cache: {e}. Checking local cache.")
+    try:
+        if os.path.exists(LOCAL_DQ_CACHE_PATH):
+            with open(LOCAL_DQ_CACHE_PATH, "r") as f:
+                data = json.load(f)
+            entry = data.get(schema_fingerprint)
+            return entry.get("dq_report") if entry else None
+    except Exception as e:
+        print(f"[Warning] Failed to read local DQ cache: {e}")
+    return None
+
+
+def get_latest_dq_cache(spark: SparkSession) -> Optional[Dict[str, Any]]:
+    """Most recent entry regardless of fingerprint — used to seed a targeted
+    patch when the current schema fingerprint has no exact-match cache."""
+    if not _is_local_spark(spark):
+        try:
+            fqn = get_dq_cache_table_fqn(spark)
+            df = spark.read.table(fqn).orderBy(F.col("updated_ts").desc()).limit(1)
+            rows = df.collect()
+            if rows:
+                return {"schema_fingerprint": rows[0]["schema_fingerprint"], "dq_report": rows[0]["dq_report"]}
+            return None
+        except Exception as e:
+            print(f"[Warning] Failed to read latest UC DQ cache: {e}. Checking local cache.")
+    try:
+        if os.path.exists(LOCAL_DQ_CACHE_PATH):
+            with open(LOCAL_DQ_CACHE_PATH, "r") as f:
+                data = json.load(f)
+            if not data:
+                return None
+            latest_fp = max(data, key=lambda k: data[k].get("updated_ts", ""))
+            return {"schema_fingerprint": latest_fp, "dq_report": data[latest_fp].get("dq_report")}
+    except Exception as e:
+        print(f"[Warning] Failed to read latest local DQ cache: {e}")
+    return None
+
+
+def upsert_dq_cache(spark: SparkSession, schema_fingerprint: str, dq_report: str) -> None:
+    timestamp = datetime.datetime.now()
+    try:
+        os.makedirs(os.path.dirname(LOCAL_DQ_CACHE_PATH), exist_ok=True)
+        data = {}
+        if os.path.exists(LOCAL_DQ_CACHE_PATH):
+            with open(LOCAL_DQ_CACHE_PATH, "r") as f:
+                data = json.load(f)
+        data[schema_fingerprint] = {"dq_report": dq_report, "updated_ts": timestamp.isoformat()}
+        with open(LOCAL_DQ_CACHE_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to upsert local DQ cache: {e}")
+
+    if _is_local_spark(spark):
+        return
+    try:
+        fqn = get_dq_cache_table_fqn(spark)
+        schema = StructType([
+            StructField("schema_fingerprint", StringType(), True),
+            StructField("dq_report", StringType(), True),
+            StructField("updated_ts", TimestampType(), True),
+        ])
+        df = spark.createDataFrame([(schema_fingerprint, dq_report, timestamp)], schema=schema)
+        if spark.catalog.tableExists(fqn):
+            from delta.tables import DeltaTable
+            target = DeltaTable.forName(spark, fqn)
+            target.alias("t").merge(
+                df.alias("s"), "t.schema_fingerprint = s.schema_fingerprint"
+            ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+        else:
+            df.write.format("delta").mode("append").saveAsTable(fqn)
+        print(f"[Agent Output Cache] Upserted DQ report for fingerprint {schema_fingerprint[:12]}... to '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to upsert UC DQ cache: {e}")
+
+
+# ---- Contracts cache (schema_fingerprint + table_name -> contract_yaml) ----
+
+def get_contracts_cache_table_fqn(spark: SparkSession) -> str:
+    return _cache_table_fqn(spark, "agent_contracts_cache")
+
+
+def init_contracts_cache_table(spark: SparkSession) -> bool:
+    fqn = get_contracts_cache_table_fqn(spark)
+    if _is_local_spark(spark):
+        os.makedirs(os.path.dirname(LOCAL_CONTRACTS_CACHE_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_CONTRACTS_CACHE_PATH):
+            with open(LOCAL_CONTRACTS_CACHE_PATH, "w") as f:
+                json.dump({}, f)
+        return True
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
+        spark.sql(f"""
+            CREATE TABLE IF NOT EXISTS {fqn} (
+                schema_fingerprint STRING,
+                table_name STRING,
+                contract_yaml STRING,
+                updated_ts TIMESTAMP
+            ) USING DELTA
+        """)
+        return True
+    except Exception as e:
+        print(f"[Warning] Failed to initialize UC contracts cache table: {e}. Falling back to local file.")
+        os.makedirs(os.path.dirname(LOCAL_CONTRACTS_CACHE_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_CONTRACTS_CACHE_PATH):
+            with open(LOCAL_CONTRACTS_CACHE_PATH, "w") as f:
+                json.dump({}, f)
+        return False
+
+
+def get_contracts_cache(spark: SparkSession, schema_fingerprint: str) -> Dict[str, str]:
+    """Exact-fingerprint lookup. Returns {table_name: contract_yaml}, {} on a miss."""
+    if not _is_local_spark(spark):
+        try:
+            fqn = get_contracts_cache_table_fqn(spark)
+            df = spark.read.table(fqn).filter(F.col("schema_fingerprint") == schema_fingerprint)
+            return {r["table_name"]: r["contract_yaml"] for r in df.collect()}
+        except Exception as e:
+            print(f"[Warning] Failed to read UC contracts cache: {e}. Checking local cache.")
+    try:
+        if os.path.exists(LOCAL_CONTRACTS_CACHE_PATH):
+            with open(LOCAL_CONTRACTS_CACHE_PATH, "r") as f:
+                data = json.load(f)
+            entry = data.get(schema_fingerprint, {})
+            return {tbl: v.get("contract_yaml") for tbl, v in entry.items()}
+    except Exception as e:
+        print(f"[Warning] Failed to read local contracts cache: {e}")
+    return {}
+
+
+def get_latest_contracts_cache(spark: SparkSession) -> Optional[Dict[str, Any]]:
+    """Most recent fingerprint's full contract set — seeds the patch flow."""
+    if not _is_local_spark(spark):
+        try:
+            fqn = get_contracts_cache_table_fqn(spark)
+            df = spark.read.table(fqn)
+            rows = df.collect()
+            if not rows:
+                return None
+            latest_ts = max(r["updated_ts"] for r in rows if r["updated_ts"] is not None)
+            latest_fp = next(r["schema_fingerprint"] for r in rows if r["updated_ts"] == latest_ts)
+            contracts = {r["table_name"]: r["contract_yaml"] for r in rows if r["schema_fingerprint"] == latest_fp}
+            return {"schema_fingerprint": latest_fp, "contracts": contracts}
+        except Exception as e:
+            print(f"[Warning] Failed to read latest UC contracts cache: {e}. Checking local cache.")
+    try:
+        if os.path.exists(LOCAL_CONTRACTS_CACHE_PATH):
+            with open(LOCAL_CONTRACTS_CACHE_PATH, "r") as f:
+                data = json.load(f)
+            if not data:
+                return None
+            def _fp_latest_ts(fp):
+                return max((v.get("updated_ts", "") for v in data[fp].values()), default="")
+            latest_fp = max(data, key=_fp_latest_ts)
+            contracts = {tbl: v.get("contract_yaml") for tbl, v in data[latest_fp].items()}
+            return {"schema_fingerprint": latest_fp, "contracts": contracts}
+    except Exception as e:
+        print(f"[Warning] Failed to read latest local contracts cache: {e}")
+    return None
+
+
+def upsert_contracts_cache(spark: SparkSession, schema_fingerprint: str, contracts: Dict[str, str]) -> None:
+    """Replace the full contract set for this fingerprint (one row per table)."""
+    timestamp = datetime.datetime.now()
+    try:
+        os.makedirs(os.path.dirname(LOCAL_CONTRACTS_CACHE_PATH), exist_ok=True)
+        data = {}
+        if os.path.exists(LOCAL_CONTRACTS_CACHE_PATH):
+            with open(LOCAL_CONTRACTS_CACHE_PATH, "r") as f:
+                data = json.load(f)
+        data[schema_fingerprint] = {
+            tbl: {"contract_yaml": yaml_str, "updated_ts": timestamp.isoformat()}
+            for tbl, yaml_str in contracts.items()
+        }
+        with open(LOCAL_CONTRACTS_CACHE_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to upsert local contracts cache: {e}")
+
+    if _is_local_spark(spark) or not contracts:
+        return
+    try:
+        fqn = get_contracts_cache_table_fqn(spark)
+        schema = StructType([
+            StructField("schema_fingerprint", StringType(), True),
+            StructField("table_name", StringType(), True),
+            StructField("contract_yaml", StringType(), True),
+            StructField("updated_ts", TimestampType(), True),
+        ])
+        row_data = [(schema_fingerprint, tbl, yaml_str, timestamp) for tbl, yaml_str in contracts.items()]
+        df = spark.createDataFrame(row_data, schema=schema)
+        if spark.catalog.tableExists(fqn):
+            from delta.tables import DeltaTable
+            target = DeltaTable.forName(spark, fqn)
+            target.alias("t").merge(
+                df.alias("s"),
+                "t.schema_fingerprint = s.schema_fingerprint AND t.table_name = s.table_name"
+            ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+        else:
+            df.write.format("delta").mode("append").saveAsTable(fqn)
+        print(f"[Agent Output Cache] Upserted {len(contracts)} contract(s) for fingerprint {schema_fingerprint[:12]}... to '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to upsert UC contracts cache: {e}")
+
+
+# ---- Modeling cache (schema_fingerprint -> gold_ddl + data_dictionary) ----
+
+def get_modeling_cache_table_fqn(spark: SparkSession) -> str:
+    return _cache_table_fqn(spark, "agent_modeling_cache")
+
+
+def init_modeling_cache_table(spark: SparkSession) -> bool:
+    fqn = get_modeling_cache_table_fqn(spark)
+    if _is_local_spark(spark):
+        os.makedirs(os.path.dirname(LOCAL_MODELING_CACHE_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_MODELING_CACHE_PATH):
+            with open(LOCAL_MODELING_CACHE_PATH, "w") as f:
+                json.dump({}, f)
+        return True
+    try:
+        spark.sql(f"CREATE SCHEMA IF NOT EXISTS {fqn.split('.')[0]}.gold")
+        spark.sql(f"""
+            CREATE TABLE IF NOT EXISTS {fqn} (
+                schema_fingerprint STRING,
+                gold_ddl STRING,
+                data_dictionary STRING,
+                updated_ts TIMESTAMP
+            ) USING DELTA
+        """)
+        return True
+    except Exception as e:
+        print(f"[Warning] Failed to initialize UC modeling cache table: {e}. Falling back to local file.")
+        os.makedirs(os.path.dirname(LOCAL_MODELING_CACHE_PATH), exist_ok=True)
+        if not os.path.exists(LOCAL_MODELING_CACHE_PATH):
+            with open(LOCAL_MODELING_CACHE_PATH, "w") as f:
+                json.dump({}, f)
+        return False
+
+
+def get_modeling_cache(spark: SparkSession, schema_fingerprint: str) -> Optional[Dict[str, str]]:
+    """Exact-fingerprint lookup. Returns {'gold_ddl':..., 'data_dictionary':...} or None."""
+    if not _is_local_spark(spark):
+        try:
+            fqn = get_modeling_cache_table_fqn(spark)
+            df = spark.read.table(fqn).filter(F.col("schema_fingerprint") == schema_fingerprint).orderBy(F.col("updated_ts").desc()).limit(1)
+            rows = df.collect()
+            if rows:
+                return {"gold_ddl": rows[0]["gold_ddl"], "data_dictionary": rows[0]["data_dictionary"]}
+            return None
+        except Exception as e:
+            print(f"[Warning] Failed to read UC modeling cache: {e}. Checking local cache.")
+    try:
+        if os.path.exists(LOCAL_MODELING_CACHE_PATH):
+            with open(LOCAL_MODELING_CACHE_PATH, "r") as f:
+                data = json.load(f)
+            entry = data.get(schema_fingerprint)
+            if entry:
+                return {"gold_ddl": entry.get("gold_ddl"), "data_dictionary": entry.get("data_dictionary")}
+    except Exception as e:
+        print(f"[Warning] Failed to read local modeling cache: {e}")
+    return None
+
+
+def get_latest_modeling_cache(spark: SparkSession) -> Optional[Dict[str, Any]]:
+    """Most recent entry regardless of fingerprint — seeds the patch flow."""
+    if not _is_local_spark(spark):
+        try:
+            fqn = get_modeling_cache_table_fqn(spark)
+            df = spark.read.table(fqn).orderBy(F.col("updated_ts").desc()).limit(1)
+            rows = df.collect()
+            if rows:
+                return {
+                    "schema_fingerprint": rows[0]["schema_fingerprint"],
+                    "gold_ddl": rows[0]["gold_ddl"],
+                    "data_dictionary": rows[0]["data_dictionary"],
+                }
+            return None
+        except Exception as e:
+            print(f"[Warning] Failed to read latest UC modeling cache: {e}. Checking local cache.")
+    try:
+        if os.path.exists(LOCAL_MODELING_CACHE_PATH):
+            with open(LOCAL_MODELING_CACHE_PATH, "r") as f:
+                data = json.load(f)
+            if not data:
+                return None
+            latest_fp = max(data, key=lambda k: data[k].get("updated_ts", ""))
+            entry = data[latest_fp]
+            return {
+                "schema_fingerprint": latest_fp,
+                "gold_ddl": entry.get("gold_ddl"),
+                "data_dictionary": entry.get("data_dictionary"),
+            }
+    except Exception as e:
+        print(f"[Warning] Failed to read latest local modeling cache: {e}")
+    return None
+
+
+def upsert_modeling_cache(spark: SparkSession, schema_fingerprint: str, gold_ddl: str, data_dictionary: str) -> None:
+    timestamp = datetime.datetime.now()
+    try:
+        os.makedirs(os.path.dirname(LOCAL_MODELING_CACHE_PATH), exist_ok=True)
+        data = {}
+        if os.path.exists(LOCAL_MODELING_CACHE_PATH):
+            with open(LOCAL_MODELING_CACHE_PATH, "r") as f:
+                data = json.load(f)
+        data[schema_fingerprint] = {
+            "gold_ddl": gold_ddl, "data_dictionary": data_dictionary, "updated_ts": timestamp.isoformat()
+        }
+        with open(LOCAL_MODELING_CACHE_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"[Warning] Failed to upsert local modeling cache: {e}")
+
+    if _is_local_spark(spark):
+        return
+    try:
+        fqn = get_modeling_cache_table_fqn(spark)
+        schema = StructType([
+            StructField("schema_fingerprint", StringType(), True),
+            StructField("gold_ddl", StringType(), True),
+            StructField("data_dictionary", StringType(), True),
+            StructField("updated_ts", TimestampType(), True),
+        ])
+        df = spark.createDataFrame([(schema_fingerprint, gold_ddl, data_dictionary, timestamp)], schema=schema)
+        if spark.catalog.tableExists(fqn):
+            from delta.tables import DeltaTable
+            target = DeltaTable.forName(spark, fqn)
+            target.alias("t").merge(
+                df.alias("s"), "t.schema_fingerprint = s.schema_fingerprint"
+            ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+        else:
+            df.write.format("delta").mode("append").saveAsTable(fqn)
+        print(f"[Agent Output Cache] Upserted modeling output for fingerprint {schema_fingerprint[:12]}... to '{fqn}'")
+    except Exception as e:
+        print(f"[Warning] Failed to upsert UC modeling cache: {e}")
+
+    return []
+

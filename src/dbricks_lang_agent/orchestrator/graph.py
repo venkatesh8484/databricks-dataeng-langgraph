@@ -443,13 +443,82 @@ def create_pipeline_graph():
     app = workflow.compile(
         checkpointer=memory,
         interrupt_before=[
-            "profile_review_gate", 
+            "profile_review_gate",
             "data_quality_review_gate",
-            "contracts_review_gate", 
-            "modeling_review_gate", 
-            "engineering_review_gate", 
+            "contracts_review_gate",
+            "modeling_review_gate",
+            "engineering_review_gate",
             "execution_review_gate"
         ]
     )
-    
+
     return app
+
+
+# ---- Gate -> approved_steps key mapping (single source of truth, reused by
+# resume_with_autopilot below and safe for callers like dashboard.py/the
+# notebook driver to import instead of re-declaring their own copy) ----
+GATE_TO_STEP_KEY = {
+    "profile_review_gate": "profile",
+    "data_quality_review_gate": "dq",
+    "contracts_review_gate": "contracts",
+    "modeling_review_gate": "modeling",
+    "engineering_review_gate": "engineering",
+    "execution_review_gate": "report",
+}
+
+
+def resume_with_autopilot(app, config: dict, initial_input: Optional[dict] = None, max_auto_advances: int = 12):
+    """Stream the graph forward, then keep auto-resuming through any review
+    gate whose `approved_steps` flag was ALREADY set to True by the agent
+    node itself — which only happens when that node hit an exact
+    schema-fingerprint cache hit AND a human already approved this exact
+    output on a prior run (see the caching logic in agents.py's
+    dq_node/contract_node/modeling_node/engineering_node, and
+    memory.was_previously_approved). Every such node itself also logs the
+    auto-approval to gold.agent_stage_review_log, so this is fully audited
+    even though no human clicked anything for that gate.
+
+    LangGraph's `interrupt_before` pauses unconditionally regardless of
+    state content — so "auto-advance" can only happen by having the DRIVING
+    code (this function) notice the pause was for an already-approved gate
+    and immediately call `.stream(None, config)` again itself. That's what
+    the loop below does, stopping at the first gate that genuinely still
+    needs a human decision (or once the pipeline reaches the end).
+
+    Both dashboard.py and Medallion_Pipeline_Notebook.py should call this
+    instead of calling app.stream(...) directly, so daily/delta runs against
+    an unchanged schema can sail through every stage except Profiler (which
+    always needs a look since it reflects the day's actual data) without a
+    human needing to click through the dashboard at all.
+
+    Returns the final `state` (as from app.get_state(config)) after
+    auto-advancing as far as possible.
+    """
+    def _stream(inputs):
+        try:
+            for _ in app.stream(inputs, config, stream_mode="values"):
+                pass
+        except KeyError as e:
+            if "__end__" not in str(e):
+                raise
+
+    _stream(initial_input)
+
+    for _ in range(max_auto_advances):
+        state = app.get_state(config)
+        if not state.next:
+            break
+        current_gate = state.next[0]
+        step_key = GATE_TO_STEP_KEY.get(current_gate)
+        approved_steps = (state.values or {}).get("approved_steps", {}) if state.values else {}
+        if step_key and approved_steps.get(step_key) is True:
+            print(
+                f"[Autopilot] '{current_gate}' was already auto-approved (schema-fingerprint "
+                f"cache hit, previously reviewed by a human) — resuming without waiting for input."
+            )
+            _stream(None)
+            continue
+        break
+
+    return app.get_state(config)

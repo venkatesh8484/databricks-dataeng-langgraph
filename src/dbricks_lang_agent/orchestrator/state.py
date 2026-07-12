@@ -32,6 +32,8 @@ class AgentState(TypedDict):
     last_run_id: str                    # ID of the most recent execution_node attempt, for audit lookup in gold.agent_run_history
     pipeline_run_id: str                # Stable ID for this end-to-end pipeline run (assigned at cold start), used to
                                          # group every per-stage review/output audit row in gold.agent_stage_review_log
+    generation_source: Dict[str, str]   # step_key -> 'cache_reused' | 'llm_patched' | 'llm_fresh', set by each caching
+                                         # node (dq/contracts/modeling/engineering) so the dashboard can show provenance
 
     # Human-in-the-Loop review and orchestration state
     active_agent: str                   # Name of the currently executing agent node

@@ -250,6 +250,19 @@ def parse_json_from_response(content: str, fallback_key: str = None) -> dict:
 
 # ---- Node Functions ----
 
+def _is_reset_requested() -> bool:
+    """Shared check for the notebook's 'reset_pipeline' dbutils widget. When
+    set, every caching node below skips its cache lookup and generates fresh,
+    mirroring a full pipeline reset."""
+    try:
+        dbutils = globals().get("dbutils")
+        if dbutils:
+            return dbutils.widgets.get("reset_pipeline").lower() == "true"
+    except Exception:
+        pass
+    return False
+
+
 def profiler_node(state: AgentState) -> Dict[str, Any]:
     """Nodes runs PySpark profiling on raw files and summaries findings."""
     print(">>> [Profiler Agent] Discovering and profiling raw source files...")
@@ -374,6 +387,7 @@ def dq_node(state: AgentState) -> Dict[str, Any]:
     # Query few-shot memory database
     spark = get_spark()
     memory.init_memory_table(spark)
+    memory.init_dq_cache_table(spark)
     dataset = list(state.get("discovered_tables", {}).keys())[0] if state.get("discovered_tables") else "generic"
     few_shot_context = memory.get_few_shot_context(spark, dataset, "data_quality")
 
@@ -381,26 +395,82 @@ def dq_node(state: AgentState) -> Dict[str, Any]:
     profiling_narration = profiling_report.get("profiler_narration", "")
     profiling_metrics = {k: v for k, v in profiling_report.items() if k != "profiler_narration"}
 
-    prompt = (
-        f"Data Profiler Report Narrative:\n{profiling_narration}\n\n"
-        f"Raw Metrics JSON:\n{json.dumps(profiling_metrics, indent=2)}\n\n"
-        f"{few_shot_context}"
-    )
-    if state.get("review_comments"):
-        prompt += f"\n\nHuman feedback on previous DQ assessment:\n{state['review_comments']}"
+    # --- Generate-once-per-schema cache ---
+    # Only Profiler is expected to differ run-to-run (new row-level data).
+    # DQ, Contracts, Modeling and Engineering all key off the same structural
+    # schema fingerprint and are reused verbatim across "daily delta" runs
+    # where the columns haven't changed — see get_schema_fingerprint().
+    schema_fingerprint = get_schema_fingerprint(spark)
+    skip_cache = _is_reset_requested() or bool(state.get("review_comments"))
 
-    messages = [
-        SystemMessage(content=prompts.DQ_SYSTEM_PROMPT),
-        HumanMessage(content=prompt)
-    ]
+    dq_report = None
+    generation_source = "llm_fresh"
 
-    llm = get_llm("dq")
-    response = llm.invoke(messages)
+    if not skip_cache:
+        cached_report = memory.get_dq_cache(spark, schema_fingerprint)
+        if cached_report:
+            dq_report = cached_report
+            generation_source = "cache_reused"
+            print(f"[DQ Agent] Exact schema-fingerprint cache hit — reusing prior DQ report, skipping LLM call.")
+
+    if dq_report is None:
+        latest_cache = None if skip_cache else memory.get_latest_dq_cache(spark)
+        prompt = (
+            f"Data Profiler Report Narrative:\n{profiling_narration}\n\n"
+            f"Raw Metrics JSON:\n{json.dumps(profiling_metrics, indent=2)}\n\n"
+            f"{few_shot_context}"
+        )
+        if state.get("review_comments"):
+            prompt += f"\n\nHuman feedback on previous DQ assessment:\n{state['review_comments']}"
+        elif latest_cache and latest_cache.get("dq_report"):
+            # Schema changed since the last cached run — ask the LLM to UPDATE
+            # the existing report rather than write a new one from scratch.
+            generation_source = "llm_patched"
+            prompt += (
+                f"\n\nIMPORTANT: The source schema has changed since the last time this dataset was assessed. "
+                f"Here is the PREVIOUS Data Quality report:\n```\n{latest_cache['dq_report']}\n```\n"
+                f"Update this previous report to reflect the current schema/metrics above — preserve findings "
+                f"that are still valid, remove/revise findings about columns or tables that no longer exist, "
+                f"and add findings for anything new. Do not discard prior context that's still accurate."
+            )
+
+        messages = [
+            SystemMessage(content=prompts.DQ_SYSTEM_PROMPT),
+            HumanMessage(content=prompt)
+        ]
+
+        llm = get_llm("dq")
+        response = llm.invoke(messages)
+        dq_report = response.content
+
+        try:
+            memory.upsert_dq_cache(spark, schema_fingerprint, dq_report)
+        except Exception as e_cache:
+            print(f"[Warning] Failed to cache DQ report: {e_cache}")
+
+    approved_steps = dict(state.get("approved_steps", {}))
+    if generation_source == "cache_reused" and memory.was_previously_approved(spark, "dq", schema_fingerprint):
+        approved_steps["dq"] = True
+        try:
+            memory.log_stage_review(
+                spark,
+                pipeline_run_id=state.get("pipeline_run_id", ""),
+                stage_key="dq",
+                agent_name="DataQualityAgent",
+                decision="approved",
+                reviewer_comments="Auto-approved — schema unchanged, identical output previously approved.",
+                output={"dq_report": dq_report},
+                dataset_fingerprint=schema_fingerprint,
+            )
+        except Exception as e_log:
+            print(f"[Warning] Failed to log auto-approval for DQ: {e_log}")
 
     return {
-        "dq_report": response.content,
+        "dq_report": dq_report,
         "active_agent": "DataQualityAgent",
-        "review_comments": ""
+        "review_comments": "",
+        "approved_steps": approved_steps,
+        "generation_source": {**(state.get("generation_source") or {}), "dq": generation_source},
     }
 
 
@@ -432,6 +502,7 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
 
     # Query few-shot memory database
     spark = get_spark()
+    memory.init_contracts_cache_table(spark)
     dataset = list(discovered.keys())[0] if discovered else "generic"
     few_shot_context = memory.get_few_shot_context(spark, dataset, "contracts")
 
@@ -451,53 +522,118 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
             column_schema_lines.append(f"  - {col_name} ({dtype}) null_pct={null_pct}% distinct={distinct}")
     column_schema_str = "\n".join(column_schema_lines) if column_schema_lines else "No column schema available."
 
-    prompt = (
-        f"Discovered Tables: {list(discovered.keys())}\n\n"
-        f"Column Schema (use ONLY these exact column names in contracts):\n{column_schema_str}\n\n"
-        f"Data Profiling Report:\n{profiling_narration}\n\n"
-        f"Data Quality Assessment Report:\n{state.get('dq_report', '')}\n\n"
-        f"Raw Metrics:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n\n"
-        f"{few_shot_context}"
-    )
-    if state.get("review_comments"):
-        prompt += f"\n\nHuman feedback on previous contracts draft:\n{state['review_comments']}"
+    # --- Generate-once-per-schema cache (see dq_node for the full rationale) ---
+    schema_fingerprint = get_schema_fingerprint(spark)
+    skip_cache = _is_reset_requested() or bool(state.get("review_comments"))
 
-    messages = [
-        SystemMessage(content=prompts.CONTRACT_SYSTEM_PROMPT),
-        HumanMessage(content=prompt)
-    ]
+    valid_contracts = None
+    generation_source = "llm_fresh"
 
-    llm = get_llm("contracts")
-    response = llm.invoke(messages)
+    if not skip_cache:
+        cached_contracts = memory.get_contracts_cache(spark, schema_fingerprint)
+        if cached_contracts:
+            valid_contracts = cached_contracts
+            generation_source = "cache_reused"
+            print(f"[Contract Steward] Exact schema-fingerprint cache hit — reusing {len(valid_contracts)} prior contract(s), skipping LLM call.")
 
-    parsed = parse_json_from_response(response.content)
-    contracts = parsed.get("contracts", {})
+    if valid_contracts is None:
+        latest_cache = None if skip_cache else memory.get_latest_contracts_cache(spark)
+        prompt = (
+            f"Discovered Tables: {list(discovered.keys())}\n\n"
+            f"Column Schema (use ONLY these exact column names in contracts):\n{column_schema_str}\n\n"
+            f"Data Profiling Report:\n{profiling_narration}\n\n"
+            f"Data Quality Assessment Report:\n{state.get('dq_report', '')}\n\n"
+            f"Raw Metrics:\n{json.dumps({k: v for k, v in profiling_metrics.items() if k != 'tables'}, indent=2)}\n\n"
+            f"{few_shot_context}"
+        )
+        if state.get("review_comments"):
+            prompt += f"\n\nHuman feedback on previous contracts draft:\n{state['review_comments']}"
+        elif latest_cache and latest_cache.get("contracts"):
+            generation_source = "llm_patched"
+            prior_contracts_str = "\n".join(
+                f"--- PREVIOUS CONTRACT FOR {tbl} ---\n{yaml_str}" for tbl, yaml_str in latest_cache["contracts"].items()
+            )
+            prompt += (
+                f"\n\nIMPORTANT: The source schema has changed since these contracts were last authored. "
+                f"Here are the PREVIOUS contracts:\n{prior_contracts_str}\n\n"
+                f"Update these contracts to match the current column schema above — preserve rules for "
+                f"tables/columns that are unchanged, remove/revise rules for anything that no longer exists, "
+                f"and add rules for any new tables/columns. Do not discard prior governance decisions that "
+                f"still apply."
+            )
 
-    # Write the YAML contracts to disk — validate each one first to prevent downstream crashes
-    contracts_dir = "/tmp/generated/config/contracts"
-    os.makedirs(contracts_dir, exist_ok=True)
-    valid_contracts = {}
-    for table, yaml_str in contracts.items():
+        messages = [
+            SystemMessage(content=prompts.CONTRACT_SYSTEM_PROMPT),
+            HumanMessage(content=prompt)
+        ]
+
+        llm = get_llm("contracts")
+        response = llm.invoke(messages)
+
+        parsed = parse_json_from_response(response.content)
+        contracts = parsed.get("contracts", {})
+
+        # Write the YAML contracts to disk — validate each one first to prevent downstream crashes
+        contracts_dir = "/tmp/generated/config/contracts"
+        os.makedirs(contracts_dir, exist_ok=True)
+        valid_contracts = {}
+        for table, yaml_str in contracts.items():
+            try:
+                import yaml as _yaml
+                parsed_yaml = _yaml.safe_load(yaml_str)
+                if not isinstance(parsed_yaml, dict) or "table" not in parsed_yaml:
+                    print(f"[Contract Steward] WARNING: YAML for '{table}' is missing 'table' key — skipping.")
+                    continue
+                if parsed_yaml.get("table") != table:
+                    print(f"[Contract Steward] WARNING: YAML table name '{parsed_yaml.get('table')}' != dict key '{table}' — correcting.")
+                    parsed_yaml["table"] = table
+                with open(os.path.join(contracts_dir, f"{table}.yaml"), "w") as f:
+                    f.write(yaml_str)
+                valid_contracts[table] = yaml_str
+            except Exception as e_yaml:
+                print(f"[Contract Steward] WARNING: Invalid YAML for '{table}': {e_yaml} — skipping.")
+
+        if valid_contracts:
+            try:
+                memory.upsert_contracts_cache(spark, schema_fingerprint, valid_contracts)
+            except Exception as e_cache:
+                print(f"[Warning] Failed to cache contracts: {e_cache}")
+    else:
+        # Cache hit — still (re)write the YAML files to disk since downstream
+        # nodes/scripts read contracts from /tmp, not directly from state.
+        contracts_dir = "/tmp/generated/config/contracts"
+        os.makedirs(contracts_dir, exist_ok=True)
+        for table, yaml_str in valid_contracts.items():
+            try:
+                with open(os.path.join(contracts_dir, f"{table}.yaml"), "w") as f:
+                    f.write(yaml_str)
+            except Exception as e_write:
+                print(f"[Warning] Failed to write cached contract for '{table}' to disk: {e_write}")
+
+    approved_steps = dict(state.get("approved_steps", {}))
+    if generation_source == "cache_reused" and memory.was_previously_approved(spark, "contracts", schema_fingerprint):
+        approved_steps["contracts"] = True
         try:
-            import yaml as _yaml
-            parsed_yaml = _yaml.safe_load(yaml_str)
-            if not isinstance(parsed_yaml, dict) or "table" not in parsed_yaml:
-                print(f"[Contract Steward] WARNING: YAML for '{table}' is missing 'table' key — skipping.")
-                continue
-            if parsed_yaml.get("table") != table:
-                print(f"[Contract Steward] WARNING: YAML table name '{parsed_yaml.get('table')}' != dict key '{table}' — correcting.")
-                parsed_yaml["table"] = table
-            with open(os.path.join(contracts_dir, f"{table}.yaml"), "w") as f:
-                f.write(yaml_str)
-            valid_contracts[table] = yaml_str
-        except Exception as e_yaml:
-            print(f"[Contract Steward] WARNING: Invalid YAML for '{table}': {e_yaml} — skipping.")
+            memory.log_stage_review(
+                spark,
+                pipeline_run_id=state.get("pipeline_run_id", ""),
+                stage_key="contracts",
+                agent_name="ContractSteward",
+                decision="approved",
+                reviewer_comments="Auto-approved — schema unchanged, identical output previously approved.",
+                output={"contracts": valid_contracts},
+                dataset_fingerprint=schema_fingerprint,
+            )
+        except Exception as e_log:
+            print(f"[Warning] Failed to log auto-approval for Contracts: {e_log}")
 
     return {
         "contracts": valid_contracts,
         "contracts_error": "" if valid_contracts else "No valid contracts generated.",
         "active_agent": "ContractSteward",
-        "review_comments": ""
+        "review_comments": "",
+        "approved_steps": approved_steps,
+        "generation_source": {**(state.get("generation_source") or {}), "contracts": generation_source},
     }
 
 
@@ -527,38 +663,95 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
     for table, yaml_str in contracts.items():
         contracts_summary += f"--- CONTRACT FOR {table} ---\n{yaml_str}\n"
 
-    prompt = (
-        f"Profiling narrative:\n{profiling_narration}\n\n"
-        f"Contracts specifications:\n{contracts_summary}"
-    )
-    if state.get("review_comments"):
-        prompt += f"\n\nHuman feedback on previous DDL draft:\n{state['review_comments']}"
+    # --- Generate-once-per-schema cache (see dq_node for the full rationale) ---
+    spark = get_spark()
+    memory.init_modeling_cache_table(spark)
+    schema_fingerprint = get_schema_fingerprint(spark)
+    skip_cache = _is_reset_requested() or bool(state.get("review_comments"))
 
-    messages = [
-        SystemMessage(content=prompts.MODELER_SYSTEM_PROMPT),
-        HumanMessage(content=prompt)
-    ]
+    gold_ddl = None
+    data_dictionary = None
+    generation_source = "llm_fresh"
 
-    llm = get_llm("modeling")
-    response = llm.invoke(messages)
+    if not skip_cache:
+        cached_model = memory.get_modeling_cache(spark, schema_fingerprint)
+        if cached_model:
+            gold_ddl = cached_model.get("gold_ddl", "")
+            data_dictionary = cached_model.get("data_dictionary", "")
+            generation_source = "cache_reused"
+            print(f"[Modeler] Exact schema-fingerprint cache hit — reusing prior Gold DDL + data dictionary, skipping LLM call.")
 
-    parsed = parse_json_from_response(response.content)
-    gold_ddl = parsed.get("gold_ddl", "")
-    data_dictionary = parsed.get("data_dictionary", "")
+    if gold_ddl is None:
+        latest_cache = None if skip_cache else memory.get_latest_modeling_cache(spark)
+        prompt = (
+            f"Profiling narrative:\n{profiling_narration}\n\n"
+            f"Contracts specifications:\n{contracts_summary}"
+        )
+        if state.get("review_comments"):
+            prompt += f"\n\nHuman feedback on previous DDL draft:\n{state['review_comments']}"
+        elif latest_cache and latest_cache.get("gold_ddl"):
+            generation_source = "llm_patched"
+            prompt += (
+                f"\n\nIMPORTANT: The contracts/schema have changed since this star schema was last designed. "
+                f"Here is the PREVIOUS Gold DDL:\n```sql\n{latest_cache['gold_ddl']}\n```\n"
+                f"And the PREVIOUS Data Dictionary:\n```\n{latest_cache.get('data_dictionary', '')}\n```\n"
+                f"Update this existing design to match the current contracts above — keep dimensions/facts that "
+                f"are still valid unchanged, add or modify only what the schema change requires. Do not "
+                f"redesign the whole star schema from scratch if most of it is still correct."
+            )
 
-    # Write SQL and Markdown DDL files
+        messages = [
+            SystemMessage(content=prompts.MODELER_SYSTEM_PROMPT),
+            HumanMessage(content=prompt)
+        ]
+
+        llm = get_llm("modeling")
+        response = llm.invoke(messages)
+
+        parsed = parse_json_from_response(response.content)
+        gold_ddl = parsed.get("gold_ddl", "")
+        data_dictionary = parsed.get("data_dictionary", "")
+
+        if gold_ddl:
+            try:
+                memory.upsert_modeling_cache(spark, schema_fingerprint, gold_ddl, data_dictionary)
+            except Exception as e_cache:
+                print(f"[Warning] Failed to cache modeling output: {e_cache}")
+
+    # Write SQL and Markdown DDL files (needed on disk regardless of cache hit/miss —
+    # downstream engineering_node's generated scripts don't read these directly, but
+    # keeping this mirrors bronze/silver/gold artifact conventions elsewhere)
     ddl_dir = "/tmp/generated/data_model"
     os.makedirs(ddl_dir, exist_ok=True)
     with open(os.path.join(ddl_dir, "gold_ddl.sql"), "w") as f:
-        f.write(gold_ddl)
+        f.write(gold_ddl or "")
     with open(os.path.join(ddl_dir, "data_dictionary.md"), "w") as f:
-        f.write(data_dictionary)
+        f.write(data_dictionary or "")
+
+    approved_steps = dict(state.get("approved_steps", {}))
+    if generation_source == "cache_reused" and memory.was_previously_approved(spark, "modeling", schema_fingerprint):
+        approved_steps["modeling"] = True
+        try:
+            memory.log_stage_review(
+                spark,
+                pipeline_run_id=state.get("pipeline_run_id", ""),
+                stage_key="modeling",
+                agent_name="DimensionalModeler",
+                decision="approved",
+                reviewer_comments="Auto-approved — schema unchanged, identical output previously approved.",
+                output={"gold_ddl": gold_ddl, "data_dictionary": data_dictionary},
+                dataset_fingerprint=schema_fingerprint,
+            )
+        except Exception as e_log:
+            print(f"[Warning] Failed to log auto-approval for Modeling: {e_log}")
 
     return {
         "gold_ddl": gold_ddl,
         "data_dictionary": data_dictionary,
         "active_agent": "DimensionalModeler",
-        "review_comments": ""
+        "review_comments": "",
+        "approved_steps": approved_steps,
+        "generation_source": {**(state.get("generation_source") or {}), "modeling": generation_source},
     }
 
 
@@ -757,7 +950,19 @@ def _sanitize_and_heal_code(code: str) -> str:
     return code
 
 
-def get_dataset_fingerprint(spark, contracts: Dict[str, str] = None, gold_ddl: str = "") -> str:
+def get_schema_fingerprint(spark) -> str:
+    """The single, canonical cache key for ALL agent-output caching (DQ report,
+    contracts, gold DDL/data dictionary, bronze/silver/gold code).
+
+    Deliberately structural-ONLY: table names + column headers, nothing else.
+    No LLM-generated content (contracts text, DDL text, prior reports) feeds
+    into this hash, and no row-level data does either. That's what makes it
+    stable across "daily delta" runs (new rows, same columns) while still
+    invalidating the moment a table is added/removed or a column is
+    added/removed/renamed. Every caching node in this file should key off
+    THIS function — not a hash of its own LLM output — so re-running any
+    single stage never causes a downstream cache miss by itself.
+    """
     import hashlib
     import json
     from dbricks_lang_agent.data_platform.profiling import discover_source_tables
@@ -785,15 +990,60 @@ def get_dataset_fingerprint(spark, contracts: Dict[str, str] = None, gold_ddl: s
                 first_line = ""
         fingerprint_data.append((table_name, first_line))
 
-    # Include contracts + DDL hash so cache is invalidated when governance rules change
+    return hashlib.sha256(json.dumps(fingerprint_data).encode("utf-8")).hexdigest()
+
+
+def get_dataset_fingerprint(spark, contracts: Dict[str, str] = None, gold_ddl: str = "") -> str:
+    """DEPRECATED as a cache key — kept only for audit-log call sites that want
+    a fingerprint reflecting "schema + governance content as of this moment"
+    for traceability. Do NOT use this to key a reuse/cache-lookup decision;
+    use get_schema_fingerprint() instead. This wraps it and additionally
+    folds in a normalized hash of contracts/DDL content, which means it still
+    changes on every cosmetic LLM re-generation — that's fine for an audit
+    trail annotation, but was the actual bug when this used to be the
+    codebase cache key (see git history)."""
+    import hashlib
+    import json
+
+    schema_fp = get_schema_fingerprint(spark)
+
+    # Include contracts + DDL hash so cache is invalidated when governance rules
+    # actually change. IMPORTANT: hash a NORMALIZED/parsed representation, not
+    # the raw LLM-generated text. ContractSteward and DimensionalModeler are
+    # LLM calls — re-running them for the *same* dataset can (and does)
+    # produce YAML/SQL that differs only in comments, key ordering, or
+    # whitespace while describing identical rules/schema. Hashing the raw
+    # text turned every such cosmetic re-generation into a "new dataset" as
+    # far as the codebase cache was concerned, silently discarding proven-good
+    # bronze/silver/gold code and forcing a full fresh regeneration — which is
+    # exactly the "same dataset, but the script is new every time" failure
+    # mode this fingerprint exists to prevent. Normalizing first means the
+    # cache only invalidates when the actual contract rules or DDL structure
+    # change, not when the LLM just phrases the same thing differently.
     contracts_hash = ""
     if contracts:
+        normalized_contracts = {}
+        for tbl, contract_yaml in contracts.items():
+            try:
+                normalized_contracts[tbl] = yaml.safe_load(contract_yaml)
+            except Exception:
+                # Unparseable — fall back to the raw string for this table only,
+                # so one bad YAML doc doesn't crash fingerprinting entirely.
+                normalized_contracts[tbl] = contract_yaml
         contracts_hash = hashlib.sha256(
-            json.dumps(sorted(contracts.items())).encode("utf-8")
+            json.dumps(normalized_contracts, sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()[:16]
-    ddl_hash = hashlib.sha256(gold_ddl.encode("utf-8")).hexdigest()[:16] if gold_ddl else ""
 
-    fingerprint_str = json.dumps(fingerprint_data) + contracts_hash + ddl_hash
+    ddl_hash = ""
+    if gold_ddl:
+        import re
+        # Strip SQL line comments and collapse all whitespace runs to a single
+        # space so formatting-only differences don't change the hash.
+        ddl_no_comments = re.sub(r"--[^\n]*", "", gold_ddl)
+        ddl_normalized = re.sub(r"\s+", " ", ddl_no_comments).strip()
+        ddl_hash = hashlib.sha256(ddl_normalized.encode("utf-8")).hexdigest()[:16]
+
+    fingerprint_str = schema_fp + contracts_hash + ddl_hash
     return hashlib.sha256(fingerprint_str.encode("utf-8")).hexdigest()
 
 
@@ -862,10 +1112,16 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             "review_comments": "",
         }
 
-    # 2. Compute fingerprint — now includes contracts + DDL hash
-    fingerprint = get_dataset_fingerprint(spark, state.get("contracts", {}), state.get("gold_ddl", ""))
-    print(f"[Codebase Memory] Computed dataset fingerprint: {fingerprint}")
-    
+    # 2. Compute fingerprint — the SAME structural schema fingerprint used by
+    # dq_node/contract_node/modeling_node (table names + column headers
+    # only). Previously this hashed contracts+DDL TEXT, which meant every
+    # cosmetic LLM re-generation of contracts/DDL (identical rules, different
+    # wording) silently invalidated the entire codebase cache — see git
+    # history. Keying off the structural fingerprint closes that gap: code
+    # is only regenerated when the schema itself changes.
+    fingerprint = get_schema_fingerprint(spark)
+    print(f"[Codebase Memory] Computed schema fingerprint: {fingerprint}")
+
     # 3. Check for stored codebase — PER SCRIPT, not all-or-nothing. A script
     # is only reused/patched if IT SPECIFICALLY has a proven-good cached
     # entry; any script with no cache at all always gets a fresh generation,
@@ -875,13 +1131,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     # cached and reused even while silver.py is still being iterated on,
     # instead of the entire bundle being thrown away because one script
     # hasn't compiled yet.
-    reset_requested = False
-    try:
-        dbutils = globals().get("dbutils")
-        if dbutils:
-            reset_requested = dbutils.widgets.get("reset_pipeline").lower() == "true"
-    except Exception:
-        pass
+    reset_requested = _is_reset_requested()
 
     # A prior execution failure for a given script means the cached version
     # (if any) of THAT script is known-bad. Recall the cache and send ONLY
@@ -1146,13 +1396,44 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     if compile_failed:
         print("[Codebase Memory] Pipeline has compilation errors — any script(s) that DID compile clean were still cached individually above.")
 
+    # Overall provenance summary for this stage: only "cache_reused" if EVERY
+    # script (bronze/silver/gold) came straight from the codebase cache
+    # untouched — any LLM involvement (fresh generation or a targeted patch
+    # for one script) makes it "llm_patched" so the dashboard/audit trail
+    # doesn't claim a fully-untouched reuse when part of it was regenerated.
+    if all(v == "cache_recalled" for v in code_source.values()):
+        generation_source = "cache_reused"
+    elif all(v in ("llm_fresh_generated", "unknown") for v in code_source.values()):
+        generation_source = "llm_fresh"
+    else:
+        generation_source = "llm_patched"
+
+    approved_steps = dict(state.get("approved_steps", {}))
+    if generation_source == "cache_reused" and memory.was_previously_approved(spark, "engineering", fingerprint):
+        approved_steps["engineering"] = True
+        try:
+            memory.log_stage_review(
+                spark,
+                pipeline_run_id=state.get("pipeline_run_id", ""),
+                stage_key="engineering",
+                agent_name="DataEngineer",
+                decision="approved",
+                reviewer_comments="Auto-approved — schema unchanged, identical bronze/silver/gold code previously approved.",
+                output={"bronze_code": bronze, "silver_code": silver, "gold_code": gold},
+                dataset_fingerprint=fingerprint,
+            )
+        except Exception as e_log:
+            print(f"[Warning] Failed to log auto-approval for Engineering: {e_log}")
+
     return {
         "bronze_code": bronze,
         "silver_code": silver,
         "gold_code": gold,
         "execution_logs": verification_logs,
         "active_agent": "DataEngineer",
-        "review_comments": ""
+        "review_comments": "",
+        "approved_steps": approved_steps,
+        "generation_source": {**(state.get("generation_source") or {}), "engineering": generation_source},
     }
 
 
@@ -1171,7 +1452,7 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     audit_fingerprint = ""
     try:
         audit_spark = get_spark()
-        audit_fingerprint = get_dataset_fingerprint(audit_spark, state.get("contracts", {}), state.get("gold_ddl", ""))
+        audit_fingerprint = get_schema_fingerprint(audit_spark)
         memory.init_compile_audit_table(audit_spark)
     except Exception as e:
         print(f"[Compile Audit] WARNING: Could not initialize compile audit context: {e}")
@@ -1226,6 +1507,32 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
                 "stdout": stdout_io.getvalue()[:15000],
                 "stderr": stderr_io.getvalue()[:15000]
             }
+
+            # Safety net independent of whether the LLM-generated script actually
+            # raises on a halted Silver run (see ENGINEER_SYSTEM_PROMPT): if
+            # silver.py "succeeded" (exit_code 0) but its own summary reports a
+            # halt, treat that as a failure here too, so gold.py never runs
+            # against a Silver layer with tables missing after the halt point.
+            # Without this, gold.py fails downstream with a confusing
+            # TABLE_OR_VIEW_NOT_FOUND instead of the real cause being visible.
+            if s == "silver.py" and exit_code == 0 and os.path.exists("/tmp/silver_summary.json"):
+                try:
+                    with open("/tmp/silver_summary.json") as f_summary:
+                        _silver_summary_check = json.load(f_summary)
+                    halted_at = _silver_summary_check.get("halted_at")
+                    if halted_at:
+                        exit_code = 1
+                        halt_msg = (
+                            f"silver.py reported halted_at='{halted_at}' in silver_summary.json "
+                            "(a hard contract-rule failure rate was exceeded for that table) even "
+                            "though the script itself did not raise. Treating this as a failed "
+                            "execution to prevent gold.py from running against an incomplete Silver layer."
+                        )
+                        print(f"!!! {halt_msg}")
+                        logs[s]["stderr"] = (logs[s]["stderr"] or "") + f"\n[Orchestrator Safety Net] {halt_msg}"
+                        logs[s]["exit_code"] = exit_code
+                except Exception as e_halt_check:
+                    print(f"[Warning] Could not inspect silver_summary.json for halted_at: {e_halt_check}")
 
             if audit_spark is not None:
                 try:
@@ -1316,7 +1623,7 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
     # keeps the latest code per fingerprint.
     try:
         spark = get_spark()
-        fingerprint = get_dataset_fingerprint(spark, state.get("contracts", {}), state.get("gold_ddl", ""))
+        fingerprint = get_schema_fingerprint(spark)
         memory.init_run_history_table(spark)
         memory.log_run(
             spark,

@@ -149,7 +149,7 @@ You are a Senior Data Engineer.
 Your task is to write clean, syntactically correct PySpark code for three scripts: `bronze.py`, `silver.py`, and `gold.py` to move the discovered tables through the Medallion pipeline.
 
 You MUST import and use the shared data platform libraries:
-- `from dbricks_lang_agent.data_platform.spark_utils import get_spark, read_table, write_full_overwrite, merge_upsert, scd2_merge, build_dim_date`
+- `from dbricks_lang_agent.data_platform.spark_utils import get_spark, read_table, write_full_overwrite, merge_upsert, scd2_merge, build_dim_date, table_exists`
 - `from dbricks_lang_agent.data_platform.contracts import load_contract, validate_table`
 - `from dbricks_lang_agent.data_platform.profiling import discover_source_tables, load_source`
 
@@ -169,11 +169,13 @@ Script Requirements:
    - Runs validation in dependency order (parents before children) so child referential checks can query silver parent tables.
    - Writes clean rows to Silver (`write_full_overwrite(clean_df, "silver", table_name)`) and invalid rows to Quarantine (`write_full_overwrite(quarantine_df, "quarantine", table_name)`).
    - Handles boolean mappings (standardizing Y/N/Yes/No indicators to booleans) AFTER contract validation checks. Note: Do NOT use pandas `applymap` as it is not supported on PySpark DataFrames. Instead, use a loop over `df.dtypes` to find string columns and apply `when`/`otherwise` with PySpark's `col`, `lit`, and `isin` to map Yes/Y to True and No/N to False.
-   - If a table's hard rule failure rate is exceeded, halts promotion.
+   - If a table's hard rule failure rate is exceeded, halts promotion (`break` out of the per-table loop — do not process any tables after the one that halted).
    - **Crucial Requirement**: At the bottom of the script, write the execution summary to `/tmp/silver_summary.json` in this JSON format:
      `{"tables": {"table_name": {"row_count_in": int, "row_count_promoted": int, "row_count_quarantined": int, "promotion_blocked": bool}}, "halted_at": "table_name_or_null"}`
+   - **Crucial Requirement**: If `halted_at` is not null (i.e. the loop broke early because a table's hard rule failure rate was exceeded), you MUST `raise RuntimeError(...)` with a message naming the table and reason, AFTER writing `/tmp/silver_summary.json` — do not let the script finish normally. This is not optional: the orchestrator (which runs this script via `exec()` and only catches `Exception`, not `SystemExit`) only stops the pipeline and skips `gold.py` when this script raises. Do NOT call `sys.exit()` for this — it raises `SystemExit`, which the orchestrator's harness does not catch, so use `raise RuntimeError(...)` instead. If silver.py halts but returns normally, the pipeline will proceed to run gold.py against an incomplete Silver layer (tables after the halt point were never written), and gold.py will crash with a confusing `TABLE_OR_VIEW_NOT_FOUND` error instead of clearly reporting the real cause — a Silver contract validation failure.
 3. **gold.py**:
    - Reads silver tables.
+   - Before reading each required silver table, guard with the shared `table_exists(schema, table)` helper (already imported from `dbricks_lang_agent.data_platform.spark_utils` alongside `read_table`): `if not table_exists("silver", table_name): raise RuntimeError(f"silver.{table_name} does not exist — the Silver stage likely halted early on a contract validation failure for an upstream table. Check silver_summary.json / the Data Quality and Contracts review artifacts before re-running.")`. This turns any gap in Silver into a clear, actionable error instead of Spark's generic `TABLE_OR_VIEW_NOT_FOUND` AnalysisException.
    - Constructs Kimball dimensions and fact tables based on the dimensional model.
    - Uses `scd2_merge` for SCD Type 2 dimensions to track changes. Note that `scd2_merge` has the signature: `scd2_merge(new_df: DataFrame, schema: str, table: str, business_key: str, tracked_cols: List[str], surrogate_key_col: str) -> str`. Make sure you pass all 6 arguments: `schema` is always `"gold"`, `table` is the gold dimension table name (e.g. `'dim_customer'`), `business_key` is the natural key column name (e.g. `'customer_id'`), `tracked_cols` is a list of column names to track changes for (e.g. `['first_name', 'last_name', 'email']`), and `surrogate_key_col` is the gold surrogate key name to generate (e.g. `'customer_key'`).
    - Joins facts to SCD Type 2 dimensions point-in-time using each fact table's OWN real event timestamp column (e.g. `created_ts` for bookings/booking_components, `availability_date` for availability) — never a literal column named `event_ts`, which does not exist in any table:

@@ -23,6 +23,7 @@ dbutils.library.restartPython()
 import os
 import sys
 import json
+import uuid
 
 # Ensure project root is on Python path
 sys.path.append(os.path.abspath("src"))
@@ -32,7 +33,7 @@ for mod in list(sys.modules.keys()):
     if mod.startswith("dbricks_lang_agent"):
         del sys.modules[mod]
 
-from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph
+from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph, resume_with_autopilot
 from dbricks_lang_agent.orchestrator.state import AgentState
 
 # COMMAND ----------
@@ -250,11 +251,14 @@ if not state.values:
         "approved_steps": {},
         "loop_count": 0,
         "active_agent": "Start",
-        "review_comments": ""
+        "review_comments": "",
+        "pipeline_run_id": str(uuid.uuid4()),
     }
-    events = app.stream(initial_input, config, stream_mode="values")
-    for event in events:
-        state = app.get_state(config)
+    # resume_with_autopilot cascades straight through any stage that turns out
+    # to be an exact schema-fingerprint cache hit already approved on a prior
+    # run (e.g. a daily delta run against an unchanged schema) — only
+    # Profiler (always) and genuinely new/changed stages will actually pause.
+    state = resume_with_autopilot(app, config, initial_input=initial_input)
     sync_db_to_volume()
 else:
     # Resume after human feedback
@@ -276,17 +280,37 @@ else:
     
     step_key = step_mapping.get(current_node)
     
+    # Snapshot of the fields relevant to each stage, for the Unity Catalog
+    # audit log (gold.agent_stage_review_log) — mirrors get_stage_artifacts()
+    # in the dashboard so a decision made from either surface is recorded
+    # identically and can drive resume_with_autopilot's auto-advance check
+    # on a future run.
+    STAGE_OUTPUT_FIELDS = {
+        "profile": ["discovered_tables", "profiling_report", "profiler_error"],
+        "dq": ["dq_report"],
+        "contracts": ["contracts", "contracts_error"],
+        "modeling": ["gold_ddl", "data_dictionary"],
+        "engineering": ["bronze_code", "silver_code", "gold_code"],
+        "report": ["execution_logs", "final_report"],
+    }
+
     if step_key:
         approvals = dict(state.values.get("approved_steps", {}))
-        
+
+        from dbricks_lang_agent.orchestrator import memory
+        from dbricks_lang_agent.orchestrator.agents import get_schema_fingerprint
+        from dbricks_lang_agent.data_platform.spark_utils import get_spark
+        spark = get_spark()
+        try:
+            schema_fingerprint = get_schema_fingerprint(spark)
+        except Exception:
+            schema_fingerprint = ""
+
         if action == "Approve":
             print(f"Review APPROVED for step '{step_key}'. Resuming pipeline execution...")
             approvals[step_key] = True
             comments = ""
             try:
-                from dbricks_lang_agent.orchestrator import memory
-                from dbricks_lang_agent.data_platform.spark_utils import get_spark
-                spark = get_spark()
                 dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
                 issue_type = "data_quality" if step_key == "dq" else step_key
                 resolution = f"Approved {step_key} design"
@@ -297,7 +321,23 @@ else:
             print(f"Review REJECTED with comments. Re-routing back to agent...")
             approvals[step_key] = False
             comments = feedback
-            
+
+        try:
+            output_snapshot = {f: state.values.get(f) for f in STAGE_OUTPUT_FIELDS.get(step_key, [])}
+            memory.init_stage_review_table(spark)
+            memory.log_stage_review(
+                spark,
+                pipeline_run_id=state.values.get("pipeline_run_id", ""),
+                stage_key=step_key,
+                agent_name=active_agent,
+                decision="approved" if action == "Approve" else "rejected",
+                reviewer_comments=feedback,
+                output=output_snapshot,
+                dataset_fingerprint=schema_fingerprint,
+            )
+        except Exception as e:
+            print(f"[Warning] Failed to log stage review to audit table: {e}")
+
         # Update state with human action
         app.update_state(
             config,
@@ -306,23 +346,20 @@ else:
                 "review_comments": comments
             }
         )
-        
+
         # Reset the widgets inputs for safety
         dbutils.widgets.remove("hitl_feedback")
         dbutils.widgets.text("hitl_feedback", "", "Review Feedback")
-        
-        # Resume graph execution
-        events = app.stream(None, config, stream_mode="values")
-        for event in events:
-            pass
+
+        # Resume graph execution — auto-cascades through any later gate that's
+        # an exact cache hit already approved on a prior run.
+        state = resume_with_autopilot(app, config)
         sync_db_to_volume()
-            
+
     else:
         if current_node != "FINISHED":
             print(f"Resuming execution from node '{current_node}'...")
-            events = app.stream(None, config, stream_mode="values")
-            for event in events:
-                pass
+            state = resume_with_autopilot(app, config)
             sync_db_to_volume()
         else:
             print("Pipeline is already finished or in an invalid state.")

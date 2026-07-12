@@ -269,6 +269,43 @@ def parse_json_from_response(content: str, fallback_key: str = None) -> dict:
     )
 
 
+def invoke_llm_for_json(llm, messages: list, max_retries: int = 2, fallback_key: str = None) -> dict:
+    """Invoke the LLM and parse its response as JSON, retrying on malformed output.
+
+    Fresh-generation calls in contract_node/modeling_node/engineering_node used to
+    call llm.invoke() then parse_json_from_response() back-to-back with no safety
+    net: one malformed/truncated JSON response (unescaped quote inside generated
+    code, a response cut off by max_tokens, etc.) raised an uncaught ValueError
+    that killed the entire node — discarding a stage that might have succeeded on
+    a second attempt, and forcing a full manual re-submit.
+
+    This wraps that pair so a formatting hiccup costs one extra LLM call instead
+    of the whole run. On retry, the malformed response is fed back to the model
+    so it can see and correct its own mistake rather than blindly resampling.
+    """
+    current_messages = list(messages)
+    last_error: Exception = None
+    for attempt in range(max_retries + 1):
+        response = llm.invoke(current_messages)
+        try:
+            return parse_json_from_response(response.content, fallback_key=fallback_key)
+        except ValueError as e:
+            last_error = e
+            print(f"[invoke_llm_for_json] Attempt {attempt + 1}/{max_retries + 1} failed to parse JSON: {e}")
+            if attempt < max_retries:
+                current_messages = current_messages + [
+                    HumanMessage(content=(
+                        "Your previous response could not be parsed as valid JSON "
+                        f"(error: {e}). Here is what you returned:\n\n"
+                        f"{response.content[:4000]}\n\n"
+                        "Please return ONLY a valid JSON object as instructed — no surrounding "
+                        "prose, and make sure every newline, tab, and double-quote character "
+                        "inside string values is properly escaped (\\n, \\t, \\\")."
+                    ))
+                ]
+    raise last_error
+
+
 # ---- Node Functions ----
 
 def _is_reset_requested() -> bool:
@@ -589,9 +626,7 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
         ]
 
         llm = get_llm("contracts")
-        response = llm.invoke(messages)
-
-        parsed = parse_json_from_response(response.content)
+        parsed = invoke_llm_for_json(llm, messages)
         contracts = parsed.get("contracts", {})
 
         # Write the YAML contracts to disk — validate each one first to prevent downstream crashes
@@ -727,9 +762,7 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
         ]
 
         llm = get_llm("modeling")
-        response = llm.invoke(messages)
-
-        parsed = parse_json_from_response(response.content)
+        parsed = invoke_llm_for_json(llm, messages)
         gold_ddl = parsed.get("gold_ddl", "")
         data_dictionary = parsed.get("data_dictionary", "")
 
@@ -1299,8 +1332,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             HumanMessage(content=prompt)
         ]
 
-        response = llm.invoke(messages)
-        parsed = parse_json_from_response(response.content)
+        parsed = invoke_llm_for_json(llm, messages)
 
         for key_name in scripts_needing_fresh:
             current_by_key[key_name] = _sanitize_and_heal_code(parsed.get(key_name, ""))

@@ -1,10 +1,10 @@
-# Streamlit native theme — aligned with the app's injected design system
-# (primary blue #2563EB on cool slate surfaces; see dashboard.py CSS tokens).
+# Streamlit native theme — matched to the app's "Ledger" light design system
+# (single #0F62FE accent on neutral surfaces; see dashboard.py CSS tokens).
 [theme]
-primaryColor = "#2563EB"
-backgroundColor = "#F4F6FA"
+primaryColor = "#0F62FE"
+backgroundColor = "#F7F8FA"
 secondaryBackgroundColor = "#FFFFFF"
-textColor = "#0F1E33"
+textColor = "#111827"
 font = "sans serif"
 
 [server]

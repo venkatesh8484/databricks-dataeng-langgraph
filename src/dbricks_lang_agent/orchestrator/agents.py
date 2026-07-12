@@ -2253,7 +2253,7 @@ def chat_with_data_agent(
         if active_agent not in gate_map:
             return (
                 f"The pipeline is currently at agent **{active_agent}** but I don't know "
-                "which gate to approve. Please use the **Action Center (HITL)** tab directly.",
+                "which gate to approve. Please use the **Stage Inspector** panel directly.",
                 False,
                 None
             )
@@ -2263,7 +2263,7 @@ def chat_with_data_agent(
             return (
                 f"The **{step}** step has already been approved. "
                 "The pipeline should be advancing automatically. "
-                "Check the **Ingestion Monitoring** tab for live status.",
+                "Check the **Observability** tab for live status.",
                 False,
                 None
             )

@@ -32,7 +32,7 @@ import io
 # Single source of truth for the six pipeline stages: display name, the gate
 # node LangGraph pauses at, the step key used in `approved_steps`, and the
 # agent name stamped into `active_agent` while that stage is in review. Used
-# by the progress lineage cards, the Action Center review panel, and the
+# by the workflow canvas, the Stage Inspector review panel, and the
 # clickable "View Output" viewer so all three stay in sync.
 STAGE_DEFS = [
     {"name": "1. Profiler",      "gate": "profile_review_gate",     "step_key": "profile",     "agent_name": "Profiler",           "node": "profiler"},
@@ -83,7 +83,7 @@ def get_stage_artifacts(step_key: str, state_values: dict) -> dict:
 
 def render_agent_output(agent_name: str, state_values: dict) -> None:
     """Render the artifacts produced by one agent stage. Pulled out of the
-    Action Center review flow so the SAME rendering can be reused by the
+    Stage Inspector review flow so the SAME rendering can be reused by the
     clickable stage viewer (which shows a stage's output at any point,
     regardless of which gate is currently active) and by the audit tab
     (which replays a past review's output snapshot)."""
@@ -110,7 +110,7 @@ def render_agent_output(agent_name: str, state_values: dict) -> None:
             st.error(profiler_error)
             diagnostics = state_values.get("profiling_report", {}).get("discovery_diagnostics", [])
             if diagnostics:
-                with st.expander("🔍 Raw discovery trail (DBUtils / SDK / POSIX attempts)", expanded=True):
+                with st.expander("Raw discovery trail (DBUtils / SDK / POSIX attempts)", expanded=True):
                     st.code("\n".join(diagnostics), language="text")
         st.markdown("### Inferred Source Table Schemas:")
         st.json(state_values.get("discovered_tables", {}))
@@ -147,9 +147,9 @@ def render_agent_output(agent_name: str, state_values: dict) -> None:
         silver_code = state_values.get("silver_code", "")
         gold_code   = state_values.get("gold_code", "")
         code_tab1, code_tab2, code_tab3 = st.tabs([
-            "🥉 Bronze — bronze.py",
-            "🥈 Silver — silver.py",
-            "🥇 Gold — gold.py",
+            "bronze.py",
+            "silver.py",
+            "gold.py",
         ])
         with code_tab1:
             if bronze_code:
@@ -299,40 +299,36 @@ def sync_db_to_volume():
 # Page configuration for premium visuals
 st.set_page_config(
     page_title="Medallion Agent Control Center",
-    page_icon="🤖",
+    page_icon="◆",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ── Enterprise Design System ─────────────────────────────────────────────
-# Design tokens + component styling for the whole app.
-# Palette: deep navy chrome (#0B1B33), cool slate surfaces on #F4F6FA,
-# primary blue #2563EB, semantic emerald/amber/red/sky status colors,
-# medallion accents (bronze/silver/gold) for layer metrics.
-# Typography: Inter (UI) + JetBrains Mono (code).
+# ── Design System ("Ledger" light theme) ─────────────────────────────────
+# One accent (#0F62FE) on warm-neutral surfaces; soft semantic chips for
+# status; no gradients, no emoji chrome. CSS is layered deliberately:
+# base text rules never target bare <span>/<div>, so custom components
+# (chips, canvas, inspector) keep their own colors without specificity wars.
 st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
         :root {
-            --bg: #F4F6FA;
+            --bg: #F7F8FA;
             --surface: #FFFFFF;
-            --border: #E3E8F0;
-            --border-strong: #CBD5E1;
-            --text: #0F1E33;
-            --text-2: #5A6B82;
-            --text-3: #94A3B8;
-            --primary: #2563EB;
-            --primary-dark: #1D4ED8;
-            --primary-soft: #EFF4FF;
-            --navy: #0B1B33;
-            --navy-2: #12274A;
-            --success: #059669;  --success-soft: #ECFDF5;  --success-text: #065F46;
-            --warning: #D97706;  --warning-soft: #FFF8EB;  --warning-text: #92400E;
-            --danger:  #DC2626;  --danger-soft:  #FEF2F2;  --danger-text:  #991B1B;
-            --info:    #0284C7;  --info-soft:    #EFF8FF;  --info-text:    #075985;
-            --shadow-sm: 0 1px 2px rgba(15,30,51,0.06);
-            --shadow-md: 0 2px 8px rgba(15,30,51,0.08), 0 1px 2px rgba(15,30,51,0.05);
+            --border: #E5E7EB;
+            --border-strong: #D1D5DB;
+            --ink: #111827;
+            --ink-2: #4B5563;
+            --ink-3: #9CA3AF;
+            --accent: #0F62FE;
+            --accent-hover: #0043CE;
+            --accent-soft: #EDF5FF;
+            --ok: #16A34A;   --ok-soft: #F0FDF4;   --ok-ink: #166534;   --ok-line: #BBE7C9;
+            --warn: #D97706; --warn-soft: #FFFBEB; --warn-ink: #92400E; --warn-line: #F5D9A8;
+            --err: #DC2626;  --err-soft: #FEF2F2;  --err-ink: #991B1B;  --err-line: #F3B6B6;
+            --shadow-sm: 0 1px 2px rgba(17,24,39,0.05);
+            --shadow-md: 0 2px 8px rgba(17,24,39,0.07);
         }
 
         /* ── Base ──────────────────────────────────────────────────────── */
@@ -341,200 +337,182 @@ st.markdown("""
         [data-testid="stMain"] { background-color: var(--bg) !important; }
         [data-testid="stHeader"] { background: transparent !important; }
         #MainMenu, footer { visibility: hidden; }
-        .block-container { padding-top: 1.1rem !important; max-width: 1440px; }
+        .block-container { padding-top: 1.0rem !important; max-width: 1440px; }
 
         html, body, [class*="css"] {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
             -webkit-font-smoothing: antialiased;
         }
 
-        p, label,
-        .stMarkdown p, .stMarkdown li, .stMarkdown ol, .stMarkdown ul,
+        /* Text: paragraphs/lists/labels only — never bare span/div */
+        p, li, label,
         [data-testid="stMarkdownContainer"] p,
-        [data-testid="stMarkdownContainer"] li,
-        [data-testid="stMarkdownContainer"] span {
-            color: var(--text) !important;
-            font-size: 0.92rem !important;
-            line-height: 1.6 !important;
+        [data-testid="stMarkdownContainer"] li {
+            color: var(--ink);
+            font-size: 0.92rem;
+            line-height: 1.6;
         }
-
         h1, h2, h3, h4, h5, h6 {
             font-family: 'Inter', sans-serif !important;
-            color: var(--text) !important;
+            color: var(--ink) !important;
             font-weight: 650 !important;
             letter-spacing: -0.02em !important;
         }
-
         hr { border-color: var(--border) !important; }
-
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
 
-        /* ── Hero header ───────────────────────────────────────────────── */
-        .hero {
+        /* ── Command bar ───────────────────────────────────────────────── */
+        .cmdbar {
             display: flex; justify-content: space-between; align-items: center;
-            gap: 16px; flex-wrap: wrap;
-            background: linear-gradient(120deg, #0B1B33 0%, #12274A 55%, #1D4ED8 145%);
-            border-radius: 14px; padding: 20px 24px; margin-bottom: 18px;
-            box-shadow: 0 8px 24px rgba(11,27,51,0.18);
+            gap: 14px; flex-wrap: wrap;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin-bottom: 14px;
+            box-shadow: var(--shadow-sm);
         }
-        .hero-left { display: flex; align-items: center; gap: 14px; }
-        .hero-logo {
-            width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
-            background: linear-gradient(135deg, #3B82F6, #8B5CF6);
-            color: #FFFFFF !important; font-size: 1.05rem; font-weight: 700;
+        .cmdbar-left { display: flex; align-items: center; gap: 12px; }
+        .cmd-logo {
+            width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
+            background: var(--accent); color: #FFFFFF;
+            font-size: 1rem; font-weight: 700;
             display: flex; align-items: center; justify-content: center;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
         }
-        .hero-title {
-            color: #FFFFFF !important; font-size: 1.35rem; font-weight: 700;
-            letter-spacing: -0.02em; line-height: 1.2;
-        }
-        .hero-sub { color: #9DB2D6 !important; font-size: 0.82rem; margin-top: 3px; }
-        .hero-right { display: flex; gap: 8px; flex-wrap: wrap; }
-        .hero-chip {
+        .cmd-title { color: var(--ink); font-size: 1.08rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+        .cmd-sub { color: var(--ink-3); font-size: 0.78rem; margin-top: 2px; }
+        .cmdbar-right { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+        /* ── Chips (soft bg + dark ink — contrast-safe everywhere) ─────── */
+        .chip {
             display: inline-flex; align-items: center; gap: 7px;
-            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
-            color: #DBE6F5 !important; font-size: 0.75rem; font-weight: 600;
-            padding: 5px 12px; border-radius: 100px; letter-spacing: 0.02em;
+            background: #F3F4F6; border: 1px solid var(--border);
+            color: #374151; font-size: 0.74rem; font-weight: 600;
+            padding: 4px 11px; border-radius: 100px;
+            letter-spacing: 0.01em; white-space: nowrap;
         }
-        .chip-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .chip .chip-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex-shrink: 0; }
+        .chip.ok   { background: var(--ok-soft);   border-color: var(--ok-line);   color: var(--ok-ink); }
+        .chip.ok .chip-dot { background: var(--ok); }
+        .chip.warn { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn-ink); }
+        .chip.warn .chip-dot { background: var(--warn); }
+        .chip.err  { background: var(--err-soft);  border-color: var(--err-line);  color: var(--err-ink); }
+        .chip.err .chip-dot { background: var(--err); }
+        .chip.neutral { }
 
-        /* ── Section label ─────────────────────────────────────────────── */
-        .section-label { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; }
-        .section-label span {
-            font-size: 0.7rem !important; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.09em; color: var(--text-2) !important;
+        /* ── Panel labels & canvas card ────────────────────────────────── */
+        .panel-label {
+            font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--ink-3);
+            margin: 10px 0 8px 2px;
         }
-        .section-line { flex: 1; height: 1px; background: var(--border); }
-
-        /* ── Pipeline stepper ──────────────────────────────────────────── */
-        .stepper { display: flex; align-items: flex-start; margin: 4px 0 6px; }
-        .step-cell {
-            flex: 1; display: flex; flex-direction: column;
-            align-items: center; text-align: center; min-width: 0;
-        }
-        .step-track { display: flex; align-items: center; width: 100%; }
-        .step-line { flex: 1; height: 2px; border-radius: 2px; }
-        .step-line.hidden { visibility: hidden; }
-        .step-circle {
-            width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; margin: 0 6px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.82rem; font-weight: 700; border: 2px solid transparent;
-        }
-        .step-circle.completed {
-            background: var(--success); color: #FFFFFF;
-            box-shadow: 0 2px 6px rgba(5,150,105,0.35);
-        }
-        .step-circle.review {
-            background: var(--warning); color: #FFFFFF;
-            animation: pulse-review 1.8s ease-out infinite;
-        }
-        .step-circle.pending {
-            background: var(--surface); color: var(--text-3);
-            border-color: var(--border-strong);
-        }
-        @keyframes pulse-review {
-            0%   { box-shadow: 0 0 0 0 rgba(217,119,6,0.35); }
-            70%  { box-shadow: 0 0 0 9px rgba(217,119,6,0); }
-            100% { box-shadow: 0 0 0 0 rgba(217,119,6,0); }
-        }
-        .step-name {
-            margin-top: 8px; font-size: 0.8rem; font-weight: 600;
-            color: var(--text); letter-spacing: -0.01em;
-        }
-        .step-name.pending { color: var(--text-3); }
-        .step-pill {
-            margin-top: 5px; display: inline-block;
-            font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.07em; padding: 2px 9px; border-radius: 100px;
+        .canvas-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px 6px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 14px;
+            overflow-x: auto;
         }
 
-        /* ── Sidebar (dark navy) ───────────────────────────────────────── */
+        /* ── Stage Inspector ───────────────────────────────────────────── */
+        .insp-head {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 10px; flex-wrap: wrap; margin-bottom: 6px;
+        }
+        .insp-title { color: var(--ink); font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+        .insp-agent {
+            color: var(--ink-3); font-size: 0.76rem; font-weight: 600;
+            margin-left: 8px; font-family: 'JetBrains Mono', monospace;
+        }
+        .insp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        /* ── Radio → segmented pills (stage selector, approve/reject) ──── */
+        [data-testid="stRadio"] div[role="radiogroup"] { gap: 6px; flex-wrap: wrap; }
+        [data-testid="stRadio"] label {
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            border-radius: 100px;
+            padding: 5px 14px !important;
+            cursor: pointer;
+            transition: border-color .12s, background .12s;
+            margin: 0 !important;
+        }
+        [data-testid="stRadio"] label > div:first-child { display: none; }
+        [data-testid="stRadio"] label p {
+            font-size: 0.82rem !important; font-weight: 600 !important;
+            color: var(--ink-2) !important; line-height: 1.3 !important;
+        }
+        [data-testid="stRadio"] label:hover { border-color: var(--accent); }
+        [data-testid="stRadio"] label:has(input:checked) {
+            background: var(--accent-soft) !important;
+            border-color: var(--accent) !important;
+        }
+        [data-testid="stRadio"] label:has(input:checked) p { color: var(--accent-hover) !important; }
+
+        /* ── Sidebar (light) ───────────────────────────────────────────── */
         [data-testid="stSidebar"] {
-            background-color: var(--navy) !important;
-            border-right: 1px solid rgba(255,255,255,0.06) !important;
+            background-color: var(--surface) !important;
+            border-right: 1px solid var(--border) !important;
         }
-        [data-testid="stSidebar"] > div { background: transparent !important; }
-        [data-testid="stSidebar"] *,
-        [data-testid="stSidebar"] div,
-        [data-testid="stSidebar"] span,
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] p {
-            background-color: transparent !important;
-            color: #C9D6EA !important;
-            font-size: 0.84rem !important;
-        }
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
-            color: #F4F8FF !important; font-size: 0.85rem !important;
-        }
+        [data-testid="stSidebar"] p, [data-testid="stSidebar"] label { font-size: 0.84rem; }
         .side-brand {
             display: flex; align-items: center; gap: 10px;
-            padding: 6px 0 14px; margin-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 6px 0 12px; margin-bottom: 8px;
+            border-bottom: 1px solid var(--border);
         }
         .side-brand-logo {
-            width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
-            background: linear-gradient(135deg, #3B82F6, #8B5CF6) !important;
+            width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+            background: var(--accent); color: #FFFFFF;
             display: flex; align-items: center; justify-content: center;
-            color: #FFFFFF !important; font-weight: 700;
+            font-weight: 700; font-size: 0.85rem;
         }
-        .side-brand-name { color: #FFFFFF !important; font-weight: 700; font-size: 0.95rem !important; letter-spacing: -0.01em; }
-        .side-brand-sub { color: #8FA6C9 !important; font-size: 0.72rem !important; }
+        .side-brand-name { color: var(--ink); font-weight: 700; font-size: 0.92rem; letter-spacing: -0.01em; }
+        .side-brand-sub { color: var(--ink-3); font-size: 0.7rem; }
         .side-section {
-            font-size: 0.66rem !important; font-weight: 700; letter-spacing: 0.1em;
-            text-transform: uppercase; color: #7E95BC !important; margin: 14px 0 6px;
+            font-size: 0.64rem; font-weight: 700; letter-spacing: 0.1em;
+            text-transform: uppercase; color: var(--ink-3); margin: 14px 0 6px;
         }
         .side-kv {
             display: flex; justify-content: space-between; align-items: center; gap: 8px;
             padding: 7px 10px; border-radius: 8px; margin-bottom: 6px;
-            background: rgba(255,255,255,0.05) !important;
-            border: 1px solid rgba(255,255,255,0.08);
+            background: #F3F4F6; border: 1px solid var(--border);
         }
-        .side-kv span { color: #8FA6C9 !important; font-size: 0.72rem !important; font-weight: 600; }
+        .side-kv span { color: var(--ink-3); font-size: 0.7rem; font-weight: 600; }
         .side-kv code {
-            color: #DBE6F5 !important; background: transparent !important;
-            font-size: 0.72rem !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        [data-testid="stSidebar"] [data-testid="stButton"] > button {
-            width: 100%;
-            background: rgba(255,255,255,0.06) !important;
-            color: #DBE6F5 !important;
-            border: 1px solid rgba(255,255,255,0.14) !important;
-            box-shadow: none !important;
-        }
-        [data-testid="stSidebar"] [data-testid="stButton"] > button:hover {
-            background: rgba(255,255,255,0.12) !important;
-            border-color: rgba(255,255,255,0.3) !important;
-            color: #FFFFFF !important;
+            color: var(--ink); background: transparent;
+            font-size: 0.72rem; font-family: 'JetBrains Mono', monospace;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         [data-testid="stSidebar"] [data-testid="stExpander"] details {
-            background: rgba(255,255,255,0.04) !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
+            background: var(--surface) !important;
+            border: 1px solid var(--border) !important;
             border-radius: 8px !important;
         }
 
-        /* ── Tabs (segmented pill control) ─────────────────────────────── */
+        /* ── Tabs (segmented) ──────────────────────────────────────────── */
         div[data-testid="stTabs"] div[data-baseweb="tab-list"] {
-            background: #E8EDF5; padding: 4px; border-radius: 12px;
+            background: #F1F3F5; padding: 4px; border-radius: 10px;
             gap: 2px; width: fit-content; max-width: 100%;
         }
         button[data-baseweb="tab"] {
             background: transparent !important;
-            border-radius: 9px !important;
-            color: var(--text-2) !important;
+            border-radius: 7px !important;
+            color: var(--ink-2) !important;
             font-size: 0.85rem !important; font-weight: 600 !important;
-            padding: 8px 16px !important;
+            padding: 7px 15px !important;
             border-bottom: none !important;
             opacity: 1 !important; letter-spacing: 0 !important;
         }
         button[data-baseweb="tab"][aria-selected="true"] {
             background: var(--surface) !important;
-            color: var(--primary-dark) !important;
+            color: var(--ink) !important;
             box-shadow: var(--shadow-sm) !important;
         }
-        button[data-baseweb="tab"]:hover { color: var(--text) !important; }
+        button[data-baseweb="tab"]:hover { color: var(--ink) !important; }
         div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] { display: none !important; }
 
         /* ── Buttons ───────────────────────────────────────────────────── */
@@ -543,103 +521,100 @@ st.markdown("""
             border-radius: 8px !important;
             font-weight: 600 !important; font-size: 0.84rem !important;
             letter-spacing: 0 !important;
-            transition: all 0.15s ease !important;
+            transition: all 0.12s ease !important;
         }
         [data-testid="stButton"] > button[kind="secondary"],
         [data-testid="stFormSubmitButton"] > button[kind="secondary"] {
             background: var(--surface) !important;
-            color: #33445E !important;
+            color: var(--ink-2) !important;
             border: 1px solid var(--border-strong) !important;
             box-shadow: var(--shadow-sm) !important;
         }
         [data-testid="stButton"] > button[kind="secondary"]:hover,
         [data-testid="stFormSubmitButton"] > button[kind="secondary"]:hover {
-            border-color: var(--primary) !important;
-            color: var(--primary-dark) !important;
-            background: var(--primary-soft) !important;
+            border-color: var(--accent) !important;
+            color: var(--accent-hover) !important;
+            background: var(--accent-soft) !important;
         }
         [data-testid="stButton"] > button[kind="primary"],
         [data-testid="stFormSubmitButton"] > button[kind="primary"] {
-            background: linear-gradient(180deg, #2F6BFF, #1D4ED8) !important;
+            background: var(--accent) !important;
             color: #FFFFFF !important;
-            border: 1px solid #1D4ED8 !important;
-            box-shadow: 0 2px 6px rgba(29,78,216,0.35) !important;
+            border: 1px solid var(--accent) !important;
+            box-shadow: var(--shadow-sm) !important;
         }
         [data-testid="stButton"] > button[kind="primary"]:hover,
         [data-testid="stFormSubmitButton"] > button[kind="primary"]:hover {
-            filter: brightness(1.07);
-            box-shadow: 0 3px 10px rgba(29,78,216,0.45) !important;
+            background: var(--accent-hover) !important;
+            border-color: var(--accent-hover) !important;
         }
 
-        /* ── Alerts (semantic variants) ────────────────────────────────── */
+        /* ── Alerts ────────────────────────────────────────────────────── */
         div[data-testid="stAlert"], .stAlert {
             border-radius: 10px !important;
-            border: 1px solid #BAE0F7 !important;
-            border-left: 3px solid var(--info) !important;
-            background: var(--info-soft) !important;
+            border: 1px solid #C6E0F5 !important;
+            border-left: 3px solid #0284C7 !important;
+            background: #F0F9FF !important;
             box-shadow: none !important;
         }
         div[data-testid="stAlert"] p, .stAlert p {
             font-size: 0.86rem !important; font-weight: 500 !important;
-            color: var(--info-text) !important;
+            color: #075985 !important;
         }
         div[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) {
-            background: var(--success-soft) !important;
-            border-color: #B7E5D0 !important; border-left-color: var(--success) !important;
+            background: var(--ok-soft) !important;
+            border-color: var(--ok-line) !important; border-left-color: var(--ok) !important;
         }
-        div[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) p { color: var(--success-text) !important; }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) p { color: var(--ok-ink) !important; }
         div[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) {
-            background: var(--warning-soft) !important;
-            border-color: #F3DCB2 !important; border-left-color: var(--warning) !important;
+            background: var(--warn-soft) !important;
+            border-color: var(--warn-line) !important; border-left-color: var(--warn) !important;
         }
-        div[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) p { color: var(--warning-text) !important; }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) p { color: var(--warn-ink) !important; }
         div[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) {
-            background: var(--danger-soft) !important;
-            border-color: #F2C4C4 !important; border-left-color: var(--danger) !important;
+            background: var(--err-soft) !important;
+            border-color: var(--err-line) !important; border-left-color: var(--err) !important;
         }
-        div[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) p { color: var(--danger-text) !important; }
-        /* Legacy fallbacks for older Streamlit DOM */
-        .stSuccess [data-testid="stMarkdownContainer"] p { color: var(--success-text) !important; }
-        .stWarning [data-testid="stMarkdownContainer"] p { color: var(--warning-text) !important; }
-        .stError   [data-testid="stMarkdownContainer"] p { color: var(--danger-text) !important; }
-        .stInfo    [data-testid="stMarkdownContainer"] p { color: var(--info-text) !important; }
+        div[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) p { color: var(--err-ink) !important; }
+        .stSuccess [data-testid="stMarkdownContainer"] p { color: var(--ok-ink) !important; }
+        .stWarning [data-testid="stMarkdownContainer"] p { color: var(--warn-ink) !important; }
+        .stError   [data-testid="stMarkdownContainer"] p { color: var(--err-ink) !important; }
 
         /* ── Metric cards ──────────────────────────────────────────────── */
         .metric-card {
             background: var(--surface);
-            padding: 1.05rem 1.25rem;
+            padding: 1rem 1.2rem;
             border-radius: 12px;
             border: 1px solid var(--border);
             box-shadow: var(--shadow-sm);
         }
         .metric-kicker {
-            font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.09em; margin-bottom: 6px;
+            font-size: 0.64rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.09em; margin-bottom: 5px;
         }
         .metric-value {
-            font-size: 1.7rem; font-weight: 750; color: var(--text);
+            font-size: 1.65rem; font-weight: 700; color: var(--ink);
             letter-spacing: -0.03em; line-height: 1.15;
             font-variant-numeric: tabular-nums;
         }
-        .metric-label { font-size: 0.74rem; color: var(--text-2); margin-top: 4px; font-weight: 500; }
+        .metric-label { font-size: 0.73rem; color: var(--ink-2); margin-top: 4px; font-weight: 500; }
 
-        /* ── Agent / type badge ────────────────────────────────────────── */
         .agent-badge {
-            background-color: var(--primary-soft);
-            border: 1px solid #C7DAFB;
-            color: var(--primary-dark);
+            background: var(--accent-soft);
+            border: 1px solid #C3DBFC;
+            color: var(--accent-hover);
             padding: 2px 10px; border-radius: 100px;
             font-weight: 600; display: inline-block;
-            font-size: 0.75rem; letter-spacing: 0.02em;
+            font-size: 0.74rem; letter-spacing: 0.02em;
         }
 
-        /* ── Expanders / bordered containers / dataframes ──────────────── */
+        /* ── Expanders / containers / dataframes ───────────────────────── */
         [data-testid="stExpander"] details {
             background: var(--surface) !important;
             border: 1px solid var(--border) !important;
             border-radius: 10px !important;
         }
-        [data-testid="stExpander"] summary { font-weight: 600 !important; color: var(--text) !important; }
+        [data-testid="stExpander"] summary { font-weight: 600 !important; color: var(--ink) !important; }
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border: 1px solid var(--border) !important;
             border-radius: 12px !important;
@@ -663,16 +638,9 @@ st.markdown("""
         }
         [data-testid="stChatMessageContent"] { background: transparent !important; }
         [data-testid="stChatMessage"] p,
-        [data-testid="stChatMessage"] span,
-        [data-testid="stChatMessage"] li,
-        [data-testid="stChatMessage"] div,
-        [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p {
-            color: var(--text) !important;
-            font-size: 0.9rem !important;
-        }
-        [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] p,
-        [data-testid="stChatMessage"] small {
-            color: var(--text-3) !important; font-size: 0.78rem !important;
+        [data-testid="stChatMessage"] li { color: var(--ink) !important; font-size: 0.9rem !important; }
+        [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] p {
+            color: var(--ink-3) !important; font-size: 0.76rem !important;
         }
         [data-testid="stChatInput"] {
             border: 1px solid var(--border-strong) !important;
@@ -681,13 +649,12 @@ st.markdown("""
         }
         [data-testid="stChatInput"] textarea {
             background: var(--surface) !important;
-            color: var(--text) !important;
-            border-radius: 10px !important;
+            color: var(--ink) !important;
             font-size: 0.9rem !important;
         }
-        [data-testid="stChatInput"] textarea::placeholder { color: var(--text-3) !important; }
+        [data-testid="stChatInput"] textarea::placeholder { color: var(--ink-3) !important; }
         [data-testid="stChatInput"] button {
-            background: var(--primary) !important;
+            background: var(--accent) !important;
             color: #FFFFFF !important;
             border-radius: 8px !important;
         }
@@ -698,31 +665,29 @@ st.markdown("""
             border-radius: 8px !important;
             border: 1px solid var(--border-strong) !important;
             font-size: 0.9rem !important;
-            color: var(--text) !important;
+            color: var(--ink) !important;
             background: var(--surface) !important;
         }
         [data-testid="stTextInput"] input:focus,
         [data-testid="stTextArea"] textarea:focus {
-            border-color: var(--primary) !important;
-            box-shadow: 0 0 0 3px rgba(37,99,235,0.14) !important;
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 0 3px rgba(15,98,254,0.12) !important;
             outline: none !important;
         }
         [data-testid="stTextInput"] input::placeholder,
-        [data-testid="stTextArea"] textarea::placeholder { color: var(--text-3) !important; }
+        [data-testid="stTextArea"] textarea::placeholder { color: var(--ink-3) !important; }
         [data-baseweb="select"] > div {
             border-radius: 8px !important;
             border-color: var(--border-strong) !important;
             background: var(--surface) !important;
         }
 
-        /* ── Captions ──────────────────────────────────────────────────── */
         [data-testid="stCaptionContainer"] p, .stCaption p {
-            color: var(--text-2) !important; font-size: 0.78rem !important;
+            color: var(--ink-2) !important; font-size: 0.78rem !important;
         }
 
         /* ── Code ──────────────────────────────────────────────────────── */
-        /* Let Streamlit's own theme handle code colours/background — only set
-           the monospace font, or syntax highlighting gets stripped. */
+        /* Only the monospace font — Streamlit's theme keeps syntax colors. */
         code, pre,
         [data-testid="stCode"] code,
         .stCodeBlock code {
@@ -858,201 +823,310 @@ def rollback_to_node(target_node: str) -> bool:
 
 # ----------------- Dashboard Layout -----------------
 
-# Branded hero header with live pipeline status + environment chips
-_hero_state = app.get_state(config)
-if not _hero_state.values:
-    _status_label, _status_dot = "Not Started", "#94A3B8"
-elif _hero_state.next:
-    _hero_gate = _hero_state.next[0]
-    _hero_stage = next((s["name"].split(". ", 1)[-1] for s in STAGE_DEFS if s["gate"] == _hero_gate), "Review")
-    _status_label, _status_dot = f"Awaiting Review &middot; {_hero_stage}", "#FBBF24"
-elif _hero_state.values.get("final_report"):
-    _status_label, _status_dot = "Pipeline Completed", "#34D399"
-else:
-    _status_label, _status_dot = "Idle", "#94A3B8"
-
-_hero_cfg = load_config()
-st.markdown(f"""
-<div class="hero">
-  <div class="hero-left">
-    <div class="hero-logo">&#9670;</div>
-    <div>
-      <div class="hero-title">Medallion Agent Control Center</div>
-      <div class="hero-sub">Multi-agent data engineering &nbsp;&middot;&nbsp; Bronze &rarr; Silver &rarr; Gold &nbsp;&middot;&nbsp; LangGraph on Databricks</div>
-    </div>
-  </div>
-  <div class="hero-right">
-    <span class="hero-chip"><span class="chip-dot" style="background:{_status_dot};"></span>{_status_label}</span>
-    <span class="hero-chip">Unity Catalog &middot; {_hero_cfg.get("catalog", "databricks_langgraph")}</span>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Fetch Current Graph State
+# Fetch current graph state once for the whole page
 state = app.get_state(config)
-
-# ----------------- Pipeline Lineage Status Bar -----------------
 stages = STAGE_DEFS
 
-# Calculate stage statuses: completed (Green), review (Amber), pending (Grey)
+# ── Stage statuses: completed / review / pending / failed ────────────────
 stage_statuses = []
 if not state.values:
     stage_statuses = ["pending"] * len(stages)
 else:
-    current_gate = state.next[0] if state.next else None
-    if not current_gate:
-        # Check if the pipeline has finished
-        if "final_report" in state.values:
-            stage_statuses = ["completed"] * len(stages)
-        else:
-            stage_statuses = ["pending"] * len(stages)
+    _sg_gate = state.next[0] if state.next else None
+    if not _sg_gate:
+        stage_statuses = ["completed"] * len(stages) if state.values.get("final_report") else ["pending"] * len(stages)
     else:
-        # Find index of current gate
-        gate_idx = -1
-        for idx, s in enumerate(stages):
-            if s["gate"] == current_gate:
-                gate_idx = idx
-                break
-        for idx, s in enumerate(stages):
-            if idx < gate_idx:
-                stage_statuses.append("completed")
-            elif idx == gate_idx:
-                stage_statuses.append("review")
-            else:
-                stage_statuses.append("pending")
+        _gate_idx = next((i for i, s in enumerate(stages) if s["gate"] == _sg_gate), -1)
+        for _idx in range(len(stages)):
+            stage_statuses.append("completed" if _idx < _gate_idx else ("review" if _idx == _gate_idx else "pending"))
 
-# ── Pipeline stage stepper ───────────────────────────────────────────────
-st.markdown("""
-<div class="section-label">
-  <span>Pipeline Progress</span>
-  <div class="section-line"></div>
+_exec_logs_cv = (state.values or {}).get("execution_logs", {}) if state.values else {}
+if any((l or {}).get("exit_code", 0) != 0 for l in _exec_logs_cv.values()) and stage_statuses[-1] != "completed":
+    stage_statuses[-1] = "failed"
+
+current_gate_key = state.next[0] if state.next else None
+current_step_key = next((s["step_key"] for s in STAGE_DEFS if s["gate"] == current_gate_key), None)
+_gen_src_cv = (state.values or {}).get("generation_source", {}) if state.values else {}
+
+# ── Command bar ──────────────────────────────────────────────────────────
+if not state.values:
+    _status_cls, _status_label = "neutral", "Not started"
+elif current_step_key:
+    _stage_nm = next(s["name"].split(". ", 1)[-1] for s in stages if s["step_key"] == current_step_key)
+    _status_cls, _status_label = "warn", f"Awaiting review &mdash; {_stage_nm}"
+elif state.values.get("final_report"):
+    _status_cls, _status_label = "ok", "Pipeline completed"
+else:
+    _status_cls, _status_label = "neutral", "Idle"
+
+_n_reused = sum(1 for v in _gen_src_cv.values() if v == "cache_reused")
+_reuse_chip = (
+    f'<span class="chip ok">{_n_reused}/{len(_gen_src_cv)} stages reused from cache</span>'
+    if _gen_src_cv and _n_reused else ""
+)
+
+_cfg_cb = load_config()
+st.markdown(f"""
+<div class="cmdbar">
+  <div class="cmdbar-left">
+    <div class="cmd-logo">M</div>
+    <div>
+      <div class="cmd-title">Medallion Agent Control Center</div>
+      <div class="cmd-sub">Multi-agent data engineering on Databricks &mdash; Bronze / Silver / Gold</div>
+    </div>
+  </div>
+  <div class="cmdbar-right">
+    <span class="chip {_status_cls}"><span class="chip-dot"></span>{_status_label}</span>
+    {_reuse_chip}
+    <span class="chip neutral">{_cfg_cb.get("catalog", "databricks_langgraph")}</span>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-_STEP_META = {
-    "completed": {"pill_bg": "#ECFDF5", "pill_fg": "#065F46", "label": "Completed"},
-    "review":    {"pill_bg": "#FFF8EB", "pill_fg": "#92400E", "label": "In Review"},
-    "pending":   {"pill_bg": "#F1F5F9", "pill_fg": "#94A3B8", "label": "Pending"},
-}
-_cells_html = []
-for _i, _stage in enumerate(stages):
-    _status = stage_statuses[_i]
-    _meta = _STEP_META[_status]
-    _icon = "&#10003;" if _status == "completed" else str(_i + 1)
-    _line_l_cls = " hidden" if _i == 0 else ""
-    _line_r_cls = " hidden" if _i == len(stages) - 1 else ""
-    _line_l_color = "#059669" if _i > 0 and stage_statuses[_i - 1] == "completed" else "#E3E8F0"
-    _line_r_color = "#059669" if _status == "completed" else "#E3E8F0"
-    _display_name = _stage["name"].split(". ", 1)[-1]
-    _name_cls = " pending" if _status == "pending" else ""
-    _cells_html.append(
-        f'<div class="step-cell">'
-        f'<div class="step-track">'
-        f'<div class="step-line{_line_l_cls}" style="background:{_line_l_color};"></div>'
-        f'<div class="step-circle {_status}">{_icon}</div>'
-        f'<div class="step-line{_line_r_cls}" style="background:{_line_r_color};"></div>'
-        f'</div>'
-        f'<div class="step-name{_name_cls}">{_display_name}</div>'
-        f'<span class="step-pill" style="background:{_meta["pill_bg"]}; color:{_meta["pill_fg"]};">{_meta["label"]}</span>'
-        f'</div>'
-    )
-st.markdown('<div class="stepper">' + "".join(_cells_html) + '</div>', unsafe_allow_html=True)
 
-# Per-stage actions, aligned under the stepper nodes
-cols = st.columns(len(stages))
-for i, stage in enumerate(stages):
-    with cols[i]:
-        # Trigger Rerun from this specific stage
-        gate_to_next_node = {
+# ── Agent workflow & lineage canvas (SVG) ────────────────────────────────
+def _workflow_canvas_svg(stages, statuses, gen_src) -> str:
+    """Render the six-agent workflow and the medallion data-lineage lane as
+    one self-contained SVG: status-tinted agent nodes with provenance tags
+    (CACHED / PATCHED / LLM), animated flow on completed edges, a pulsing
+    ring on the stage awaiting review, and dashed drops showing which agent
+    feeds which data layer."""
+    W, H = 1160, 268
+    NW, NH, Y = 158, 64, 26
+    C = {
+        "completed": {"bar": "#16A34A", "ring": "#BBE7C9", "ink": "#166534", "sub": "Completed"},
+        "review":    {"bar": "#D97706", "ring": "#F5D9A8", "ink": "#92400E", "sub": "Needs review"},
+        "pending":   {"bar": "#D1D5DB", "ring": "#E5E7EB", "ink": "#9CA3AF", "sub": "Queued"},
+        "failed":    {"bar": "#DC2626", "ring": "#F3B6B6", "ink": "#991B1B", "sub": "Failed"},
+    }
+    PROV = {"cache_reused": ("CACHED", "#16A34A"), "llm_patched": ("PATCHED", "#D97706"), "llm_fresh": ("LLM", "#0F62FE")}
+    parts = [f'<svg viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;font-family:Inter,sans-serif;min-width:900px;">']
+    parts.append(
+        "<style>"
+        ".wf-edge{stroke:#D1D5DB;stroke-width:2;fill:none;}"
+        ".wf-edge.done{stroke:#16A34A;stroke-dasharray:6 5;animation:wfdash 1s linear infinite;}"
+        ".wf-drop{stroke:#CBD5E1;stroke-width:1.5;stroke-dasharray:3 4;fill:none;}"
+        "@keyframes wfdash{to{stroke-dashoffset:-11;}}"
+        ".wf-pulse{animation:wfpulse 1.8s ease-out infinite;}"
+        "@keyframes wfpulse{0%{opacity:.55;}55%{opacity:.12;}100%{opacity:.55;}}"
+        "</style>"
+    )
+    parts.append('<defs><marker id="wfarr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9CA3AF"/></marker></defs>')
+    xs = [20 + i * ((W - 40 - NW) / 5.0) for i in range(6)]
+    midy = Y + NH / 2
+    for i in range(5):
+        cls = "wf-edge done" if statuses[i] == "completed" else "wf-edge"
+        parts.append(f'<line class="{cls}" x1="{xs[i] + NW:.0f}" y1="{midy:.0f}" x2="{xs[i + 1]:.0f}" y2="{midy:.0f}"/>')
+    for i, stg in enumerate(stages):
+        c = C[statuses[i]]
+        x = xs[i]
+        name = stg["name"].split(". ", 1)[-1]
+        if statuses[i] == "review":
+            parts.append(f'<rect class="wf-pulse" x="{x - 4:.0f}" y="{Y - 4}" width="{NW + 8}" height="{NH + 8}" rx="13" fill="none" stroke="{c["bar"]}" stroke-width="2"/>')
+        parts.append(f'<rect x="{x:.0f}" y="{Y}" width="{NW}" height="{NH}" rx="10" fill="#FFFFFF" stroke="{c["ring"]}" stroke-width="1.5"/>')
+        parts.append(f'<rect x="{x:.0f}" y="{Y}" width="4" height="{NH}" rx="2" fill="{c["bar"]}"/>')
+        parts.append(f'<text x="{x + 14:.0f}" y="{Y + 26}" font-size="13" font-weight="650" fill="#111827">{name}</text>')
+        parts.append(f'<text x="{x + 14:.0f}" y="{Y + 45}" font-size="10.5" font-weight="500" fill="{c["ink"]}">{c["sub"]}</text>')
+        prov = (gen_src or {}).get(stg["step_key"])
+        if prov in PROV:
+            lbl, col = PROV[prov]
+            bw = 10 + 6.2 * len(lbl)
+            parts.append(f'<rect x="{x + NW - bw - 7:.0f}" y="{Y + NH - 21}" width="{bw:.0f}" height="14" rx="7" fill="{col}" opacity="0.13"/>')
+            parts.append(f'<text x="{x + NW - 7 - bw / 2:.0f}" y="{Y + NH - 10.5}" font-size="8.5" font-weight="700" fill="{col}" text-anchor="middle" letter-spacing="0.5">{lbl}</text>')
+    LY = 196
+    lane = [("RAW VOLUME", "#6B7280"), ("BRONZE", "#A16207"), ("SILVER", "#64748B"), ("GOLD", "#CA8A04"), ("DATA PRODUCTS", "#0F62FE")]
+    LW, LH = 140, 32
+    lxs = [20 + j * ((W - 40 - LW) / 4.0) for j in range(5)]
+
+    def _drop(i_node, j_lane):
+        parts.append(
+            f'<path class="wf-drop" d="M {xs[i_node] + NW / 2:.0f} {Y + NH} '
+            f'C {xs[i_node] + NW / 2:.0f} {Y + NH + 42}, {lxs[j_lane] + LW / 2:.0f} {LY - 38}, {lxs[j_lane] + LW / 2:.0f} {LY}"/>'
+        )
+
+    _drop(0, 0); _drop(4, 1); _drop(4, 2); _drop(4, 3); _drop(5, 4)
+    parts.append(f'<text x="20" y="{LY - 12}" font-size="9.5" font-weight="700" fill="#9CA3AF" letter-spacing="1.4">DATA LINEAGE</text>')
+    for j, (lbl, col) in enumerate(lane):
+        lx = lxs[j]
+        parts.append(f'<rect x="{lx:.0f}" y="{LY}" width="{LW}" height="{LH}" rx="16" fill="{col}" opacity="0.08"/>')
+        parts.append(f'<rect x="{lx:.0f}" y="{LY}" width="{LW}" height="{LH}" rx="16" fill="none" stroke="{col}" opacity="0.4"/>')
+        parts.append(f'<circle cx="{lx + 18:.0f}" cy="{LY + 16}" r="4" fill="{col}"/>')
+        parts.append(f'<text x="{lx + 30:.0f}" y="{LY + 20}" font-size="10.5" font-weight="700" fill="#374151" letter-spacing="0.6">{lbl}</text>')
+        if j < 4:
+            parts.append(f'<line class="wf-edge" x1="{lx + LW:.0f}" y1="{LY + 16}" x2="{lxs[j + 1]:.0f}" y2="{LY + 16}" marker-end="url(#wfarr)"/>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+st.markdown('<div class="panel-label">Agent Workflow &amp; Lineage</div>', unsafe_allow_html=True)
+st.markdown('<div class="canvas-card">' + _workflow_canvas_svg(stages, stage_statuses, _gen_src_cv) + "</div>", unsafe_allow_html=True)
+
+# ── Stage Inspector ──────────────────────────────────────────────────────
+# One panel replaces the old per-stage button grid and the Action Center
+# tab: pick a stage, see its output + provenance, and — when it's the stage
+# the pipeline is paused on — approve/reject right here. Restart-from-stage
+# lives under Advanced.
+st.markdown('<div class="panel-label">Stage Inspector</div>', unsafe_allow_html=True)
+
+_GLYPH = {"completed": "✓", "review": "◉", "pending": "○", "failed": "✕"}
+_step_keys = [s["step_key"] for s in stages]
+_label_by_key = {
+    s["step_key"]: f"{_GLYPH[stage_statuses[i]]} {s['name'].split('. ', 1)[-1]}"
+    for i, s in enumerate(stages)
+}
+_default_idx = _step_keys.index(current_step_key) if current_step_key in _step_keys else 0
+selected_step = st.radio(
+    "Stage", _step_keys, index=_default_idx, horizontal=True,
+    format_func=lambda k: _label_by_key[k], label_visibility="collapsed",
+    key="inspector_stage",
+)
+sel_idx = _step_keys.index(selected_step)
+sel_stage = stages[sel_idx]
+sel_status = stage_statuses[sel_idx]
+sel_name = sel_stage["name"].split(". ", 1)[-1]
+
+with st.container(border=True):
+    _pill_cls, _pill_lbl = {
+        "completed": ("ok", "Completed"),
+        "review": ("warn", "Awaiting review"),
+        "pending": ("neutral", "Queued"),
+        "failed": ("err", "Failed"),
+    }[sel_status]
+    _prov_chip = {
+        "cache_reused": '<span class="chip ok">Reused from Unity Catalog cache &mdash; no LLM call</span>',
+        "llm_patched": '<span class="chip warn">Patched from prior version (schema changed)</span>',
+        "llm_fresh": '<span class="chip neutral">Freshly generated by the LLM</span>',
+    }.get(_gen_src_cv.get(selected_step), "")
+    st.markdown(f"""
+    <div class="insp-head">
+      <div><span class="insp-title">{sel_name}</span><span class="insp-agent">{sel_stage["agent_name"]}</span></div>
+      <div class="insp-chips"><span class="chip {_pill_cls}"><span class="chip-dot"></span>{_pill_lbl}</span>{_prov_chip}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not state.values:
+        st.info("No pipeline state yet. Start the pipeline from the Talk to Data tab (say “start the pipeline”) or from the notebook.")
+    else:
+        render_agent_output(sel_stage["agent_name"], state.values)
+
+    # ── Review decision — only for the stage the pipeline is paused on ──
+    if state.next and selected_step == current_step_key and state.values:
+        st.markdown("---")
+        st.markdown("##### Review decision")
+        st.caption(f"The pipeline is paused at **{sel_name}** and needs a human decision before it can continue.")
+        _decision = st.radio(
+            "Decision", ["Approve", "Reject"], index=0, horizontal=True,
+            key="inspector_decision", label_visibility="collapsed",
+        )
+        _feedback = st.text_area(
+            "Feedback / comments",
+            placeholder="Optional context if approving — concrete instructions for the agent if rejecting…",
+            key="inspector_feedback",
+        )
+        if st.button("Submit & resume pipeline", type="primary", key="inspector_submit"):
+            try:
+                approvals = dict(state.values.get("approved_steps", {}))
+                _agent_for_log = state.values.get("active_agent", sel_stage["agent_name"])
+                _dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
+                _issue_type = "data_quality" if selected_step == "dq" else selected_step
+
+                if _decision == "Approve":
+                    approvals[selected_step] = True
+                    _comments = ""
+                    try:
+                        memory.log_approval(spark, _dataset, _issue_type, [], f"Approved {selected_step} design", _feedback)
+                    except Exception as e:
+                        st.warning(f"Unable to log memory to table: {e}")
+                else:
+                    approvals[selected_step] = False
+                    _comments = _feedback
+                    try:
+                        memory.log_rejection(spark, _dataset, _issue_type, _feedback, selected_step)
+                    except Exception as e:
+                        st.warning(f"Unable to log rejection to memory table: {e}")
+
+                # Full audit snapshot to gold.agent_stage_review_log
+                try:
+                    run_id_for_audit = get_or_assign_run_id()
+                    try:
+                        # Must be the same structural schema fingerprint the caching
+                        # nodes compute — that's what lets was_previously_approved()
+                        # find THIS decision and auto-advance future cache-hit runs.
+                        fingerprint = get_schema_fingerprint(spark)
+                    except Exception:
+                        fingerprint = ""
+                    stage_output = get_stage_artifacts(selected_step, state.values)
+                    memory.init_stage_review_table(spark)
+                    memory.log_stage_review(
+                        spark,
+                        pipeline_run_id=run_id_for_audit,
+                        stage_key=selected_step,
+                        agent_name=_agent_for_log,
+                        decision="approved" if _decision == "Approve" else "rejected",
+                        reviewer_comments=_feedback,
+                        output=stage_output,
+                        dataset_fingerprint=fingerprint,
+                    )
+                except Exception as e:
+                    st.warning(f"Unable to log stage output to audit table: {e}")
+
+                app.update_state(config, {"approved_steps": approvals, "review_comments": _comments})
+                with st.spinner("Resuming pipeline… later cache-hit stages that were already approved will cascade automatically."):
+                    resume_with_autopilot(app, config)
+                sync_db_to_volume()
+                st.success("Pipeline resumed.")
+                st.rerun()
+            except Exception as e_click:
+                if isinstance(e_click, KeyError) and "__end__" in str(e_click):
+                    try:
+                        sync_db_to_volume()
+                    except Exception:
+                        pass
+                    st.success("Pipeline finished. Refreshing…")
+                    st.rerun()
+                else:
+                    st.error("Execution error during submit & resume:")
+                    st.exception(e_click)
+
+    # ── Advanced: restart the pipeline from this stage ───────────────────
+    with st.expander("Advanced — restart pipeline from this stage"):
+        st.caption(
+            "Rolls the checkpoint back to just before this agent and re-executes it. "
+            "Later stages re-run too, reusing Unity Catalog caches wherever the source "
+            "schema is unchanged."
+        )
+        _gate_to_node = {
             "profile_review_gate": "profiler",
             "data_quality_review_gate": "data_quality",
             "contracts_review_gate": "contracts",
             "modeling_review_gate": "modeling",
             "engineering_review_gate": "engineering",
-            "execution_review_gate": "execution"
+            "execution_review_gate": "execution",
         }
-        target_node = gate_to_next_node.get(stage["gate"])
-
-        # Make the widget clickable: view whatever this agent has produced so
-        # far, even if the pipeline has already moved past this gate. State
-        # values accumulate across the whole thread, so this works regardless
-        # of which stage is currently active.
-        if st.button("👁️ View Output", key=f"btn_view_{stage['gate']}", use_container_width=True):
-            if st.session_state.get("selected_stage_key") == stage["step_key"]:
-                st.session_state["selected_stage_key"] = None  # toggle closed
-            else:
-                st.session_state["selected_stage_key"] = stage["step_key"]
-            st.rerun()
-
-        if st.button("🔄 Rerun", key=f"btn_rerun_{stage['gate']}", use_container_width=True):
-            with st.spinner(f"Rolling back and running '{stage['name']}'..."):
-                if rollback_to_node(target_node):
-                    # Force reload the graph app connection to bind to the modified database state
+        if st.button(f"Restart from {sel_name}", key=f"restart_{sel_stage['gate']}"):
+            _target_node = _gate_to_node.get(sel_stage["gate"])
+            with st.spinner(f"Rolling back and running '{sel_name}'…"):
+                if rollback_to_node(_target_node):
                     refresh_graph_checkpoint()
-                    app_to_use = get_or_create_graph()
-
-                    # Run/stream the graph forward to execute the target agent node.
-                    # resume_with_autopilot also keeps cascading automatically through
-                    # any LATER gate that turns out to be an exact cache hit already
-                    # approved on a prior run (e.g. rerunning Profiler when nothing
-                    # downstream actually needs to change).
+                    _app_rr = get_or_create_graph()
                     try:
-                        # Note: intentionally NOT injecting a fresh pipeline_run_id here — this
-                        # path also covers rolling back to an earlier checkpoint WITHIN the same
-                        # run, which should keep its existing run ID. A brand-new ID is only
-                        # needed after a full Reset, and get_or_assign_run_id() lazily assigns one
-                        # the next time a review decision is submitted if none is present yet.
-                        inputs = {} if target_node == "profiler" else None
-                        resume_with_autopilot(app_to_use, config, initial_input=inputs)
+                        # Intentionally NOT injecting a fresh pipeline_run_id: rolling
+                        # back within the same run keeps its run ID; a new one is only
+                        # assigned lazily after a full Reset.
+                        _inputs = {} if _target_node == "profiler" else None
+                        resume_with_autopilot(_app_rr, config, initial_input=_inputs)
                     except Exception as e_stream:
                         if not (isinstance(e_stream, KeyError) and "__end__" in str(e_stream)):
                             st.error(f"Stream execution error: {e_stream}")
-
-                    # Sync updated state back to Volume and reload page
                     sync_db_to_volume()
                     refresh_graph_checkpoint()
-                    st.success(f"'{stage['name']}' execution completed successfully!")
+                    st.success(f"'{sel_name}' execution completed.")
                     st.rerun()
                 else:
-                    st.error("Cannot rerun: no historical checkpoint found for this stage.")
+                    st.error("Cannot restart: no historical checkpoint found for this stage.")
 
-# ----------------- Clickable Stage Output Viewer -----------------
-# Opens when a "View Output" button above is clicked. Shows that stage's
-# artifacts from the live thread state — independent of the current review
-# gate — so approving/rejecting a later stage no longer hides earlier output.
-#
-# Note: if the selected stage IS the one currently awaiting review, we don't
-# render its output here too — the Action Center (HITL) tab already renders
-# that exact same output inline as part of the approve/reject flow, and
-# showing it in both places at once on the same page read as a duplicate.
-# We only render here for stages OTHER than the active one; for the active
-# one we just point the user at Action Center.
-current_gate_key = state.next[0] if state.next else None
-current_step_key = next((s["step_key"] for s in STAGE_DEFS if s["gate"] == current_gate_key), None)
-
-selected_stage_key = st.session_state.get("selected_stage_key")
-if selected_stage_key:
-    selected_stage = next((s for s in STAGE_DEFS if s["step_key"] == selected_stage_key), None)
-    if selected_stage:
-        with st.container(border=True):
-            header_col, close_col = st.columns([6, 1])
-            with header_col:
-                st.markdown(f"#### 👁️ Output — {selected_stage['name']} ({selected_stage['agent_name']})")
-            with close_col:
-                if st.button("✕ Close", key="close_stage_viewer"):
-                    st.session_state["selected_stage_key"] = None
-                    st.rerun()
-
-            if selected_stage_key == current_step_key:
-                st.info(
-                    f"**{selected_stage['name']}** is the stage currently awaiting review — "
-                    "its output is shown in the **📥 Action Center (HITL)** tab below, where you can "
-                    "also approve or reject it."
-                )
-            elif state.values:
-                render_agent_output(selected_stage["agent_name"], state.values)
-            else:
-                st.info("No pipeline state yet — start the pipeline to generate output.")
+if not state.next and state.values and state.values.get("final_report"):
+    st.success("Pipeline is completely finished — no review pending.")
 
 # Sidebar: brand, environment, actions
 catalog_config = load_config()
@@ -1077,13 +1151,13 @@ st.sidebar.markdown(f"""
 st.sidebar.markdown('<div class="side-section">Actions</div>', unsafe_allow_html=True)
 
 # Refresh button
-if st.sidebar.button("🔄 Refresh Data"):
+if st.sidebar.button("Refresh data"):
     sync_db_from_volume()
     refresh_graph_checkpoint()
     st.rerun()
 
 # Reset button
-if st.sidebar.button("🗑️ Reset Pipeline / Start Fresh", type="secondary"):
+if st.sidebar.button("Reset pipeline / start fresh", type="secondary"):
     local_db = get_checkpoint_db_path()
     volume_db = get_volume_db_path()
     
@@ -1114,7 +1188,7 @@ if st.sidebar.button("🗑️ Reset Pipeline / Start Fresh", type="secondary"):
     st.rerun()
 
 # Diagnostics & Health check in sidebar
-with st.sidebar.expander("🛠️ Diagnostics & Health Check"):
+with st.sidebar.expander("Diagnostics & health"):
     local_db = get_checkpoint_db_path()
     volume_db = get_volume_db_path()
     
@@ -1162,13 +1236,13 @@ with st.sidebar.expander("🛠️ Diagnostics & Health Check"):
     else:
         st.text("No sync logs yet.")
 
-# Layout Tabs
-tab0, tab1, tab2, tab3, tab4 = st.tabs([
-    "💬 Talk to Data",
-    "📊 Ingestion Monitoring",
-    "📥 Action Center (HITL)",
-    "🕓 Run History",
-    "🧩 Data Products"
+# Layout Tabs — approvals live in the Stage Inspector above, so there is
+# no separate Action Center tab anymore.
+tab0, tab1, tab3, tab4 = st.tabs([
+    "Talk to Data",
+    "Observability",
+    "Audit Trail",
+    "Data Products",
 ])
 
 # ----------------- Tab 0: Talk to Data Chatbot -----------------
@@ -1180,7 +1254,7 @@ with tab0:
         st.session_state["pending_pipeline_action"] = None
 
     # ---- Header ----
-    st.markdown("#### 💬 Talk to Data")
+    st.markdown("#### Talk to Data")
     st.caption(
         "Ask anything about your dataset — row counts, schemas, data quality, "
         "pipeline status, and more. I can also start or advance the pipeline for you."
@@ -1255,7 +1329,7 @@ with tab0:
 
                         msg = (
                             "🚀 **Pipeline launched!** The Profiler agent is now running. "
-                            "Switch to the **Action Center (HITL)** tab to approve each stage as it completes."
+                            "Use the **Stage Inspector** at the top of the page to approve each stage as it completes."
                         )
                         st.session_state["chat_history"].append({
                             "role": "assistant", "content": msg, "profiling_triggered": False
@@ -1291,7 +1365,7 @@ with tab0:
 
                         msg = (
                             f"✅ The **{step.title()}** step is approved and the pipeline has resumed. "
-                            "Switch to the **Ingestion Monitoring** tab to track progress."
+                            "Track progress in the **Observability** tab."
                         )
                         st.session_state["chat_history"].append({
                             "role": "assistant", "content": msg, "profiling_triggered": False
@@ -1364,19 +1438,19 @@ with tab0:
     st.markdown("---")
     ctrl_col1, ctrl_col2, _ = st.columns([1, 1, 4])
     with ctrl_col1:
-        if st.button("🗑️ Clear Chat", key="clear_chat_btn"):
+        if st.button("Clear chat", key="clear_chat_btn"):
             st.session_state["chat_history"] = []
             st.session_state["pending_pipeline_action"] = None
             st.rerun()
     with ctrl_col2:
-        if st.button("♻️ Reset Profile Cache", key="reset_profile_cache_btn"):
+        if st.button("Reset profile cache", key="reset_profile_cache_btn"):
             clear_profiling_cache()
             st.success("Profiling cache cleared.")
 
 
-# ----------------- Tab 1: Ingestion Monitoring -----------------
+# ----------------- Tab 1: Observability -----------------
 with tab1:
-    st.markdown("### 📈 Ingestion Pipeline Metrics")
+    st.markdown("### Ingestion Pipeline Metrics")
     
     # Try fetching table statistics from Unity Catalog
     try:
@@ -1411,7 +1485,7 @@ with tab1:
         st.warning(f"Unable to query live table metrics: {e}")
         
     st.markdown("---")
-    st.markdown("### 📝 Pipeline Run Details")
+    st.markdown("### Pipeline Run Details")
     if not state.values:
         st.write("No active pipeline execution logs found in checkpointer. Start the run from the notebook.")
     else:
@@ -1430,137 +1504,13 @@ with tab1:
         else:
             st.info("No ETL script execution logs generated yet. Awaiting agent schema design and coding steps.")
 
-# ----------------- Tab 2: Action Center (HITL) -----------------
-with tab2:
-    st.markdown("### 📥 Human-in-the-Loop Pending Approvals")
-    
-    if not state.next:
-        st.success("🎉 Pipeline is completely finished! No actions pending.")
-    else:
-        current_node = state.next[0]
-        active_agent = state.values.get("active_agent", "None")
-        
-        st.warning(f"⚠️ **Action Required**: Pipeline is suspended BEFORE running node: **`{current_node}`**")
-        st.markdown(f"Review the artifacts generated by the previous agent (**{active_agent}**) below:")
-
-        # Define step mappings for user actions
-        step_mapping = {s["gate"]: s["step_key"] for s in STAGE_DEFS}
-        step_key = step_mapping.get(current_node)
-
-        # Render specific artifact content based on what node is paused
-        # (shared with the clickable stage viewer above and the audit tab)
-        render_agent_output(active_agent, state.values)
-
-        st.markdown("---")
-        st.markdown("#### Submit Decision")
-        
-        # Approve/Reject controls
-        action = st.radio("Review Decision", ["Approve", "Reject"], index=0, horizontal=True)
-        feedback = st.text_area("Review Feedback / Comments", placeholder="Enter comments or instructions if rejecting, or additional context...")
-        
-        if st.button("Submit & Resume Pipeline"):
-            try:
-                if step_key:
-                    approvals = dict(state.values.get("approved_steps", {}))
-                    
-                    if action == "Approve":
-                        st.success(f"Approving step '{step_key}'...")
-                        approvals[step_key] = True
-                        comments = ""
-                        
-                        # Log approval to memory Delta Table
-                        try:
-                            dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
-                            issue_type = "data_quality" if step_key == "dq" else step_key
-                            resolution = f"Approved {step_key} design"
-                            memory.log_approval(spark, dataset, issue_type, [], resolution, feedback)
-                        except Exception as e:
-                            st.warning(f"Unable to log memory to table: {e}")
-                    else:
-                        st.error(f"Rejecting step '{step_key}'...")
-                        approvals[step_key] = False
-                        comments = feedback
-
-                        # Log rejection to memory so agents can learn from it
-                        try:
-                            dataset = list(state.values.get("discovered_tables", {}).keys())[0] if state.values.get("discovered_tables") else "generic"
-                            issue_type = "data_quality" if step_key == "dq" else step_key
-                            memory.log_rejection(spark, dataset, issue_type, feedback, step_key)
-                        except Exception as e:
-                            st.warning(f"Unable to log rejection to memory table: {e}")
-
-                    # Log the full agent output + decision to the Unity Catalog audit
-                    # table (gold.agent_stage_review_log) so it stays reviewable —
-                    # filterable by date, grouped by run — even after this thread
-                    # advances past this stage or is later reset.
-                    try:
-                        run_id_for_audit = get_or_assign_run_id()
-                        try:
-                            # IMPORTANT: must be the same structural schema fingerprint the
-                            # caching nodes (dq_node/contract_node/modeling_node/
-                            # engineering_node in agents.py) compute — that's what lets
-                            # was_previously_approved() find THIS human decision on a future
-                            # run and auto-advance instead of re-prompting for review.
-                            fingerprint = get_schema_fingerprint(spark)
-                        except Exception:
-                            fingerprint = ""
-                        stage_output = get_stage_artifacts(step_key, state.values)
-                        memory.init_stage_review_table(spark)
-                        memory.log_stage_review(
-                            spark,
-                            pipeline_run_id=run_id_for_audit,
-                            stage_key=step_key,
-                            agent_name=active_agent,
-                            decision="approved" if action == "Approve" else "rejected",
-                            reviewer_comments=feedback,
-                            output=stage_output,
-                            dataset_fingerprint=fingerprint,
-                        )
-                    except Exception as e:
-                        st.warning(f"Unable to log stage output to audit table: {e}")
-
-                    # Update graph checkpointer state
-                    app.update_state(
-                        config,
-                        {
-                            "approved_steps": approvals,
-                            "review_comments": comments
-                        }
-                    )
-                    
-                    # Resume execution — auto-cascades through any later gate that's
-                    # an exact cache hit already approved on a prior run.
-                    with st.spinner("Resuming pipeline execution with new state context... Please wait..."):
-                        resume_with_autopilot(app, config)
-
-                    # Sync state back to Unity Catalog Volume
-                    sync_db_to_volume()
-                    
-                    st.success("Pipeline resumed! Refreshing dashboard...")
-                    st.rerun()
-                else:
-                    st.error("Invalid state. Unable to route step mapping approvals.")
-            except Exception as e_click:
-                # Catch and ignore the LangGraph end-of-execution KeyError
-                if isinstance(e_click, KeyError) and "__end__" in str(e_click):
-                    # Sync state and rerun since the graph finished successfully
-                    try:
-                        sync_db_to_volume()
-                    except Exception:
-                        pass
-                    st.success("Pipeline successfully finished! Refreshing dashboard...")
-                    st.rerun()
-                else:
-                    st.error("Execution error during Submit & Resume:")
-                    st.exception(e_click)
-
 # ----------------- Tab 3: Run History -----------------
 with tab3:
-    st.markdown("### 🕓 Run History & Review Decisions")
+    st.markdown("### Run History & Review Decisions")
     st.caption("Every pipeline execution attempt and every human review decision, kept for auditing — even after the live thread moves on or is reset.")
 
     hist_subtab, decisions_subtab, outputs_subtab = st.tabs([
-        "📜 Pipeline Run History", "✅ Review Decisions", "🗂️ Agent Outputs & Reviews"
+        "Pipeline Runs", "Review Decisions", "Agent Outputs & Reviews"
     ])
 
     # ---- Sub-tab: Pipeline Run History (gold.agent_run_history) ----
@@ -1623,7 +1573,7 @@ with tab3:
             )
 
             if len(filtered) > 0:
-                st.markdown("#### 🔍 Inspect a Run")
+                st.markdown("#### Inspect a Run")
                 options = filtered.sort_values("run_timestamp", ascending=False)["run_id"].tolist()
                 labels = {
                     r: f"{ts} · {status} · {rid[:8]}"
@@ -1642,10 +1592,10 @@ with tab3:
                 status_color = "🟢" if run_row["pipeline_status"] == "COMPLETED" else "🔴"
                 st.markdown(f"**{status_color} {run_row['pipeline_status']}** — `{run_row['run_id']}` — {run_row['run_timestamp']}")
 
-                with st.expander("📝 Final Run Report", expanded=True):
+                with st.expander("Final Run Report", expanded=True):
                     st.markdown(run_row.get("final_report") or "No report captured for this run.")
 
-                with st.expander("⚙️ Script Execution Logs (stdout/stderr)"):
+                with st.expander("Script Execution Logs (stdout/stderr)"):
                     try:
                         exec_logs = json.loads(run_row.get("execution_logs") or "{}")
                     except Exception:
@@ -1659,7 +1609,7 @@ with tab3:
                     else:
                         st.info("No execution logs captured.")
 
-                with st.expander("📊 Silver / Gold Summaries"):
+                with st.expander("Silver / Gold Summaries"):
                     try:
                         silver_s = json.loads(run_row.get("silver_summary") or "{}")
                     except Exception:
@@ -1676,7 +1626,7 @@ with tab3:
                         st.markdown("**Gold Summary**")
                         st.json(gold_s or {"info": "empty"})
 
-                with st.expander("✅ Approvals in effect at time of run"):
+                with st.expander("Approvals in effect at time of run"):
                     try:
                         approved = json.loads(run_row.get("approved_steps") or "{}")
                     except Exception:
@@ -1707,7 +1657,7 @@ with tab3:
                 pandas_df = pd.DataFrame()
 
             if len(pandas_df) == 0:
-                st.info("No review decisions logged yet. They'll appear here once you approve or reject a step in the Action Center tab.")
+                st.info("No review decisions logged yet. They'll appear here once you approve or reject a step in the Stage Inspector.")
             else:
                 if "decision" not in pandas_df.columns:
                     # Backward-compat: infer from resolution text if reading an older table/cache
@@ -1776,7 +1726,7 @@ with tab3:
         if not stage_reviews:
             st.info(
                 "No agent outputs logged yet. Every time you approve or reject a step in the "
-                "Action Center tab, that stage's full output is captured here."
+                "Stage Inspector, that stage's full output is captured here."
             )
         else:
             audit_df = pd.DataFrame(stage_reviews)
@@ -1839,7 +1789,7 @@ with tab3:
                 },
             )
 
-            st.markdown("#### 🔍 Inspect a Reviewed Output")
+            st.markdown("#### Inspect a Reviewed Output")
             if len(filtered_a) > 0:
                 row_options = filtered_a.index.tolist()
                 row_labels = {
@@ -1871,7 +1821,7 @@ with tab3:
                 else:
                     st.caption("No reviewer comments were entered for this decision.")
 
-                with st.expander("📦 Agent Output at Time of Review", expanded=True):
+                with st.expander("Agent Output at Time of Review", expanded=True):
                     try:
                         output_dict = json.loads(sel_row.get("output_json") or "{}")
                     except Exception:
@@ -1886,7 +1836,7 @@ with tab3:
 
 # ----------------- Tab 4: Data Products -----------------
 with tab4:
-    st.markdown("### 🧩 Data Products")
+    st.markdown("### Data Products")
     st.caption(
         "The Data Product Advisor analyzes your completed Gold star schema and proposes purpose-built "
         "marts/views on top of it — a Customer 360, a booking profitability mart, a supplier scorecard, etc. "
@@ -1899,14 +1849,14 @@ with tab4:
     if not gold_ready:
         st.info(
             "The Gold star schema hasn't been designed/built yet. Run the pipeline through the "
-            "Modeler → Engineer → Orchestrator stages (see the **Action Center (HITL)** tab) before "
+            "Modeler → Engineer → Orchestrator stages (see the **Stage Inspector** at the top of the page) before "
             "analyzing data product opportunities."
         )
     else:
         adv_col1, adv_col2 = st.columns([1, 3])
         with adv_col1:
             analyze_clicked = st.button(
-                "🔍 Analyze Gold for Data Products", type="primary",
+                "Analyze Gold for data products", type="primary",
                 use_container_width=True, key="analyze_products_btn",
             )
         with adv_col2:
@@ -1976,7 +1926,7 @@ with tab4:
                     build_col, status_col = st.columns([1, 3])
                     with build_col:
                         build_clicked = st.button(
-                            "🔨 Build", key=f"build_{product_id}", use_container_width=True
+                            "Build", key=f"build_{product_id}", use_container_width=True
                         )
                     with status_col:
                         if status == "built":

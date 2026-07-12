@@ -943,6 +943,16 @@ for i, stage in enumerate(stages):
 # Opens when a "View Output" button above is clicked. Shows that stage's
 # artifacts from the live thread state — independent of the current review
 # gate — so approving/rejecting a later stage no longer hides earlier output.
+#
+# Note: if the selected stage IS the one currently awaiting review, we don't
+# render its output here too — the Action Center (HITL) tab already renders
+# that exact same output inline as part of the approve/reject flow, and
+# showing it in both places at once on the same page read as a duplicate.
+# We only render here for stages OTHER than the active one; for the active
+# one we just point the user at Action Center.
+current_gate_key = state.next[0] if state.next else None
+current_step_key = next((s["step_key"] for s in STAGE_DEFS if s["gate"] == current_gate_key), None)
+
 selected_stage_key = st.session_state.get("selected_stage_key")
 if selected_stage_key:
     selected_stage = next((s for s in STAGE_DEFS if s["step_key"] == selected_stage_key), None)
@@ -955,7 +965,14 @@ if selected_stage_key:
                 if st.button("✕ Close", key="close_stage_viewer"):
                     st.session_state["selected_stage_key"] = None
                     st.rerun()
-            if state.values:
+
+            if selected_stage_key == current_step_key:
+                st.info(
+                    f"**{selected_stage['name']}** is the stage currently awaiting review — "
+                    "its output is shown in the **📥 Action Center (HITL)** tab below, where you can "
+                    "also approve or reject it."
+                )
+            elif state.values:
                 render_agent_output(selected_stage["agent_name"], state.values)
             else:
                 st.info("No pipeline state yet — start the pipeline to generate output.")

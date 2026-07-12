@@ -24,3 +24,17 @@ ehthumbs.db
 Thumbs.db
 
 .databricks
+
+# Local LangGraph checkpoint DBs (runtime state, not source)
+checkpoint*.db
+checkpoint*.db-wal
+checkpoint*.db-shm
+downloaded_checkpoint*
+*.db-wal
+
+# Editor / OS artifacts
+.vscode/
+.fuse_hidden*
+
+# Local raw source data staged for pipeline testing (not source code)
+/Source/

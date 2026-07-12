@@ -101,6 +101,41 @@ class MockChatModel:
                 )
             }
             return MockResponse(json.dumps(eng_data))
+        elif self.node_name == "product_advisor":
+            products_data = {
+                "products": [
+                    {
+                        "id": "customer_360",
+                        "name": "Customer 360",
+                        "description": "Repeat-booking and marketing segmentation view for CRM/email campaigns.",
+                        "product_type": "view",
+                        "source_tables": ["dim_customer", "fact_bookings"],
+                        "grain": "One row per current customer.",
+                        "refresh_frequency": "real-time (view)",
+                        "sql": (
+                            "SELECT c.customer_sk, c.customer_id, c.full_name, c.email, c.marketing_optin, "
+                            "COUNT(b.booking_sk) AS total_bookings, SUM(b.total_price_eur) AS lifetime_value_eur "
+                            "FROM dim_customer c LEFT JOIN fact_bookings b ON b.customer_sk = c.customer_sk "
+                            "WHERE c.is_current = true "
+                            "GROUP BY c.customer_sk, c.customer_id, c.full_name, c.email, c.marketing_optin"
+                        ),
+                    },
+                    {
+                        "id": "booking_profitability",
+                        "name": "Booking Profitability Mart",
+                        "description": "Margin and revenue by brand/channel/time for exec dashboards and finance close.",
+                        "product_type": "table",
+                        "source_tables": ["fact_bookings", "dim_channel", "dim_date"],
+                        "grain": "One row per booking.",
+                        "refresh_frequency": "daily",
+                        "sql": (
+                            "SELECT b.booking_id, b.brand, ch.channel_group, b.total_price_eur, b.total_cost_eur, b.margin_eur "
+                            "FROM fact_bookings b LEFT JOIN dim_channel ch ON ch.channel_sk = b.channel_sk"
+                        ),
+                    },
+                ]
+            }
+            return MockResponse(json.dumps(products_data))
         else:
             return MockResponse("# Mock Orchestrator Report\nPipeline execution finished successfully.")
 
@@ -1308,6 +1343,62 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
         "active_agent": "Orchestrator",
         "review_comments": "",
         "last_run_id": run_id,
+    }
+
+
+def product_advisor_node(state: AgentState) -> Dict[str, Any]:
+    """Data Product Advisor: inspects the completed Gold star schema (DDL + data
+    dictionary + row counts) and proposes candidate downstream data products —
+    purpose-built marts/views for a specific consumer (finance, marketing,
+    supplier ops, revenue management, ML) — built ON TOP of Gold.
+
+    Unlike the six sequential pipeline agents, this one is intentionally NOT
+    wired into the interrupt_before HITL chain in graph.py. Gold is a stable,
+    already-approved asset by the time this runs, so there's no draft to
+    approve/reject here — it's an on-demand analysis triggered from the
+    dashboard's "Data Products" tab, any time after Gold has been built.
+    """
+    print(">>> [Data Product Advisor] Analyzing Gold layer for data product opportunities...")
+
+    gold_ddl = state.get("gold_ddl", "")
+    data_dictionary = state.get("data_dictionary", "")
+    gold_summary = state.get("gold_summary", {}) or {}
+
+    # GUARD: No Gold DDL means Gold hasn't been designed/built yet — nothing to analyze.
+    if not gold_ddl:
+        error_msg = (
+            "Data Product Advisor blocked: no Gold DDL found in pipeline state. "
+            "Run the pipeline through a completed Gold build (Modeler → Engineer → Orchestrator stages) first."
+        )
+        print(f"[Data Product Advisor] ABORT: {error_msg}")
+        return {
+            "product_candidates": [],
+            "product_advisor_error": error_msg,
+            "active_agent": "DataProductAdvisor",
+        }
+
+    row_counts = gold_summary.get("row_counts", {})
+    prompt = (
+        f"Gold Star Schema DDL:\n{gold_ddl}\n\n"
+        f"Data Dictionary:\n{data_dictionary}\n\n"
+        f"Current Gold table row counts:\n{json.dumps(row_counts, indent=2)}"
+    )
+
+    messages = [
+        SystemMessage(content=prompts.PRODUCT_ADVISOR_SYSTEM_PROMPT),
+        HumanMessage(content=prompt)
+    ]
+
+    llm = get_llm("product_advisor")
+    response = llm.invoke(messages)
+
+    parsed = parse_json_from_response(response.content)
+    products = parsed.get("products", [])
+
+    return {
+        "product_candidates": products,
+        "product_advisor_error": "",
+        "active_agent": "DataProductAdvisor",
     }
 
 

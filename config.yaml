@@ -7,6 +7,7 @@ schemas:
   bronze: "bronze"
   silver: "silver"
   gold: "gold"
+  products: "products"  # Materialized data products built on top of gold (see data_platform/products.py)
 
 # Unity Catalog Volume path where raw source CSV files are placed
 # For example: /Volumes/hospitality_catalog/raw/source_volume/

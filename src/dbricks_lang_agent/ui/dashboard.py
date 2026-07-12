@@ -21,7 +21,10 @@ sys.path.append(os.path.abspath("src"))
 from dbricks_lang_agent.data_platform.spark_utils import get_spark, load_config
 from dbricks_lang_agent.orchestrator.graph import create_pipeline_graph, get_checkpoint_db_path
 from dbricks_lang_agent.orchestrator import memory
-from dbricks_lang_agent.orchestrator.agents import chat_with_data_agent, clear_profiling_cache, get_dataset_fingerprint
+from dbricks_lang_agent.orchestrator.agents import (
+    chat_with_data_agent, clear_profiling_cache, get_dataset_fingerprint, product_advisor_node,
+)
+from dbricks_lang_agent.data_platform import products as products_module
 from databricks.sdk import WorkspaceClient
 import io
 
@@ -1049,11 +1052,12 @@ with st.sidebar.expander("🛠️ Diagnostics & Health Check"):
         st.text("No sync logs yet.")
 
 # Layout Tabs
-tab0, tab1, tab2, tab3 = st.tabs([
+tab0, tab1, tab2, tab3, tab4 = st.tabs([
     "💬 Talk to Data",
     "📊 Ingestion Monitoring",
     "📥 Action Center (HITL)",
-    "🕓 Run History"
+    "🕓 Run History",
+    "🧩 Data Products"
 ])
 
 # ----------------- Tab 0: Talk to Data Chatbot -----------------
@@ -1764,3 +1768,127 @@ with tab3:
                         st.info("No output snapshot was captured for this review.")
             else:
                 st.info("No reviewed outputs match the current filters.")
+
+# ----------------- Tab 4: Data Products -----------------
+with tab4:
+    st.markdown("### 🧩 Data Products")
+    st.caption(
+        "The Data Product Advisor analyzes your completed Gold star schema and proposes purpose-built "
+        "marts/views on top of it — a Customer 360, a booking profitability mart, a supplier scorecard, etc. "
+        "Review a proposal, then build it with one click. Each product is materialized into its own "
+        "`products` schema in Unity Catalog, kept separate from the conformed Gold model."
+    )
+
+    gold_ready = bool(state.values.get("gold_ddl")) if state.values else False
+
+    if not gold_ready:
+        st.info(
+            "The Gold star schema hasn't been designed/built yet. Run the pipeline through the "
+            "Modeler → Engineer → Orchestrator stages (see the **Action Center (HITL)** tab) before "
+            "analyzing data product opportunities."
+        )
+    else:
+        adv_col1, adv_col2 = st.columns([1, 3])
+        with adv_col1:
+            analyze_clicked = st.button(
+                "🔍 Analyze Gold for Data Products", type="primary",
+                use_container_width=True, key="analyze_products_btn",
+            )
+        with adv_col2:
+            existing_candidates = state.values.get("product_candidates", []) if state.values else []
+            if existing_candidates:
+                st.caption(
+                    f"{len(existing_candidates)} proposed product(s) from the last analysis. "
+                    "Re-run anytime — Gold rarely changes shape between runs."
+                )
+
+        if analyze_clicked:
+            with st.spinner("🧠 Data Product Advisor is analyzing the Gold star schema..."):
+                try:
+                    advisor_result = product_advisor_node(state.values or {})
+                    app.update_state(config, advisor_result)
+                    sync_db_to_volume()
+                    refresh_graph_checkpoint()
+                    if advisor_result.get("product_advisor_error"):
+                        st.warning(advisor_result["product_advisor_error"])
+                    else:
+                        st.success(f"Proposed {len(advisor_result.get('product_candidates', []))} candidate data product(s).")
+                    st.rerun()
+                except Exception as e_adv:
+                    st.error(f"Data Product Advisor failed: {e_adv}")
+                    st.exception(e_adv)
+
+        st.markdown("---")
+
+        candidates = state.values.get("product_candidates", []) if state.values else []
+        build_status = state.values.get("product_build_status", {}) if state.values else {}
+        advisor_error = state.values.get("product_advisor_error", "") if state.values else ""
+
+        if advisor_error:
+            st.warning(advisor_error)
+
+        if not candidates:
+            st.info("No data products proposed yet. Click **🔍 Analyze Gold for Data Products** above to get started.")
+        else:
+            for product in candidates:
+                product_id = product.get("id", "unknown")
+                status_info = build_status.get(product_id, {})
+                status = status_info.get("status", "not_built")
+
+                with st.container(border=True):
+                    head_col, badge_col = st.columns([4, 1])
+                    with head_col:
+                        st.markdown(f"#### {product.get('name', product_id)}")
+                        st.caption(product.get("description", ""))
+                    with badge_col:
+                        type_label = (product.get("product_type") or "view").upper()
+                        st.markdown(
+                            f'<div style="text-align:right;"><span class="agent-badge">{type_label}</span></div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    meta_col1, meta_col2, meta_col3 = st.columns(3)
+                    with meta_col1:
+                        st.markdown(f"**Grain:** {product.get('grain', 'N/A')}")
+                    with meta_col2:
+                        st.markdown(f"**Source tables:** {', '.join(product.get('source_tables', [])) or 'N/A'}")
+                    with meta_col3:
+                        st.markdown(f"**Refresh:** {product.get('refresh_frequency', 'N/A')}")
+
+                    with st.expander("View generated SQL"):
+                        st.code(product.get("sql", "-- no SQL generated --"), language="sql")
+
+                    build_col, status_col = st.columns([1, 3])
+                    with build_col:
+                        build_clicked = st.button(
+                            "🔨 Build", key=f"build_{product_id}", use_container_width=True
+                        )
+                    with status_col:
+                        if status == "built":
+                            st.success(
+                                f"✅ Built as `{status_info.get('target_fqn', '')}` "
+                                f"({status_info.get('row_count', 'N/A')} rows) — "
+                                f"last built {status_info.get('last_built_ts', '')}"
+                            )
+                        elif status == "failed":
+                            st.error(f"❌ Build failed: {status_info.get('error', 'Unknown error')}")
+                        else:
+                            st.caption("Not built yet.")
+
+                    if build_clicked:
+                        with st.spinner(f"Building `{product_id}`..."):
+                            try:
+                                build_result = products_module.build_product(product)
+                                updated_status = dict(build_status)
+                                updated_status[product_id] = build_result
+                                app.update_state(config, {"product_build_status": updated_status})
+                                sync_db_to_volume()
+                                refresh_graph_checkpoint()
+                                if build_result.get("status") == "built":
+                                    st.success(f"Built `{product_id}` successfully!")
+                                else:
+                                    st.error(f"Build failed: {build_result.get('error')}")
+                                st.rerun()
+                            except Exception as e_build:
+                                st.error(f"Unexpected error building `{product_id}`: {e_build}")
+                                st.exception(e_build)

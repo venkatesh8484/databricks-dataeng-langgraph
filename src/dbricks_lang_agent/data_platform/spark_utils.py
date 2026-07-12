@@ -42,7 +42,8 @@ def load_config() -> dict:
             "raw": "raw",
             "bronze": "bronze",
             "silver": "silver",
-            "gold": "gold"
+            "gold": "gold",
+            "products": "products"
         },
         "volume_raw_path": "/Volumes/databricks_langgraph/raw/source_volume",
         "llm": {

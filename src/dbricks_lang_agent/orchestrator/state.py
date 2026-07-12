@@ -42,5 +42,12 @@ class AgentState(TypedDict):
     profiler_error: str                 # Set by profiler_node when no tables discovered
     contracts_error: str                # Set by contract_node when it cannot generate contracts
 
+    # Data Product Advisor — analyzes the completed Gold star schema and proposes
+    # candidate downstream data products. Runs on-demand from the dashboard's
+    # "Data Products" tab (not part of the sequential HITL chain — see agents.py).
+    product_candidates: List[Dict[str, Any]]   # Proposed products: id, name, description, product_type, source_tables, sql, ...
+    product_advisor_error: str                 # Set when the advisor cannot run (e.g. Gold not built yet)
+    product_build_status: Dict[str, Any]       # product_id -> {status, target_fqn, row_count, last_built_ts, error}
+
     # LangGraph routing variables
     loop_count: int                     # Tracks consecutive agent rejections — capped at MAX_AGENT_RETRIES to prevent infinite loops

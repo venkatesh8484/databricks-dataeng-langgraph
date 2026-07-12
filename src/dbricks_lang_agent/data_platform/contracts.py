@@ -114,19 +114,52 @@ def sanitize_contract_rules(contract: dict, columns: Dict[str, Dict[str, Any]]) 
             rules.pop("range", None)
             changes.append("range: removed entirely (no valid numeric columns left)")
 
-    # --- allowed_values / regex: drop refs to nonexistent columns only ---
-    for rule_key in ("allowed_values", "regex"):
-        rule = rules.get(rule_key)
-        if isinstance(rule, dict) and isinstance(rule.get("checks"), dict):
-            kept = {c: v for c, v in rule["checks"].items() if c in known}
-            dropped = set(rule["checks"]) - set(kept)
-            for c in sorted(dropped):
-                changes.append(f"{rule_key}: dropped '{c}' (not in source schema)")
-            if kept:
-                rule["checks"] = kept
-            else:
-                rules.pop(rule_key, None)
-                changes.append(f"{rule_key}: removed entirely (no valid columns left)")
+    # --- regex: drop refs to nonexistent columns only ---
+    rx = rules.get("regex")
+    if isinstance(rx, dict) and isinstance(rx.get("checks"), dict):
+        kept = {c: v for c, v in rx["checks"].items() if c in known}
+        for c in sorted(set(rx["checks"]) - set(kept)):
+            changes.append(f"regex: dropped '{c}' (not in source schema)")
+        if kept:
+            rx["checks"] = kept
+        else:
+            rules.pop("regex", None)
+            changes.append("regex: removed entirely (no valid columns left)")
+
+    # --- allowed_values: drop refs to nonexistent columns AND union in the
+    #     profiler's OBSERVED distinct values so real categories the LLM didn't
+    #     list aren't silently quarantined. The classic failure: the contract
+    #     lists has_pool ∈ {"Yes","No"} while the source actually holds "Y"/"N",
+    #     so every row fails a SOFT allowed_values check, gets quarantined, and
+    #     silver comes out empty with no HALT to flag it. Profiling captures each
+    #     low-cardinality column's real values as `value_counts`; we widen the
+    #     allowed set to cover them (never narrowing the LLM's intended domain).
+    av = rules.get("allowed_values")
+    if isinstance(av, dict) and isinstance(av.get("checks"), dict):
+        kept = {}
+        for c, allowed in av["checks"].items():
+            if c not in known:
+                changes.append(f"allowed_values: dropped '{c}' (not in source schema)")
+                continue
+            observed = {
+                v for v in (columns[c].get("value_counts") or {}).keys()
+                if v not in ("None", "", "null", "NULL")
+            }
+            if observed and isinstance(allowed, list):
+                missing = observed - set(str(a) for a in allowed)
+                if missing:
+                    allowed = sorted(set(str(a) for a in allowed) | observed)
+                    changes.append(
+                        f"allowed_values: widened '{c}' to include observed value(s) "
+                        f"{sorted(missing)} (the contract's list didn't cover values "
+                        f"actually present in the source)"
+                    )
+            kept[c] = allowed
+        if kept:
+            av["checks"] = kept
+        else:
+            rules.pop("allowed_values", None)
+            changes.append("allowed_values: removed entirely (no valid columns left)")
 
     return contract, changes
 

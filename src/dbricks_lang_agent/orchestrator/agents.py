@@ -928,6 +928,197 @@ def _validate_script_structure(code: str, script_name: str = "") -> tuple:
     return True, ""
 
 
+# Columns the platform generates that are legitimately referenced in gold.py
+# but may not appear in the source-derived Gold DDL. Allowlisted so the schema
+# validator below never flags them as hallucinations.
+_GOLD_GENERATED_COLS = {
+    "eff_start_ts", "eff_end_ts", "is_current", "is_active",
+    "_ingestion_ts", "_batch_id", "_source_layer",
+    "date_key", "date_sk", "full_date",
+}
+
+
+def _split_top_level_args(argstr: str) -> list:
+    """Split a call's argument string on top-level commas only (ignoring commas
+    inside nested (), [], {} or string literals)."""
+    args, cur, depth = [], "", 0
+    quote = None
+    for ch in argstr:
+        if quote:
+            cur += ch
+            if ch == quote:
+                quote = None
+            continue
+        if ch in "\"'":
+            quote = ch
+            cur += ch
+        elif ch in "([{":
+            depth += 1
+            cur += ch
+        elif ch in ")]}":
+            depth -= 1
+            cur += ch
+        elif ch == "," and depth == 0:
+            args.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        args.append(cur)
+    return [a.strip() for a in args]
+
+
+def _string_literal(s: str):
+    """Return the inner value of a simple quoted string literal, else None."""
+    import re
+    m = re.match(r"""^[rbuRBU]?["'](\w+)["']$""", s.strip())
+    return m.group(1) if m else None
+
+
+def _extract_call_args(code: str, func: str) -> list:
+    """Return the (paren-balanced) argument string of every `func(...)` call in
+    code. Handles nested parens like read_table('silver', 'x') inside the args."""
+    out = []
+    needle = func + "("
+    i = 0
+    while True:
+        start = code.find(needle, i)
+        if start == -1:
+            break
+        j = start + len(needle)
+        depth = 1
+        quote = None
+        while j < len(code) and depth > 0:
+            ch = code[j]
+            if quote:
+                if ch == quote:
+                    quote = None
+            elif ch in "\"'":
+                quote = ch
+            elif ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            j += 1
+        out.append(code[start + len(needle):j - 1])
+        i = j
+    return out
+
+
+def _parse_ddl_columns(ddl: str) -> dict:
+    """Best-effort parse of `CREATE TABLE ... (...)` statements into
+    {table_name: set(column_names)}. Tolerant of Databricks DDL; skips
+    table-level constraint lines. table_name is the bare name (catalog/schema
+    stripped)."""
+    import re
+    tables = {}
+    for m in re.finditer(
+        r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`\w.]+)\s*\(",
+        ddl, re.IGNORECASE,
+    ):
+        name = m.group(1).strip().strip("`").split(".")[-1]
+        # Balance-match the column-definition parens starting at the '('.
+        open_idx = m.end() - 1
+        depth, j = 0, open_idx
+        while j < len(ddl):
+            if ddl[j] == "(":
+                depth += 1
+            elif ddl[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        body = ddl[open_idx + 1:j]
+        cols = set()
+        for part in _split_top_level_args(body):
+            part = part.strip()
+            if not part:
+                continue
+            if re.match(r"(?i)(PRIMARY|FOREIGN|CONSTRAINT|UNIQUE|CHECK)\b", part):
+                continue
+            cm = re.match(r"[`\"]?(\w+)[`\"]?\s+\S", part)
+            if cm:
+                cols.add(cm.group(1))
+        if cols:
+            tables[name] = cols
+    return tables
+
+
+def _validate_gold_against_ddl(gold_code: str, ddl: str) -> tuple:
+    """Deterministic PRE-EXECUTION check that catches the UNRESOLVED_COLUMN class
+    of Spark AnalysisErrors — which compile() cannot see — so the engineering
+    self-heal loop fixes them automatically before the real run instead of the
+    pipeline dying in execution_node and waiting for a human.
+
+    Deliberately CONSERVATIVE: only flags high-confidence key-name
+    inconsistencies (surrogate/business keys), never ordinary computed columns,
+    so it can't block otherwise-valid code. Returns (ok, reason)."""
+    import re
+    tables = _parse_ddl_columns(ddl)
+    if not tables:
+        return True, ""  # couldn't parse DDL — do not block
+    all_cols = set()
+    for cset in tables.values():
+        all_cols |= cset
+
+    problems = []
+
+    # Surrogate keys this script actually CREATES via scd2_merge (6th arg).
+    created_surrogates = set()
+    scd2_arglists = [_split_top_level_args(a) for a in _extract_call_args(gold_code, "scd2_merge")]
+    for args in scd2_arglists:
+        if len(args) >= 6:
+            s = _string_literal(args[5])
+            if s:
+                created_surrogates.add(s)
+
+    # Rule A — scd2_merge surrogate_key_col must match the dimension's DDL.
+    # scd2_merge(new_df, schema, table, business_key, tracked_cols, surrogate_key_col)
+    for args in scd2_arglists:
+        if len(args) >= 6:
+            table = _string_literal(args[2])
+            surrogate = _string_literal(args[5])
+            business = _string_literal(args[3])
+            if table and table in tables:
+                declared = tables[table]
+                if surrogate and surrogate not in declared:
+                    sk_hint = sorted(c for c in declared if c.endswith("_sk") or c.endswith("_key"))
+                    problems.append(
+                        f"scd2_merge for dimension '{table}' passes surrogate_key_col='{surrogate}', but "
+                        f"'{surrogate}' is NOT a column in the Gold DDL for '{table}'. "
+                        f"The DDL declares surrogate key(s): {sk_hint or sorted(declared)}. "
+                        f"Set surrogate_key_col to the DDL's <entity>_sk name and use that SAME name in every "
+                        f"fact join that resolves this dimension."
+                    )
+                if business and business not in declared:
+                    problems.append(
+                        f"scd2_merge for dimension '{table}' passes business_key='{business}', but that column "
+                        f"is not in the Gold DDL for '{table}' (declared: {sorted(declared)}). Use the exact "
+                        f"natural-key column name from the DDL/silver schema."
+                    )
+
+    # Rule B — any KEY-LIKE column reference (col("x") / F.col('x')) whose name
+    # ends in _sk or _bk and exists in NO DDL table and is not created by
+    # scd2_merge here is almost certainly a hallucinated key name (e.g.
+    # accommodation_bk, component_sk built under a different name).
+    known = all_cols | created_surrogates | _GOLD_GENERATED_COLS
+    referenced = set(re.findall(r"""(?:F\.)?col\(\s*["'](\w+)["']\s*\)""", gold_code))
+    for ref in sorted(referenced):
+        if re.search(r"_(sk|bk)$", ref) and ref not in known:
+            problems.append(
+                f"gold.py references col('{ref}') but '{ref}' is not declared in the Gold DDL for any table "
+                f"and is not generated in this script — a likely hallucinated key name. Use the exact "
+                f"<entity>_sk surrogate (or real natural key) column name from the Gold DDL."
+            )
+
+    if problems:
+        return False, (
+            "[Schema Validation] gold.py references columns inconsistent with the Gold DDL — fix these before "
+            "it fails at runtime with UNRESOLVED_COLUMN:\n" + "\n".join(f"  - {p}" for p in problems)
+        )
+    return True, ""
+
+
 def _sanitize_and_heal_code(code: str) -> str:
     """Auto-inject missing PySpark imports and heal line-continuation/indent issues."""
     if not code:
@@ -1682,6 +1873,24 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
                             "Return ONLY the executable Python script as a properly escaped "
                             "JSON string value — no JSON wrapper, no markdown fence, no triple quotes."
                         ),
+                    }
+
+            # Deterministic schema check for gold.py: compile() cannot see Spark
+            # AnalysisErrors (UNRESOLVED_COLUMN), so a surrogate/business-key name
+            # mismatch between the DDL and the generated joins sails through the
+            # syntax gate and only blows up later in execution_node — where the
+            # graph pauses for a human instead of self-healing. Validating the
+            # gold code against the Gold DDL HERE turns those into a normal
+            # verification failure that the loop below auto-repairs via the LLM,
+            # with no human in the loop.
+            if res["exit_code"] == 0 and script_name == "gold.py":
+                _ddl_ok, _ddl_reason = _validate_gold_against_ddl(current_code, ddl_str)
+                if not _ddl_ok:
+                    print(f"[Compiler Loop] {script_name} failed schema validation against the Gold DDL.")
+                    res = {
+                        "exit_code": 1,
+                        "stdout": res.get("stdout", ""),
+                        "stderr": _ddl_reason,
                     }
             verification_logs[script_name] = res
 

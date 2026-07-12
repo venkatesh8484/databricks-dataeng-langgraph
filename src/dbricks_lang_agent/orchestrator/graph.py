@@ -468,7 +468,7 @@ GATE_TO_STEP_KEY = {
 }
 
 
-def resume_with_autopilot(app, config: dict, initial_input: Optional[dict] = None, max_auto_advances: int = 12):
+def resume_with_autopilot(app, config: dict, initial_input: Optional[dict] = None, max_auto_advances: int = 24):
     """Stream the graph forward, then keep auto-resuming through any review
     gate whose `approved_steps` flag was ALREADY set to True by the agent
     node itself — which only happens when that node hit an exact
@@ -505,13 +505,30 @@ def resume_with_autopilot(app, config: dict, initial_input: Optional[dict] = Non
 
     _stream(initial_input)
 
+    # Bounded automatic runtime self-heal. execution_node runs the generated
+    # PySpark against the real catalog, so it surfaces errors that compile()
+    # (and thus the engineering compile loop) cannot — e.g. UNRESOLVED_COLUMN.
+    # On such a failure route_after_execution already routes back to
+    # 'engineering' for a targeted patch, but interrupt_before pauses at the
+    # execution gate, so nothing advances until a human clicks Reject. This loop
+    # performs that reject-and-retry automatically: on a detected execution
+    # failure it resumes through the execution gate (→ engineering patches from
+    # the stderr) and auto-approves the resulting engineering patch so it flows
+    # straight back into execution — up to max_execution_repairs times, then it
+    # stops and hands control to a human if the code still won't run.
+    max_execution_repairs = 3
+    exec_repairs = 0
+
     for _ in range(max_auto_advances):
         state = app.get_state(config)
         if not state.next:
             break
         current_gate = state.next[0]
         step_key = GATE_TO_STEP_KEY.get(current_gate)
-        approved_steps = (state.values or {}).get("approved_steps", {}) if state.values else {}
+        values = state.values or {}
+        approved_steps = values.get("approved_steps", {}) if values else {}
+
+        # 1. Cache-hit gate a human already approved on a prior run — cascade.
         if step_key and approved_steps.get(step_key) is True:
             print(
                 f"[Autopilot] '{current_gate}' was already auto-approved (schema-fingerprint "
@@ -519,6 +536,40 @@ def resume_with_autopilot(app, config: dict, initial_input: Optional[dict] = Non
             )
             _stream(None)
             continue
+
+        # 2. Runtime self-heal: execution finished but a script failed and no
+        #    human has ruled on the report gate yet.
+        if current_gate == "execution_review_gate":
+            logs = values.get("execution_logs", {}) or {}
+            has_failure = any((l or {}).get("exit_code", 0) != 0 for l in logs.values())
+            human_reviewed = approved_steps.get("report") is not None
+            if has_failure and not human_reviewed and exec_repairs < max_execution_repairs:
+                exec_repairs += 1
+                failed = [s for s, l in logs.items() if (l or {}).get("exit_code", 0) != 0]
+                print(
+                    f"[Autopilot] Execution failed for {failed} — automatic self-heal "
+                    f"{exec_repairs}/{max_execution_repairs}: routing back to engineering for a targeted patch."
+                )
+                _stream(None)  # execution_review_gate → route_after_execution → engineering
+                continue
+            if has_failure and not human_reviewed:
+                print(
+                    f"[Autopilot] Execution still failing after {max_execution_repairs} automatic self-heal "
+                    f"attempts — pausing for human review."
+                )
+            break
+
+        # 3. During an active self-heal cycle, push the engineering patch straight
+        #    back into execution without waiting for a human click. engineering_node
+        #    carries approved_steps forward, so the flag may already be True from a
+        #    prior cycle — resume regardless, just ensuring it's set.
+        if current_gate == "engineering_review_gate" and exec_repairs > 0:
+            print(f"[Autopilot] Resuming engineering self-heal patch into execution (attempt {exec_repairs}/{max_execution_repairs}).")
+            if approved_steps.get("engineering") is not True:
+                app.update_state(config, {"approved_steps": {**approved_steps, "engineering": True}, "review_comments": ""})
+            _stream(None)
+            continue
+
         break
 
     return app.get_state(config)

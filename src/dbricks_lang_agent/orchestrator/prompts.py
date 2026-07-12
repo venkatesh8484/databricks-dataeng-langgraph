@@ -194,6 +194,14 @@ Return your generated scripts as a JSON object:
   "silver_code": "Python code string",
   "gold_code": "Python code string"
 }
+
+OUTPUT FORMAT — NON-NEGOTIABLE:
+- Each value MUST be ONE valid JSON string: newlines escaped as \\n, tabs as \\t,
+  double quotes as \\", backslashes as \\\\.
+- NEVER use Python triple quotes (\"\"\") as string delimiters inside the JSON —
+  that is not valid JSON and the entire response will be rejected.
+- The string value must contain ONLY the Python script itself — no surrounding
+  JSON, no markdown fences, no prose inside the code.
 """
 
 ORCHESTRATOR_SYSTEM_PROMPT = """

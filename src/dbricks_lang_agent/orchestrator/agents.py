@@ -855,10 +855,86 @@ def modeling_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
+def _unwrap_pseudo_json_code(code: str) -> str:
+    """Recover the actual Python script when `code` is really the LLM's raw
+    JSON wrapper text stored by mistake — e.g. the literal string
+    '{ "silver_code": \"\"\"from pyspark...\"\"\" }'.
+
+    This happened in production: the model wrapped its (invalid, triple-quoted)
+    JSON in a code fence, every JSON parse strategy failed, and the fenced-block
+    fallback then returned the WHOLE wrapper as if it were the script. Worse, a
+    dict literal like that COMPILES as valid Python (it's just an expression),
+    so syntax checking alone can't catch it — exec()ing it is a silent no-op.
+    Unwrap it here; _validate_script_structure() below is the backstop.
+    """
+    if not code:
+        return code
+    import re
+    s = code.strip()
+    # Strip a stray markdown fence first
+    fence = re.match(r"^```(?:json|python|py)?\s*\n(.*?)\n?```$", s, re.DOTALL)
+    if fence:
+        s = fence.group(1).strip()
+    if not s.startswith("{") or not re.search(r'"\w+_code"\s*:', s[:300]):
+        return code if not fence else s
+    # Triple-quoted pseudo-JSON value (greedy to the LAST closing triple quote)
+    m = re.search(r'"\w+_code"\s*:\s*"""(.*)"""\s*,?\s*\}?\s*$', s, re.DOTALL)
+    if m:
+        print("[Sanity Guard] Unwrapped a triple-quoted pseudo-JSON wrapper around the script.")
+        return m.group(1).strip("\n")
+    # Unterminated triple-quoted value (response truncated)
+    m = re.search(r'"\w+_code"\s*:\s*"""(.*)$', s, re.DOTALL)
+    if m:
+        print("[Sanity Guard] Unwrapped an UNTERMINATED triple-quoted pseudo-JSON wrapper (response was likely truncated).")
+        return m.group(1).rstrip().rstrip("}").rstrip().strip("\n")
+    # Properly-escaped JSON that just never got parsed
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(s)
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k.endswith("_code") and isinstance(v, str) and v.strip():
+                    print("[Sanity Guard] Unwrapped a valid-JSON wrapper around the script.")
+                    return v
+    except Exception:
+        pass
+    return code
+
+
+def _validate_script_structure(code: str, script_name: str = "") -> tuple:
+    """Structural gate a script must pass before it is trusted, cached, or
+    executed. compile() alone is NOT sufficient — a JSON wrapper stored as
+    code is a valid Python dict expression that compiles and exec()s as a
+    silent no-op. Returns (ok: bool, reason: str)."""
+    import ast
+    if not code or not code.strip():
+        return False, "script is empty"
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return False, f"SyntaxError at line {e.lineno}: {e.msg}"
+    has_import = any(isinstance(n, (ast.Import, ast.ImportFrom)) for n in ast.walk(tree))
+    # A real ETL script has statements beyond bare dict/string constant expressions
+    substantive = [
+        n for n in tree.body
+        if not (isinstance(n, ast.Expr) and isinstance(n.value, (ast.Dict, ast.Constant)))
+    ]
+    if not substantive:
+        return False, (
+            "the code is just a bare dict/string expression — it looks like the LLM's JSON "
+            "response wrapper was stored as the script instead of the Python code inside it"
+        )
+    if not has_import:
+        return False, "no import statements found — not a runnable PySpark script"
+    return True, ""
+
+
 def _sanitize_and_heal_code(code: str) -> str:
     """Auto-inject missing PySpark imports and heal line-continuation/indent issues."""
     if not code:
         return code
+
+    # 0. If the "code" is actually a JSON wrapper containing the code, unwrap it
+    code = _unwrap_pseudo_json_code(code)
 
     # 1. Replace literal backslash-n sequences with actual newlines
     # (Since we do this first, we can clean up literal '\n' formatting artifacts)
@@ -1372,6 +1448,26 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     if not reset_requested and not engineering_explicitly_rejected:
         cached = memory.get_stored_codebase(spark, fingerprint)
         if cached:
+            # Self-repair the cache on read: unwrap any entry that is actually a
+            # stored JSON wrapper (see _unwrap_pseudo_json_code) and DROP any
+            # entry that fails structural validation, so a poisoned cache row
+            # forces a fresh generation instead of being reused forever.
+            repaired: Dict[str, str] = {}
+            for k, v in cached.items():
+                fixed = _unwrap_pseudo_json_code(v or "")
+                ok, reason = _validate_script_structure(fixed, k)
+                if ok:
+                    if fixed != v:
+                        print(f"[Codebase Memory] Repaired cached {k} (unwrapped a stored JSON wrapper) — re-persisting the clean version.")
+                        try:
+                            memory.log_script_code(spark, fingerprint, k, fixed)
+                        except Exception as e_fix:
+                            print(f"[Codebase Memory] WARNING: failed to persist repaired {k}: {e_fix}")
+                    repaired[k] = fixed
+                else:
+                    print(f"[Codebase Memory] DISCARDING cached {k} — failed validation ({reason}). It will be regenerated fresh.")
+            cached = repaired
+        if cached:
             print(f"[Codebase Memory] Found cached, proven-good code for: {sorted(cached.keys())}")
 
     contracts_str = "\n".join([f"--- {tbl} contract ---\n{s}" for tbl, s in state["contracts"].items()])
@@ -1422,6 +1518,10 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             f"{{\n"
             f"  \"{key_name}\": \"Corrected PySpark code string\"\n"
             f"}}\n"
+            f"OUTPUT FORMAT — NON-NEGOTIABLE: the value must be ONE valid JSON string "
+            f"(newlines as \\n, quotes as \\\"). NEVER use Python triple quotes as JSON "
+            f"string delimiters, and put ONLY the Python script in the value — no JSON "
+            f"wrapper or markdown fence inside it.\n"
         )
         messages = [
             SystemMessage(content=prompts.ENGINEER_SYSTEM_PROMPT),
@@ -1526,6 +1626,23 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         for attempt in range(4): # 1 initial + 3 retries
             print(f"[Compiler Loop] Verifying {script_name} (Attempt {attempt + 1}, mode={verify_mode})...")
             res = _run_and_verify_script(script_name, current_code, mode=verify_mode)
+
+            # Structural gate on top of compile/execute: a JSON wrapper stored
+            # as code is a valid Python dict expression — it compiles and
+            # exec()s as a silent no-op. Force such "successes" into the
+            # self-heal path with an explicit reason the LLM can act on.
+            if res["exit_code"] == 0:
+                _ok, _reason = _validate_script_structure(current_code, script_name)
+                if not _ok:
+                    res = {
+                        "exit_code": 1,
+                        "stdout": res.get("stdout", ""),
+                        "stderr": (
+                            f"[Structural Validation] {script_name} rejected: {_reason}. "
+                            "Return ONLY the executable Python script as a properly escaped "
+                            "JSON string value — no JSON wrapper, no markdown fence, no triple quotes."
+                        ),
+                    }
             verification_logs[script_name] = res
 
             # Audit every attempt: attempt 0 is tagged with how this script's
@@ -1579,6 +1696,10 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
                     f"{{\n"
                     f"  \"{key_name}\": \"Corrected PySpark code string\"\n"
                     f"}}\n"
+                    f"OUTPUT FORMAT — NON-NEGOTIABLE: the value must be ONE valid JSON string "
+                    f"(newlines as \\n, quotes as \\\"). NEVER use Python triple quotes as JSON "
+                    f"string delimiters, and put ONLY the Python script in the value — no JSON "
+                    f"wrapper or markdown fence inside it.\n"
                 )
                 
                 messages = [
@@ -1721,7 +1842,25 @@ def execution_node(state: AgentState) -> Dict[str, Any]:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 code_content = f.read()
-                
+
+            # Guard: never exec a script that fails structural validation (e.g. a
+            # JSON wrapper stored as code — compiles fine, exec()s as a silent
+            # no-op). Unwrap if possible; otherwise fail loudly so the router
+            # sends it back to the Data Engineer for regeneration.
+            code_content = _unwrap_pseudo_json_code(code_content)
+            _ok_struct, _reason_struct = _validate_script_structure(code_content, s)
+            if not _ok_struct:
+                logs[s] = {
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": (
+                        f"[Structural Validation] Refusing to execute {s}: {_reason_struct}. "
+                        "The stored code is not a runnable script — it must be regenerated."
+                    ),
+                }
+                print(f"!!! {logs[s]['stderr']}")
+                break
+
             stdout_io = io.StringIO()
             stderr_io = io.StringIO()
             exit_code = 0

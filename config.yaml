@@ -19,3 +19,13 @@ volume_raw_path: "/Volumes/databricks_langgraph/raw/source_volume"
 llm:
   endpoint: "databricks-meta-llama-3-1-70b-instruct"
   temperature: 0.0
+  # Explicit output token ceiling. The engineering node generates THREE full
+  # PySpark scripts (bronze+silver+gold) in a single combined JSON response —
+  # easily several thousand output tokens. Without an explicit max_tokens,
+  # ChatDatabricks/the serving endpoint falls back to a much lower default,
+  # silently truncating long responses mid-JSON. A truncated response has no
+  # closing brace/fence, which is exactly what causes
+  # "Failed to parse JSON from LLM response... Expecting value: line 1 column 1"
+  # — the parser correctly detects the response isn't valid JSON because it
+  # genuinely isn't (it's an incomplete fragment), not because of a parsing bug.
+  max_tokens: 8192

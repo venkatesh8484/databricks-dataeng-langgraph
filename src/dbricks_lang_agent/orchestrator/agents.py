@@ -148,12 +148,19 @@ def get_llm(node_name: str) -> Any:
     cfg = load_config()
     endpoint = cfg.get("llm", {}).get("endpoint", "databricks-meta-llama-3-1-70b-instruct")
     temperature = cfg.get("llm", {}).get("temperature", 0.0)
+    # Without an explicit ceiling, long combined-JSON responses (engineering_node
+    # generating bronze+silver+gold in one call is the worst case) can get
+    # silently truncated by whatever lower default the endpoint falls back to —
+    # producing an incomplete JSON response that then fails to parse. See
+    # config.yaml's llm.max_tokens comment for the full explanation.
+    max_tokens = cfg.get("llm", {}).get("max_tokens", 8192)
 
     try:
         # Databricks model serving integration in langchain
         return ChatDatabricks(
             endpoint=endpoint,
             temperature=temperature,
+            max_tokens=max_tokens,
         )
     except Exception as e:
         print(f"Warning: Failed to load ChatDatabricks endpoint. Falling back to MockChatModel. Error: {e}")
@@ -193,59 +200,73 @@ def parse_json_from_response(content: str, fallback_key: str = None) -> dict:
     below fails and `fallback_key` is supplied, we make one last attempt to pull
     the first fenced code block out of the response and return it under that key,
     rather than raising and losing the fix entirely.
+
+    IMPORTANT implementation note: the values in this JSON are entire PySpark
+    scripts, which are virtually guaranteed to contain their own `{`/`}`
+    characters (f-strings, dict literals, `json.dump({...})`, etc.). A naive
+    `\\{.*?\\}` / `\\{.*\\}` regex match — the previous approach — gets fooled by
+    those embedded braces and either matches too little (non-greedy stops at
+    the first `}` it finds, which is usually INSIDE the code, not the JSON
+    object's real end) or, in rarer cases, too much. `json.JSONDecoder.raw_decode`
+    parses using the actual JSON grammar starting from the first `{`, so braces
+    inside string values can never confuse it — it always finds the JSON
+    object's true end regardless of what's nested inside the string content.
     """
     import re
     content_str = content.strip()
 
-    # 1. Try to find json code block first
-    code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content_str, re.DOTALL)
+    def _raw_decode_from_first_brace(text: str):
+        start = text.find("{")
+        if start == -1:
+            return None
+        try:
+            obj, _end_idx = json.JSONDecoder().raw_decode(text, start)
+            return obj
+        except Exception as e:
+            print(f"[parse_json_from_response] raw_decode attempt failed: {e}")
+            return None
+
+    # 1. Try the content of a fenced code block, wherever it appears in the
+    # response (models often prefix the fence with prose like "Here are the
+    # generated scripts as a JSON object:" — search anywhere, not just at the
+    # very start of the response).
+    code_block_match = re.search(r"```(?:json)?\s*\n?(.*?)```", content_str, re.DOTALL)
     if code_block_match:
-        try:
-            sanitized = sanitize_json_string(code_block_match.group(1).strip())
-            return json.loads(sanitized)
-        except Exception:
-            pass
-            
-    # 2. Find the first '{' and the last '}' (greedy match)
-    brace_match = re.search(r"(\{.*\})", content_str, re.DOTALL)
-    if brace_match:
-        try:
-            sanitized = sanitize_json_string(brace_match.group(1).strip())
-            return json.loads(sanitized)
-        except Exception:
-            pass
-            
-    # 3. Fallback to parsing the stripped content directly
-    cleaned = content_str
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    cleaned = cleaned.strip()
-    try:
-        sanitized = sanitize_json_string(cleaned)
-        return json.loads(sanitized)
-    except Exception as e_direct:
-        # Last resort: the model may have ignored the JSON-output instruction and
-        # replied with prose + a fenced code block instead (common with reasoning-
-        # style responses like "Step-by-step analysis... Fixed solution: ```python").
-        # Recover the code rather than discarding a valid fix over a format miss.
-        if fallback_key:
-            fence_match = re.search(r"```(?:python|py)?\s*\n(.*?)```", content_str, re.DOTALL)
-            if fence_match:
-                print(
-                    f"[parse_json_from_response] WARNING: Response was not valid JSON "
-                    f"(model likely ignored JSON-output instructions). Recovered code "
-                    f"from a fenced code block instead and mapped it to '{fallback_key}'."
-                )
-                return {fallback_key: fence_match.group(1).strip()}
-        raise ValueError(
-            f"Failed to parse JSON from LLM response.\n"
-            f"Parser error: {e_direct}\n"
-            f"Response content length: {len(content_str)}\n"
-            f"Response content snippet (first 1000 chars):\n"
-            f"{content_str[:1000]}"
-        ) from e_direct
+        sanitized = sanitize_json_string(code_block_match.group(1).strip())
+        result = _raw_decode_from_first_brace(sanitized)
+        if result is not None:
+            return result
+
+    # 2. Try the whole response directly — covers responses with no fence at
+    # all, or where the fence regex above didn't match cleanly.
+    sanitized_full = sanitize_json_string(content_str)
+    result = _raw_decode_from_first_brace(sanitized_full)
+    if result is not None:
+        return result
+
+    # 3. Last resort: the model may have ignored the JSON-output instruction
+    # entirely and replied with prose + a fenced code block instead (common
+    # with reasoning-style responses like "Step-by-step analysis... Fixed
+    # solution: ```python"). Recover the code rather than discarding a valid
+    # fix over a format miss. Only usable when the caller expects a single
+    # script back (fallback_key) — a combined multi-script response with no
+    # valid JSON structure can't be safely split this way.
+    if fallback_key:
+        fence_match = re.search(r"```(?:python|py)?\s*\n(.*?)```", content_str, re.DOTALL)
+        if fence_match:
+            print(
+                f"[parse_json_from_response] WARNING: Response was not valid JSON "
+                f"(model likely ignored JSON-output instructions). Recovered code "
+                f"from a fenced code block instead and mapped it to '{fallback_key}'."
+            )
+            return {fallback_key: fence_match.group(1).strip()}
+
+    raise ValueError(
+        f"Failed to parse JSON from LLM response.\n"
+        f"Response content length: {len(content_str)}\n"
+        f"Response content snippet (first 1000 chars):\n"
+        f"{content_str[:1000]}"
+    )
 
 
 # ---- Node Functions ----

@@ -2,8 +2,9 @@ table: bookings
 source_file: raw_bookings.csv
 business_key: [external_booking_id]
 description: >
-  Booking header. Grain = one row per booking. Assumed EUR (see FX policy in
-  data_model/data_dictionary.md) since no currency column present at this grain.
+  Vessel order header. Grain = one row per order. Monetary columns are EUR thousands.
+  Assumed EUR (see FX policy in data_model/data_dictionary.md) since no currency column
+  present at this grain. accommodation_start/end = build start / delivery date.
 
 schema:
   required_columns:
@@ -48,8 +49,8 @@ rules:
     max_fail_rate: 0.01
     checks:
       is_owner_booking: ["Y", "N"]
-      booking_channel: ["Corporate", "Telephone", "GDS", "OTA", "Web", "Travel Agent"]
-      channel_group: ["Direct", "Indirect", "Corporate"]
+      booking_channel: ["Direct Tender", "Government Contract", "Framework Agreement", "Broker", "Repeat Order", "Export Credit"]
+      channel_group: ["Direct", "Indirect", "Government"]
 
   range:
     severity: soft

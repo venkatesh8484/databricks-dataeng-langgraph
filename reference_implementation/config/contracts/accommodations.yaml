@@ -2,7 +2,7 @@ table: accommodations
 source_file: raw_accommodations.csv
 business_key: [external_accommodation_id]
 description: >
-  Accommodation unit master. 60 units across 3 brands. Attributes (price_band,
+  Vessel master. 60 vessels across 3 product families (brands). Attributes (price_band,
   commission_rate, rating, contract_type) change over time -> SCD Type 2 in gold.
 
 schema:
@@ -53,8 +53,8 @@ rules:
     checks:
       has_pool: ["Y", "N"]
       pets_allowed: ["Y", "N"]
-      price_band: ["Budget", "Standard", "Premium", "Luxury", "Ultra-Luxury"]
-      contract_type: ["Fixed Rate", "Revenue Share", "Management Contract", "Lease"]
+      price_band: ["Workboat", "Standard", "Premium", "Naval", "Flagship"]
+      contract_type: ["Fixed Price", "Cost Plus", "Build-to-Print", "Lease"]
 
   range:
     severity: soft
@@ -75,5 +75,6 @@ rules:
 
 notes:
   - "address2/address3 are 100% null in source — dropped in silver."
-  - "withdrawn_date is null for ~97% of rows (still-active units) — null is the expected/majority state, not a defect."
+  - "withdrawn_date is null for ~97% of rows (in-service vessels) — null is the expected/majority state, not a defect; a populated value marks a decommissioned/withdrawn hull."
   - "date_created/date_live/withdrawn_date drive SCD2 change tracking on price_band, commission_rate, rating, contract_type in gold."
+  - "brand = product family (SeaGuard Defence / PortMaster Workboats / OceanBuild Offshore); accommodation_type = vessel class; commission_rate = build margin %; bedrooms/max_occupancy = deck count / complement; monetary figures elsewhere are EUR thousands."

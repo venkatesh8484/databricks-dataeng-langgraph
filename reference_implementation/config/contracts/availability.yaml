@@ -2,7 +2,7 @@ table: availability
 source_file: raw_availability.csv
 business_key: [external_accommodation_id, availability_date]
 description: >
-  Daily availability snapshot per accommodation. Only a subset of accommodations
+  Daily build-slot / berth availability snapshot per vessel. Only a subset of vessels
   are present in any given extract — expected (rolling feed), not a completeness defect.
 
 schema:

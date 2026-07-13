@@ -1,0 +1,701 @@
+raw_customer_id,source_system,external_customer_id,customer_ref,email,title,forename,surname,telephone,mobile,address1,address2,city,postcode,country,marketing_optin,load_ts,source_file
+1,ProtelPMS,CUST100001,CR-000001,liam.bogaert@example.com,Mrs,Liam,Bogaert,+32 417 872246,+32 473 809570,190 Rue Main St,Apt 3B,Liège,B-7912,UK,Y,2023-01-31 00:00:00,customers_20240101.csv
+2,ProtelPMS,CUST100002,CR-000002,lucas.fontaine@example.com,Prof,Lucas,Fontaine,+32 425 850800,+32 490 835392,140 Rue Main St,,Bruges,B-8359,Luxembourg,N,2023-10-12 00:00:00,customers_20240101.csv
+3,ProtelPMS,CUST100003,CR-000003,louis.willems@example.com,Mrs,Louis,Willems,+32 497 452944,+32 473 197251,98 Rue Main St,Apt 3B,Ghent,B-6635,UK,N,2023-09-28 00:00:00,customers_20240101.csv
+4,ProtelPMS,CUST100004,CR-000004,elena.janssen@example.com,Prof,Elena,Janssen,+32 437 969693,+32 490 748564,93 Rue Main St,Floor 2,Knokke-Heist,B-2139,Japan,Y,2024-11-08 00:00:00,customers_20240101.csv
+5,ProtelPMS,CUST100005,CR-000005,olivia.declercq@example.com,Dr,Olivia,Declercq,+32 435 575435,+32 490 974628,94 Rue Main St,Floor 2,Ghent,B-6820,Germany,Y,2024-11-17 00:00:00,customers_20240201.csv
+6,Micros,CUST100006,CR-000006,leon.lecomte@example.com,Mrs,Leon,Lecomte,+32 420 584714,+32 482 383060,164 Rue Main St,Floor 2,Knokke-Heist,B-6313,France,Y,2023-08-23 00:00:00,customers_20240101.csv
+7,ProtelPMS,CUST100007,CR-000007,mia.maes@example.com,Prof,Mia,Maes,+32 491 429963,+32 476 787277,128 Rue Main St,,Knokke-Heist,B-8517,Netherlands,Y,2023-09-29 00:00:00,customers_20240101.csv
+8,Micros,CUST100008,CR-000008,matteo.fontaine@example.com,Prof,Matteo,Fontaine,+32 454 711878,+32 482 479580,57 Rue Main St,Floor 2,Liège,B-9085,UK,Y,2023-02-18 00:00:00,customers_20240101.csv
+9,Micros,CUST100009,CR-000009,james.vandamme@example.com,Mr,James,Van Damme,+32 449 500156,+32 489 590785,136 Rue Main St,,Liège,B-1188,Japan,N,2023-04-28 00:00:00,customers_20240301.csv
+10,Mews,CUST100010,CR-000010,lea.janssen@example.com,Mrs,Lea,Janssen,+32 458 103402,+32 493 854639,68 Rue Main St,Floor 2,Liège,B-2743,UK,N,2023-11-02 00:00:00,customers_20240301.csv
+11,Micros,CUST100011,CR-000011,james.willems@example.com,Prof,James,Willems,+32 400 728038,+32 480 612340,5 Rue Main St,Apt 3B,Ghent,B-6038,France,Y,2023-03-01 00:00:00,customers_20240101.csv
+12,ProtelPMS,CUST100012,CR-000012,noah.bogaert@example.com,Prof,Noah,Bogaert,+32 498 231869,+32 474 791798,122 Rue Main St,Floor 2,Ghent,B-9645,UAE,N,2024-03-09 00:00:00,customers_20240101.csv
+13,Mews,CUST100013,CR-000013,ethan.leclercq@example.com,Prof,Ethan,Leclercq,+32 457 226882,+32 477 335612,17 Rue Main St,,Brussels,B-4770,USA,N,2023-08-14 00:00:00,customers_20240101.csv
+14,ProtelPMS,CUST100014,CR-000014,liam.claes@example.com,Ms,Liam,Claes,+32 409 639131,+32 477 392004,172 Rue Main St,,Bruges,B-9834,Netherlands,Y,2024-08-07 00:00:00,customers_20240301.csv
+15,Mews,CUST100015,CR-000015,sofia.vandamme@example.com,Mrs,Sofia,Van Damme,+32 412 201639,+32 491 551989,91 Rue Main St,,Antwerp,B-8651,UAE,N,2023-02-25 00:00:00,customers_20240301.csv
+16,ProtelPMS,CUST100016,CR-000016,liam.leclercq@example.com,Mrs,Liam,Leclercq,+32 424 299448,+32 487 570405,36 Rue Main St,,Bruges,B-5563,USA,Y,2023-09-13 00:00:00,customers_20240101.csv
+17,Micros,CUST100017,CR-000017,elena.janssen@example.com,Prof,Elena,Janssen,+32 401 197793,+32 499 890170,61 Rue du Marché,Floor 2,Antwerp,B-8956,Belgium,Y,2023-08-07 00:00:00,customers_20240201.csv
+18,Mews,CUST100018,CR-000018,james.leclercq@example.com,Ms,James,Leclercq,+32 458 399105,+32 483 830429,188 Rue du Marché,,Bruges,B-4111,Belgium,Y,2023-08-11 00:00:00,customers_20240101.csv
+19,Micros,CUST100019,CR-000019,hugo.dubois@example.com,Dr,Hugo,Dubois,+32 464 994141,+32 486 265080,15 Rue du Marché,Apt 3B,Bruges,B-2122,Belgium,N,2023-03-11 00:00:00,customers_20240301.csv
+20,ProtelPMS,CUST100020,CR-000020,louis.janssen@example.com,Prof,Louis,Janssen,+32 476 141672,+32 489 185965,108 Rue Main St,,Ghent,B-4346,Luxembourg,N,2023-11-18 00:00:00,customers_20240101.csv
+21,Mews,CUST100021,CR-000021,mia.peeters@example.com,Ms,Mia,Peeters,+32 496 176066,+32 470 580547,160 Rue Main St,Apt 3B,Brussels,B-9808,UK,Y,2024-06-02 00:00:00,customers_20240201.csv
+22,ProtelPMS,CUST100022,CR-000022,hugo.mertens@example.com,Ms,Hugo,Mertens,+32 436 265409,+32 484 974244,140 Rue Main St,,Liège,B-9666,Netherlands,Y,2024-11-14 00:00:00,customers_20240301.csv
+23,Mews,CUST100023,CR-000023,olivia.mertens@example.com,Mr,Olivia,Mertens,+32 413 878480,+32 487 262998,70 Rue Main St,,Liège,B-4450,France,N,2023-12-18 00:00:00,customers_20240101.csv
+24,ProtelPMS,CUST100024,CR-000024,elena.laurent@example.com,Mr,Elena,Laurent,+32 481 544151,+32 496 390120,12 Rue Main St,Apt 3B,Ghent,B-3143,UK,N,2023-09-26 00:00:00,customers_20240101.csv
+25,Micros,CUST100025,CR-000025,elena.bogaert@example.com,Mr,Elena,Bogaert,+32 414 178898,+32 498 824586,39 Rue Main St,Apt 3B,Ghent,B-3426,Japan,Y,2023-05-11 00:00:00,customers_20240101.csv
+26,Mews,CUST100026,CR-000026,lea.mertens@example.com,Mrs,Lea,Mertens,+32 487 361650,+32 491 207786,91 Rue du Marché,,Liège,B-3532,Belgium,Y,2023-06-16 00:00:00,customers_20240101.csv
+27,Mews,CUST100027,CR-000027,emma.peeters@example.com,Mrs,Emma,Peeters,+32 434 266931,+32 495 835343,28 Rue Main St,,Brussels,B-8711,USA,Y,2023-07-24 00:00:00,customers_20240201.csv
+28,ProtelPMS,CUST100028,CR-000028,chloe.declercq@example.com,Mr,Chloe,Declercq,+32 484 302511,+32 482 444207,72 Rue Main St,Apt 3B,Ghent,B-6753,Germany,N,2024-06-05 00:00:00,customers_20240201.csv
+29,ProtelPMS,CUST100029,CR-000029,emma.janssen@example.com,Prof,Emma,Janssen,+32 433 140115,+32 473 725550,112 Rue Main St,,Knokke-Heist,B-6139,UK,Y,2024-09-12 00:00:00,customers_20240301.csv
+30,ProtelPMS,CUST100030,CR-000030,louis.mertens@example.com,Ms,Louis,Mertens,+32 405 843215,+32 483 101773,134 Rue Main St,Floor 2,Ghent,B-8066,Luxembourg,Y,2024-11-11 00:00:00,customers_20240201.csv
+31,Micros,CUST100031,CR-000031,olivia.bogaert@example.com,Ms,Olivia,Bogaert,+32 485 528231,+32 480 521947,179 Rue Main St,,Liège,B-3085,UK,Y,2024-03-06 00:00:00,customers_20240301.csv
+32,Mews,CUST100032,CR-000032,nora.renard@example.com,Dr,Nora,Renard,+32 470 974224,+32 470 418635,74 Rue Main St,Floor 2,Antwerp,B-6279,Luxembourg,Y,2024-03-28 00:00:00,customers_20240201.csv
+33,Micros,CUST100033,CR-000033,matteo.laurent@example.com,Mr,Matteo,Laurent,+32 436 640490,+32 491 763686,159 Rue Main St,,Brussels,B-4848,France,N,2023-11-14 00:00:00,customers_20240101.csv
+34,ProtelPMS,CUST100034,CR-000034,james.dubois@example.com,Dr,James,Dubois,+32 478 991014,+32 494 176365,117 Rue du Marché,,Knokke-Heist,B-4185,Belgium,N,2024-12-14 00:00:00,customers_20240201.csv
+35,Micros,CUST100035,CR-000035,mia.claes@example.com,Mr,Mia,Claes,+32 496 907451,+32 498 211764,200 Rue Main St,,Bruges,B-3881,France,N,2024-06-14 00:00:00,customers_20240201.csv
+36,Mews,CUST100036,CR-000036,matteo.claes@example.com,Mrs,Matteo,Claes,+32 459 800005,+32 486 686075,153 Rue Main St,,Antwerp,B-9270,Netherlands,Y,2024-07-15 00:00:00,customers_20240201.csv
+37,ProtelPMS,CUST100037,CR-000037,arthur.laurent@example.com,Ms,Arthur,Laurent,+32 498 915451,+32 486 608136,161 Rue Main St,Floor 2,Ghent,B-8206,UK,Y,2024-12-31 00:00:00,customers_20240201.csv
+38,Micros,CUST100038,CR-000038,ethan.willems@example.com,Mr,Ethan,Willems,+32 417 258157,+32 477 501641,178 Rue Main St,Floor 2,Knokke-Heist,B-4505,USA,Y,2024-02-29 00:00:00,customers_20240201.csv
+39,ProtelPMS,CUST100039,CR-000039,elena.laurent@example.com,Mrs,Elena,Laurent,+32 453 508396,+32 498 907189,150 Rue Main St,Apt 3B,Liège,B-7232,Japan,Y,2023-01-07 00:00:00,customers_20240201.csv
+40,Micros,CUST100040,CR-000040,mia.declercq@example.com,Prof,Mia,Declercq,+32 477 331251,+32 485 330080,70 Rue Main St,,Antwerp,B-1475,Japan,Y,2023-12-11 00:00:00,customers_20240301.csv
+41,ProtelPMS,CUST100041,CR-000041,nora.declercq@example.com,Prof,Nora,Declercq,+32 468 128276,+32 499 513160,152 Rue Main St,Apt 3B,Brussels,B-8022,UAE,Y,2024-04-17 00:00:00,customers_20240101.csv
+42,ProtelPMS,CUST100042,CR-000042,ethan.leclercq@example.com,Dr,Ethan,Leclercq,+32 441 453894,+32 494 497542,72 Rue Main St,,Ghent,B-2341,USA,Y,2023-01-20 00:00:00,customers_20240301.csv
+43,Micros,CUST100043,CR-000043,hugo.claes@example.com,Mr,Hugo,Claes,+32 496 132537,+32 477 309044,6 Rue Main St,Floor 2,Bruges,B-3068,Netherlands,Y,2024-11-16 00:00:00,customers_20240101.csv
+44,Mews,CUST100044,CR-000044,arthur.bogaert@example.com,Mrs,Arthur,Bogaert,+32 477 736745,+32 493 853252,30 Rue Main St,Floor 2,Ghent,B-2771,UK,N,2023-01-27 00:00:00,customers_20240201.csv
+45,ProtelPMS,CUST100045,CR-000045,mia.bogaert@example.com,Prof,Mia,Bogaert,+32 488 970917,+32 490 354646,27 Rue Main St,,Knokke-Heist,B-2983,Germany,N,2023-02-12 00:00:00,customers_20240201.csv
+46,Micros,CUST100046,CR-000046,lea.janssen@example.com,Ms,Lea,Janssen,+32 401 990844,+32 483 962276,126 Rue Main St,Apt 3B,Antwerp,B-6934,Switzerland,N,2024-04-15 00:00:00,customers_20240301.csv
+47,Micros,CUST100047,CR-000047,louis.peeters@example.com,Ms,Louis,Peeters,+32 478 947458,+32 499 664315,199 Rue Main St,,Antwerp,B-8136,Switzerland,N,2024-08-29 00:00:00,customers_20240201.csv
+48,Mews,CUST100048,CR-000048,sofia.declercq@example.com,Dr,Sofia,Declercq,+32 431 886931,+32 484 697530,157 Rue Main St,,Ghent,B-1470,Netherlands,Y,2023-11-29 00:00:00,customers_20240101.csv
+49,Mews,CUST100049,CR-000049,sofia.willems@example.com,Ms,Sofia,Willems,+32 476 835244,+32 498 389688,143 Rue Main St,Apt 3B,Liège,B-4130,UK,Y,2023-09-05 00:00:00,customers_20240301.csv
+50,Micros,CUST100050,CR-000050,hana.fontaine@example.com,Dr,Hana,Fontaine,+32 482 846420,+32 485 569945,5 Rue Main St,Apt 3B,Ghent,B-4630,Germany,Y,2024-12-09 00:00:00,customers_20240101.csv
+51,Micros,CUST100051,CR-000051,zoe.willems@example.com,Prof,Zoe,Willems,+32 444 546173,+32 493 677124,85 Rue Main St,,Knokke-Heist,B-8434,UAE,Y,2023-11-10 00:00:00,customers_20240201.csv
+52,Mews,CUST100052,CR-000052,noah.bogaert@example.com,Mr,Noah,Bogaert,+32 495 661894,+32 494 823688,48 Rue Main St,Floor 2,Bruges,B-8933,Germany,Y,2024-08-26 00:00:00,customers_20240301.csv
+53,Mews,CUST100053,CR-000053,olivia.declercq@example.com,Mrs,Olivia,Declercq,+32 446 288158,+32 479 114835,182 Rue Main St,Floor 2,Ghent,B-1745,Germany,Y,2024-07-20 00:00:00,customers_20240201.csv
+54,Micros,CUST100054,CR-000054,arthur.janssen@example.com,Ms,Arthur,Janssen,+32 460 601968,+32 484 457256,48 Rue du Marché,Apt 3B,Ghent,B-8827,Belgium,Y,2023-03-08 00:00:00,customers_20240201.csv
+55,ProtelPMS,CUST100055,CR-000055,olivia.renard@example.com,Mrs,Olivia,Renard,+32 472 418594,+32 472 360247,31 Rue du Marché,,Liège,B-4697,Belgium,N,2024-01-25 00:00:00,customers_20240201.csv
+56,Mews,CUST100056,CR-000056,chloe.declercq@example.com,Ms,Chloe,Declercq,+32 472 751194,+32 471 739244,190 Rue Main St,Apt 3B,Bruges,B-4457,Luxembourg,Y,2024-11-07 00:00:00,customers_20240101.csv
+57,ProtelPMS,CUST100057,CR-000057,lucas.peeters@example.com,Mrs,Lucas,Peeters,+32 400 528361,+32 484 822858,153 Rue Main St,,Ghent,B-1534,Switzerland,Y,2023-10-23 00:00:00,customers_20240301.csv
+58,Mews,CUST100058,CR-000058,hana.janssen@example.com,Prof,Hana,Janssen,+32 484 942956,+32 499 307428,109 Rue Main St,Apt 3B,Liège,B-4683,Germany,N,2023-06-02 00:00:00,customers_20240201.csv
+59,Mews,CUST100059,CR-000059,noah.dubois@example.com,Prof,Noah,Dubois,+32 495 964278,+32 488 402630,113 Rue Main St,Apt 3B,Antwerp,B-5982,France,N,2024-02-17 00:00:00,customers_20240201.csv
+60,ProtelPMS,CUST100060,CR-000060,hana.janssen@example.com,Dr,Hana,Janssen,+32 494 437978,+32 489 362529,7 Rue Main St,Apt 3B,Bruges,B-1339,Luxembourg,N,2023-10-03 00:00:00,customers_20240301.csv
+61,Micros,CUST100061,CR-000061,james.laurent@example.com,Dr,James,Laurent,+32 435 290305,+32 488 557058,163 Rue Main St,,Brussels,B-8700,Switzerland,Y,2024-02-23 00:00:00,customers_20240201.csv
+62,Mews,CUST100062,CR-000062,olivia.declercq@example.com,Dr,Olivia,Declercq,+32 488 619536,+32 479 794769,103 Rue Main St,Apt 3B,Antwerp,B-2442,France,Y,2023-09-16 00:00:00,customers_20240201.csv
+63,ProtelPMS,CUST100063,CR-000063,louis.declercq@example.com,Prof,Louis,Declercq,+32 459 533321,+32 471 296694,133 Rue Main St,,Liège,B-9167,Switzerland,N,2024-03-28 00:00:00,customers_20240101.csv
+64,Mews,CUST100064,CR-000064,ethan.fontaine@example.com,Dr,Ethan,Fontaine,+32 489 608257,+32 473 130271,162 Rue Main St,Floor 2,Knokke-Heist,B-3594,France,Y,2024-07-18 00:00:00,customers_20240101.csv
+65,Mews,CUST100065,CR-000065,olivia.claes@example.com,Mr,Olivia,Claes,+32 482 972565,+32 474 622584,184 Rue Main St,,Liège,B-5479,Netherlands,Y,2024-05-09 00:00:00,customers_20240201.csv
+66,Mews,CUST100066,CR-000066,arthur.fontaine@example.com,Mrs,Arthur,Fontaine,+32 476 632929,+32 493 243139,18 Rue Main St,,Antwerp,B-6568,France,N,2023-10-01 00:00:00,customers_20240101.csv
+67,Micros,CUST100067,CR-000067,chloe.declercq@example.com,Dr,Chloe,Declercq,+32 419 568238,+32 487 607868,89 Rue Main St,,Liège,B-9903,Luxembourg,Y,2024-04-11 00:00:00,customers_20240201.csv
+68,ProtelPMS,CUST100068,CR-000068,lucas.renard@example.com,Dr,Lucas,Renard,+32 405 433632,+32 493 595951,181 Rue Main St,,Antwerp,B-3492,Japan,Y,2023-02-07 00:00:00,customers_20240101.csv
+69,ProtelPMS,CUST100069,CR-000069,olivia.declercq@example.com,Prof,Olivia,Declercq,+32 458 116093,+32 493 251157,105 Rue Main St,Floor 2,Brussels,B-8692,UAE,Y,2023-12-13 00:00:00,customers_20240301.csv
+70,Micros,CUST100070,CR-000070,olivia.declercq@example.com,Prof,Olivia,Declercq,+32 448 432043,+32 490 853629,195 Rue Main St,,Liège,B-1588,USA,N,2023-03-12 00:00:00,customers_20240101.csv
+71,Mews,CUST100071,CR-000071,sofia.bogaert@example.com,Mr,Sofia,Bogaert,+32 497 764532,+32 492 205389,114 Rue Main St,Floor 2,Knokke-Heist,B-5906,Netherlands,Y,2023-02-17 00:00:00,customers_20240201.csv
+72,Mews,CUST100072,CR-000072,ethan.willems@example.com,Mrs,Ethan,Willems,+32 431 656968,+32 483 693418,175 Rue Main St,Floor 2,Bruges,B-3868,USA,Y,2024-09-16 00:00:00,customers_20240201.csv
+73,ProtelPMS,CUST100073,CR-000073,arthur.mertens@example.com,Mrs,Arthur,Mertens,+32 459 768891,+32 478 581894,66 Rue Main St,Apt 3B,Antwerp,B-5712,Luxembourg,N,2024-07-13 00:00:00,customers_20240101.csv
+74,Mews,CUST100074,CR-000074,arthur.willems@example.com,Dr,Arthur,Willems,+32 488 362246,+32 484 986365,78 Rue Main St,Floor 2,Antwerp,B-8916,Luxembourg,Y,2023-08-31 00:00:00,customers_20240201.csv
+75,ProtelPMS,CUST100075,CR-000075,zoe.maes@example.com,Dr,Zoe,Maes,+32 435 108491,+32 488 819112,200 Rue Main St,Apt 3B,Liège,B-9138,UK,Y,2023-08-24 00:00:00,customers_20240301.csv
+76,Micros,CUST100076,CR-000076,sofia.lecomte@example.com,Ms,Sofia,Lecomte,+32 486 892280,+32 493 904751,169 Rue Main St,Floor 2,Knokke-Heist,B-2591,Germany,N,2024-10-23 00:00:00,customers_20240101.csv
+77,Mews,CUST100077,CR-000077,hana.dubois@example.com,Mrs,Hana,Dubois,+32 411 409445,+32 480 883790,107 Rue Main St,Floor 2,Bruges,B-3165,Luxembourg,N,2024-01-10 00:00:00,customers_20240301.csv
+78,Mews,CUST100078,CR-000078,nora.maes@example.com,Ms,Nora,Maes,+32 414 591081,+32 472 247594,194 Rue Main St,Floor 2,Knokke-Heist,B-7511,UAE,N,2024-01-10 00:00:00,customers_20240101.csv
+79,ProtelPMS,CUST100079,CR-000079,emma.maes@example.com,Dr,Emma,Maes,+32 447 805511,+32 493 805000,68 Rue Main St,,Knokke-Heist,B-7086,Switzerland,Y,2024-11-22 00:00:00,customers_20240101.csv
+80,Mews,CUST100080,CR-000080,emma.renard@example.com,Prof,Emma,Renard,+32 428 779112,+32 472 766269,119 Rue Main St,,Knokke-Heist,B-7689,Switzerland,Y,2023-05-24 00:00:00,customers_20240101.csv
+81,ProtelPMS,CUST100081,CR-000081,ethan.laurent@example.com,Mrs,Ethan,Laurent,+32 468 242254,+32 482 575679,95 Rue Main St,,Liège,B-3531,Netherlands,Y,2024-11-01 00:00:00,customers_20240101.csv
+82,ProtelPMS,CUST100082,CR-000082,zoe.leclercq@example.com,Ms,Zoe,Leclercq,+32 427 564920,+32 484 347582,93 Rue Main St,Apt 3B,Knokke-Heist,B-7018,UK,N,2024-10-22 00:00:00,customers_20240201.csv
+83,ProtelPMS,CUST100083,CR-000083,louis.maes@example.com,Dr,Louis,Maes,+32 411 794963,+32 476 772875,164 Rue Main St,Apt 3B,Brussels,B-6464,Germany,Y,2023-05-09 00:00:00,customers_20240301.csv
+84,ProtelPMS,CUST100084,CR-000084,noah.declercq@example.com,Prof,Noah,Declercq,+32 427 952547,+32 497 344316,85 Rue Main St,Floor 2,Liège,B-1046,Switzerland,Y,2023-05-29 00:00:00,customers_20240101.csv
+85,ProtelPMS,CUST100085,CR-000085,nora.janssen@example.com,Mr,Nora,Janssen,+32 445 928358,+32 495 349489,151 Rue du Marché,,Brussels,B-3854,Belgium,Y,2023-02-23 00:00:00,customers_20240101.csv
+86,Mews,CUST100086,CR-000086,elena.janssen@example.com,Dr,Elena,Janssen,+32 499 479625,+32 486 722503,28 Rue Main St,,Liège,B-4629,Netherlands,N,2023-02-14 00:00:00,customers_20240301.csv
+87,ProtelPMS,CUST100087,CR-000087,hana.lecomte@example.com,Dr,Hana,Lecomte,+32 451 546980,+32 491 213206,126 Rue du Marché,,Brussels,B-2323,Belgium,Y,2024-09-14 00:00:00,customers_20240101.csv
+88,Micros,CUST100088,CR-000088,james.maes@example.com,Prof,James,Maes,+32 470 846746,+32 480 499407,153 Rue Main St,,Antwerp,B-9282,Luxembourg,N,2024-03-16 00:00:00,customers_20240101.csv
+89,Mews,CUST100089,CR-000089,matteo.bogaert@example.com,Dr,Matteo,Bogaert,+32 429 533914,+32 480 967611,117 Rue Main St,,Antwerp,B-2557,Germany,Y,2024-03-13 00:00:00,customers_20240201.csv
+90,ProtelPMS,CUST100090,CR-000090,lea.peeters@example.com,Mr,Lea,Peeters,+32 410 197758,+32 483 201255,191 Rue Main St,,Bruges,B-1982,UAE,N,2024-07-29 00:00:00,customers_20240301.csv
+91,Micros,CUST100091,CR-000091,olivia.leclercq@example.com,Dr,Olivia,Leclercq,+32 492 153945,+32 479 729575,80 Rue Main St,,Brussels,B-9313,USA,Y,2023-06-08 00:00:00,customers_20240301.csv
+92,Mews,CUST100092,CR-000092,sofia.declercq@example.com,Prof,Sofia,Declercq,+32 447 220465,+32 494 392099,147 Rue Main St,Floor 2,Antwerp,B-1430,Netherlands,N,2024-11-04 00:00:00,customers_20240301.csv
+93,Micros,CUST100093,CR-000093,emma.peeters@example.com,Ms,Emma,Peeters,+32 443 468074,+32 470 290217,37 Rue Main St,,Brussels,B-3324,UK,N,2024-10-10 00:00:00,customers_20240101.csv
+94,Mews,CUST100094,CR-000094,matteo.claes@example.com,Dr,Matteo,Claes,+32 443 265055,+32 481 426775,185 Rue Main St,,Liège,B-2391,Japan,Y,2023-06-09 00:00:00,customers_20240101.csv
+95,Micros,CUST100095,CR-000095,noah.maes@example.com,Dr,Noah,Maes,+32 462 736565,+32 484 534303,70 Rue Main St,Floor 2,Liège,B-2864,UAE,Y,2024-03-16 00:00:00,customers_20240101.csv
+96,Micros,CUST100096,CR-000096,zoe.laurent@example.com,Ms,Zoe,Laurent,+32 405 331230,+32 482 728437,15 Rue Main St,Apt 3B,Bruges,B-5938,Switzerland,Y,2023-05-21 00:00:00,customers_20240201.csv
+97,Mews,CUST100097,CR-000097,lea.janssen@example.com,Dr,Lea,Janssen,+32 422 235461,+32 482 658453,181 Rue du Marché,Floor 2,Liège,B-6802,Belgium,Y,2024-02-11 00:00:00,customers_20240301.csv
+98,ProtelPMS,CUST100098,CR-000098,louis.dubois@example.com,Ms,Louis,Dubois,+32 473 550137,+32 488 524068,182 Rue Main St,,Ghent,B-2887,UAE,Y,2023-01-22 00:00:00,customers_20240201.csv
+99,ProtelPMS,CUST100099,CR-000099,leon.laurent@example.com,Dr,Leon,Laurent,+32 413 355135,+32 483 717476,103 Rue Main St,Apt 3B,Antwerp,B-6083,USA,N,2023-12-14 00:00:00,customers_20240101.csv
+100,Micros,CUST100100,CR-000100,nora.janssen@example.com,Mr,Nora,Janssen,+32 467 634723,+32 476 913934,90 Rue Main St,,Knokke-Heist,B-3419,Switzerland,Y,2023-04-16 00:00:00,customers_20240101.csv
+101,ProtelPMS,CUST100101,CR-000101,sofia.peeters@example.com,Mr,Sofia,Peeters,+32 422 910389,+32 490 618119,119 Rue Main St,,Knokke-Heist,B-6295,Luxembourg,N,2023-11-20 00:00:00,customers_20240101.csv
+102,Micros,CUST100102,CR-000102,olivia.laurent@example.com,Ms,Olivia,Laurent,+32 435 720148,+32 471 469038,130 Rue Main St,Apt 3B,Ghent,B-8565,UAE,Y,2023-02-08 00:00:00,customers_20240101.csv
+103,Micros,CUST100103,CR-000103,chloe.janssen@example.com,Prof,Chloe,Janssen,+32 464 503159,+32 484 708519,142 Rue Main St,Apt 3B,Antwerp,B-4084,Netherlands,Y,2024-09-11 00:00:00,customers_20240201.csv
+104,Mews,CUST100104,CR-000104,liam.laurent@example.com,Mr,Liam,Laurent,+32 464 777513,+32 475 141043,64 Rue Main St,,Antwerp,B-9586,Netherlands,N,2024-09-16 00:00:00,customers_20240101.csv
+105,Mews,CUST100105,CR-000105,lea.mertens@example.com,Dr,Lea,Mertens,+32 499 454803,+32 491 726928,14 Rue Main St,,Brussels,B-6401,UK,Y,2024-07-25 00:00:00,customers_20240301.csv
+106,ProtelPMS,CUST100106,CR-000106,chloe.maes@example.com,Ms,Chloe,Maes,+32 410 711046,+32 491 248298,90 Rue Main St,,Knokke-Heist,B-7421,Luxembourg,Y,2024-09-01 00:00:00,customers_20240301.csv
+107,Micros,CUST100107,CR-000107,ethan.fontaine@example.com,Ms,Ethan,Fontaine,+32 416 802667,+32 492 969226,190 Rue Main St,Apt 3B,Knokke-Heist,B-7937,Japan,N,2024-01-06 00:00:00,customers_20240101.csv
+108,Mews,CUST100108,CR-000108,chloe.peeters@example.com,Dr,Chloe,Peeters,+32 424 337547,+32 474 262471,20 Rue Main St,,Brussels,B-9317,Germany,N,2024-06-23 00:00:00,customers_20240101.csv
+109,Mews,CUST100109,CR-000109,zoe.peeters@example.com,Mrs,Zoe,Peeters,+32 420 289630,+32 496 826501,198 Rue Main St,Floor 2,Knokke-Heist,B-8170,Luxembourg,Y,2024-02-25 00:00:00,customers_20240201.csv
+110,Micros,CUST100110,CR-000110,arthur.renard@example.com,Dr,Arthur,Renard,+32 429 659951,+32 477 424500,121 Rue Main St,Floor 2,Ghent,B-8218,UK,Y,2023-10-16 00:00:00,customers_20240201.csv
+111,Micros,CUST100111,CR-000111,nora.declercq@example.com,Mrs,Nora,Declercq,+32 432 154714,+32 490 603935,96 Rue Main St,Apt 3B,Knokke-Heist,B-9452,Germany,Y,2023-10-19 00:00:00,customers_20240101.csv
+112,ProtelPMS,CUST100112,CR-000112,ethan.laurent@example.com,Dr,Ethan,Laurent,+32 411 332823,+32 496 573041,90 Rue Main St,Apt 3B,Antwerp,B-1872,Switzerland,Y,2024-05-29 00:00:00,customers_20240201.csv
+113,ProtelPMS,CUST100113,CR-000113,louis.janssen@example.com,Mr,Louis,Janssen,+32 440 203896,+32 496 849421,167 Rue Main St,,Bruges,B-3254,USA,Y,2023-10-21 00:00:00,customers_20240201.csv
+114,ProtelPMS,CUST100114,CR-000114,arthur.laurent@example.com,Mr,Arthur,Laurent,+32 402 368355,+32 476 975522,39 Rue Main St,,Brussels,B-5720,Luxembourg,Y,2023-11-05 00:00:00,customers_20240101.csv
+115,Mews,CUST100115,CR-000115,lucas.leclercq@example.com,Mr,Lucas,Leclercq,+32 414 977330,+32 498 624108,153 Rue Main St,Apt 3B,Knokke-Heist,B-9443,Luxembourg,N,2023-09-05 00:00:00,customers_20240301.csv
+116,Micros,CUST100116,CR-000116,ethan.leclercq@example.com,Ms,Ethan,Leclercq,+32 430 698384,+32 483 296412,171 Rue du Marché,Apt 3B,Liège,B-6908,Belgium,Y,2024-06-22 00:00:00,customers_20240301.csv
+117,ProtelPMS,CUST100117,CR-000117,louis.declercq@example.com,Dr,Louis,Declercq,+32 447 365971,+32 493 117031,92 Rue Main St,Apt 3B,Ghent,B-4950,UAE,N,2024-11-03 00:00:00,customers_20240301.csv
+118,ProtelPMS,CUST100118,CR-000118,leon.bogaert@example.com,Mr,Leon,Bogaert,+32 445 672536,+32 480 953025,165 Rue Main St,Floor 2,Knokke-Heist,B-8612,USA,N,2024-05-05 00:00:00,customers_20240301.csv
+119,ProtelPMS,CUST100119,CR-000119,james.janssen@example.com,Ms,James,Janssen,+32 425 145934,+32 495 309159,11 Rue Main St,,Ghent,B-9444,UAE,Y,2024-07-10 00:00:00,customers_20240201.csv
+120,Mews,CUST100120,CR-000120,emma.vandamme@example.com,Ms,Emma,Van Damme,+32 499 150126,+32 497 787584,85 Rue Main St,,Brussels,B-7029,Germany,Y,2024-02-14 00:00:00,customers_20240301.csv
+121,Mews,CUST100121,CR-000121,mia.willems@example.com,Dr,Mia,Willems,+32 447 936020,+32 486 379676,22 Rue Main St,,Brussels,B-8055,France,N,2023-07-04 00:00:00,customers_20240301.csv
+122,Mews,CUST100122,CR-000122,lea.janssen@example.com,Ms,Lea,Janssen,+32 439 567576,+32 489 852524,110 Rue Main St,Floor 2,Knokke-Heist,B-8272,Netherlands,Y,2024-04-02 00:00:00,customers_20240101.csv
+123,Micros,CUST100123,CR-000123,zoe.leclercq@example.com,Mr,Zoe,Leclercq,+32 409 803787,+32 490 525942,94 Rue Main St,Floor 2,Brussels,B-3339,UK,N,2024-11-25 00:00:00,customers_20240201.csv
+124,Micros,CUST100124,CR-000124,james.janssen@example.com,Ms,James,Janssen,+32 446 501451,+32 488 133958,155 Rue Main St,Floor 2,Knokke-Heist,B-8371,Germany,Y,2024-01-16 00:00:00,customers_20240201.csv
+125,Mews,CUST100125,CR-000125,leon.peeters@example.com,Dr,Leon,Peeters,+32 440 781113,+32 478 361736,30 Rue Main St,Apt 3B,Knokke-Heist,B-4048,Switzerland,Y,2024-06-14 00:00:00,customers_20240201.csv
+126,Micros,CUST100126,CR-000126,ethan.vandamme@example.com,Dr,Ethan,Van Damme,+32 427 741599,+32 479 827691,126 Rue Main St,Floor 2,Brussels,B-3223,UK,Y,2024-04-07 00:00:00,customers_20240101.csv
+127,Micros,CUST100127,CR-000127,olivia.vandamme@example.com,Ms,Olivia,Van Damme,+32 490 168093,+32 487 668507,75 Rue Main St,,Bruges,B-3852,USA,Y,2024-06-04 00:00:00,customers_20240101.csv
+128,ProtelPMS,CUST100128,CR-000128,lucas.vandamme@example.com,Dr,Lucas,Van Damme,+32 403 478427,+32 487 700076,95 Rue Main St,,Liège,B-3126,France,N,2023-03-30 00:00:00,customers_20240101.csv
+129,Micros,CUST100129,CR-000129,mia.bogaert@example.com,Dr,Mia,Bogaert,+32 498 529322,+32 496 702826,19 Rue Main St,Floor 2,Ghent,B-2215,UAE,Y,2024-04-22 00:00:00,customers_20240301.csv
+130,Micros,CUST100130,CR-000130,nora.mertens@example.com,Prof,Nora,Mertens,+32 423 905077,+32 474 553633,129 Rue Main St,Apt 3B,Brussels,B-9488,Switzerland,Y,2023-11-08 00:00:00,customers_20240101.csv
+131,Mews,CUST100131,CR-000131,hugo.mertens@example.com,Prof,Hugo,Mertens,+32 436 987025,+32 472 362778,51 Rue Main St,,Bruges,B-5961,Germany,N,2024-06-30 00:00:00,customers_20240101.csv
+132,ProtelPMS,CUST100132,CR-000132,leon.renard@example.com,Prof,Leon,Renard,+32 492 734534,+32 480 983456,145 Rue Main St,Apt 3B,Brussels,B-2330,France,Y,2024-10-18 00:00:00,customers_20240301.csv
+133,Mews,CUST100133,CR-000133,sofia.vandamme@example.com,Prof,Sofia,Van Damme,+32 481 131757,+32 485 757629,140 Rue Main St,,Knokke-Heist,B-5949,Luxembourg,Y,2023-09-08 00:00:00,customers_20240301.csv
+134,Micros,CUST100134,CR-000134,chloe.laurent@example.com,Mr,Chloe,Laurent,+32 420 560959,+32 483 607774,119 Rue Main St,Floor 2,Ghent,B-3353,Netherlands,Y,2023-11-23 00:00:00,customers_20240301.csv
+135,Micros,CUST100135,CR-000135,mia.peeters@example.com,Prof,Mia,Peeters,+32 413 434617,+32 477 589131,32 Rue Main St,,Antwerp,B-5061,USA,Y,2023-04-10 00:00:00,customers_20240101.csv
+136,Mews,CUST100136,CR-000136,mia.declercq@example.com,Mrs,Mia,Declercq,+32 420 952993,+32 480 705748,185 Rue Main St,,Bruges,B-3610,Luxembourg,Y,2024-06-11 00:00:00,customers_20240201.csv
+137,ProtelPMS,CUST100137,CR-000137,chloe.laurent@example.com,Dr,Chloe,Laurent,+32 464 579441,+32 477 325595,150 Rue du Marché,,Brussels,B-1828,Belgium,Y,2024-05-21 00:00:00,customers_20240301.csv
+138,ProtelPMS,CUST100138,CR-000138,chloe.fontaine@example.com,Dr,Chloe,Fontaine,+32 417 377319,+32 493 483545,196 Rue du Marché,,Ghent,B-1741,Belgium,Y,2023-02-22 00:00:00,customers_20240301.csv
+139,ProtelPMS,CUST100139,CR-000139,hugo.fontaine@example.com,Dr,Hugo,Fontaine,+32 464 572230,+32 494 676566,72 Rue Main St,Apt 3B,Bruges,B-2584,UK,Y,2024-01-18 00:00:00,customers_20240201.csv
+140,Micros,CUST100140,CR-000140,nora.claes@example.com,Dr,Nora,Claes,+32 464 142210,+32 471 140804,36 Rue Main St,,Antwerp,B-9508,Luxembourg,Y,2023-06-02 00:00:00,customers_20240301.csv
+141,Mews,CUST100141,CR-000141,hugo.mertens@example.com,Mrs,Hugo,Mertens,+32 450 746447,+32 493 983532,77 Rue Main St,,Liège,B-9351,Luxembourg,N,2024-05-16 00:00:00,customers_20240301.csv
+142,Mews,CUST100142,CR-000142,hana.declercq@example.com,Ms,Hana,Declercq,+32 486 214928,+32 483 712056,79 Rue du Marché,Apt 3B,Liège,B-8775,Belgium,Y,2024-11-02 00:00:00,customers_20240301.csv
+143,ProtelPMS,CUST100143,CR-000143,liam.renard@example.com,Prof,Liam,Renard,+32 480 856215,+32 489 912233,98 Rue Main St,Floor 2,Knokke-Heist,B-4968,UAE,Y,2024-08-09 00:00:00,customers_20240301.csv
+144,Mews,CUST100144,CR-000144,lucas.dubois@example.com,Dr,Lucas,Dubois,+32 419 533020,+32 492 313795,106 Rue Main St,,Knokke-Heist,B-2020,UAE,N,2023-05-22 00:00:00,customers_20240301.csv
+145,Micros,CUST100145,CR-000145,matteo.willems@example.com,Dr,Matteo,Willems,+32 440 281594,+32 484 659024,88 Rue Main St,,Knokke-Heist,B-5331,UAE,N,2024-05-10 00:00:00,customers_20240101.csv
+146,ProtelPMS,CUST100146,CR-000146,ethan.fontaine@example.com,Ms,Ethan,Fontaine,+32 498 403042,+32 492 317346,177 Rue Main St,,Ghent,B-8861,UK,Y,2024-07-27 00:00:00,customers_20240301.csv
+147,Micros,CUST100147,CR-000147,chloe.janssen@example.com,Prof,Chloe,Janssen,+32 448 513697,+32 496 461899,198 Rue Main St,Floor 2,Ghent,B-1689,Luxembourg,Y,2023-03-22 00:00:00,customers_20240201.csv
+148,ProtelPMS,CUST100148,CR-000148,chloe.bogaert@example.com,Mrs,Chloe,Bogaert,+32 468 384303,+32 499 689318,179 Rue Main St,,Bruges,B-2789,UAE,N,2024-08-23 00:00:00,customers_20240101.csv
+149,ProtelPMS,CUST100149,CR-000149,liam.lecomte@example.com,Mrs,Liam,Lecomte,+32 406 205065,+32 483 446337,184 Rue Main St,,Brussels,B-3252,Switzerland,Y,2024-07-17 00:00:00,customers_20240101.csv
+150,Mews,CUST100150,CR-000150,hana.laurent@example.com,Ms,Hana,Laurent,+32 436 777273,+32 471 906066,23 Rue Main St,Floor 2,Liège,B-1611,Germany,Y,2024-03-03 00:00:00,customers_20240101.csv
+151,ProtelPMS,CUST100151,CR-000151,louis.vandamme@example.com,Ms,Louis,Van Damme,+32 404 109717,+32 479 695551,155 Rue Main St,Apt 3B,Ghent,B-5662,UAE,Y,2024-10-18 00:00:00,customers_20240301.csv
+152,Mews,CUST100152,CR-000152,nora.declercq@example.com,Ms,Nora,Declercq,+32 424 948102,+32 473 446747,42 Rue Main St,,Knokke-Heist,B-5215,Switzerland,N,2023-07-10 00:00:00,customers_20240101.csv
+153,ProtelPMS,CUST100153,CR-000153,chloe.renard@example.com,Prof,Chloe,Renard,+32 481 525187,+32 496 548479,132 Rue Main St,,Brussels,B-7567,Germany,N,2023-04-08 00:00:00,customers_20240101.csv
+154,ProtelPMS,CUST100154,CR-000154,arthur.willems@example.com,Ms,Arthur,Willems,+32 449 346961,+32 484 890371,69 Rue Main St,,Ghent,B-1187,Germany,Y,2024-10-31 00:00:00,customers_20240201.csv
+155,Mews,CUST100155,CR-000155,liam.lecomte@example.com,Ms,Liam,Lecomte,+32 420 525110,+32 491 626930,181 Rue Main St,,Knokke-Heist,B-2923,Netherlands,N,2023-10-30 00:00:00,customers_20240201.csv
+156,ProtelPMS,CUST100156,CR-000156,lucas.peeters@example.com,Dr,Lucas,Peeters,+32 495 735163,+32 481 536045,180 Rue Main St,,Liège,B-4578,UAE,Y,2024-11-27 00:00:00,customers_20240301.csv
+157,Micros,CUST100157,CR-000157,matteo.laurent@example.com,Ms,Matteo,Laurent,+32 409 691573,+32 473 164758,141 Rue Main St,Floor 2,Liège,B-9792,Switzerland,Y,2023-06-18 00:00:00,customers_20240201.csv
+158,Micros,CUST100158,CR-000158,olivia.lecomte@example.com,Prof,Olivia,Lecomte,+32 462 195359,+32 498 635167,115 Rue Main St,Apt 3B,Antwerp,B-3161,Germany,N,2024-03-01 00:00:00,customers_20240201.csv
+159,Micros,CUST100159,CR-000159,matteo.laurent@example.com,Mr,Matteo,Laurent,+32 450 366817,+32 496 103161,191 Rue Main St,Floor 2,Liège,B-2196,UK,Y,2024-03-09 00:00:00,customers_20240201.csv
+160,Mews,CUST100160,CR-000160,matteo.dubois@example.com,Mr,Matteo,Dubois,+32 436 528728,+32 475 906325,35 Rue Main St,,Ghent,B-7266,Netherlands,Y,2024-01-22 00:00:00,customers_20240201.csv
+161,ProtelPMS,CUST100161,CR-000161,matteo.peeters@example.com,Mrs,Matteo,Peeters,+32 468 512151,+32 486 233533,187 Rue Main St,Floor 2,Brussels,B-1372,USA,Y,2024-04-19 00:00:00,customers_20240301.csv
+162,ProtelPMS,CUST100162,CR-000162,elena.leclercq@example.com,Dr,Elena,Leclercq,+32 444 262656,+32 478 297636,186 Rue Main St,Apt 3B,Brussels,B-7868,Germany,N,2023-01-17 00:00:00,customers_20240101.csv
+163,ProtelPMS,CUST100163,CR-000163,noah.janssen@example.com,Dr,Noah,Janssen,+32 476 804667,+32 492 151040,63 Rue Main St,Apt 3B,Antwerp,B-8191,Luxembourg,Y,2024-07-06 00:00:00,customers_20240101.csv
+164,ProtelPMS,CUST100164,CR-000164,james.fontaine@example.com,Prof,James,Fontaine,+32 440 705526,+32 489 910065,173 Rue Main St,,Bruges,B-5944,UK,Y,2024-11-07 00:00:00,customers_20240301.csv
+165,ProtelPMS,CUST100165,CR-000165,louis.maes@example.com,Prof,Louis,Maes,+32 475 870925,+32 499 283640,161 Rue Main St,,Liège,B-9120,UK,Y,2023-12-19 00:00:00,customers_20240301.csv
+166,Mews,CUST100166,CR-000166,elena.willems@example.com,Mrs,Elena,Willems,+32 438 494747,+32 475 891062,138 Rue Main St,,Bruges,B-4692,Japan,Y,2024-12-25 00:00:00,customers_20240101.csv
+167,Mews,CUST100167,CR-000167,emma.fontaine@example.com,Prof,Emma,Fontaine,+32 467 240606,+32 482 354655,66 Rue Main St,Floor 2,Ghent,B-2295,Japan,Y,2024-01-15 00:00:00,customers_20240101.csv
+168,Micros,CUST100168,CR-000168,liam.maes@example.com,Prof,Liam,Maes,+32 477 141468,+32 497 176319,49 Rue Main St,Floor 2,Antwerp,B-4422,Japan,Y,2023-11-07 00:00:00,customers_20240101.csv
+169,Micros,CUST100169,CR-000169,lucas.bogaert@example.com,Dr,Lucas,Bogaert,+32 431 829417,+32 489 837954,53 Rue Main St,,Bruges,B-6269,Netherlands,Y,2024-01-25 00:00:00,customers_20240201.csv
+170,Micros,CUST100170,CR-000170,chloe.maes@example.com,Dr,Chloe,Maes,+32 459 203398,+32 495 857505,121 Rue Main St,,Bruges,B-7073,USA,Y,2024-02-28 00:00:00,customers_20240101.csv
+171,Micros,CUST100171,CR-000171,james.dubois@example.com,Prof,James,Dubois,+32 474 854987,+32 483 409531,40 Rue Main St,Floor 2,Ghent,B-4768,UK,Y,2024-08-06 00:00:00,customers_20240101.csv
+172,Mews,CUST100172,CR-000172,elena.lecomte@example.com,Dr,Elena,Lecomte,+32 492 772865,+32 493 614426,118 Rue Main St,Floor 2,Knokke-Heist,B-6770,USA,Y,2023-05-24 00:00:00,customers_20240301.csv
+173,Micros,CUST100173,CR-000173,nora.mertens@example.com,Mr,Nora,Mertens,+32 467 135466,+32 496 987826,20 Rue Main St,Apt 3B,Brussels,B-7756,Switzerland,Y,2024-10-07 00:00:00,customers_20240101.csv
+174,Micros,CUST100174,CR-000174,james.dubois@example.com,Dr,James,Dubois,+32 447 163386,+32 489 768706,171 Rue Main St,,Knokke-Heist,B-8993,Germany,Y,2023-01-07 00:00:00,customers_20240301.csv
+175,Micros,CUST100175,CR-000175,emma.dubois@example.com,Ms,Emma,Dubois,+32 468 400614,+32 470 626611,179 Rue Main St,,Bruges,B-2753,Switzerland,Y,2024-06-20 00:00:00,customers_20240101.csv
+176,Mews,CUST100176,CR-000176,lucas.renard@example.com,Ms,Lucas,Renard,+32 434 933551,+32 482 182857,96 Rue Main St,,Antwerp,B-4984,Switzerland,N,2023-08-20 00:00:00,customers_20240201.csv
+177,Mews,CUST100177,CR-000177,liam.janssen@example.com,Dr,Liam,Janssen,+32 470 599127,+32 471 767678,3 Rue Main St,Floor 2,Brussels,B-9189,Japan,Y,2024-10-22 00:00:00,customers_20240201.csv
+178,ProtelPMS,CUST100178,CR-000178,matteo.mertens@example.com,Mrs,Matteo,Mertens,+32 488 694316,+32 485 384263,12 Rue du Marché,Apt 3B,Knokke-Heist,B-5593,Belgium,N,2024-07-31 00:00:00,customers_20240301.csv
+179,ProtelPMS,CUST100179,CR-000179,james.mertens@example.com,Mrs,James,Mertens,+32 475 251195,+32 494 960556,183 Rue Main St,,Brussels,B-5903,USA,Y,2024-07-31 00:00:00,customers_20240101.csv
+180,Micros,CUST100180,CR-000180,elena.willems@example.com,Mrs,Elena,Willems,+32 488 859340,+32 472 625119,191 Rue Main St,,Brussels,B-2600,Japan,Y,2023-08-26 00:00:00,customers_20240101.csv
+181,Micros,CUST100181,CR-000181,zoe.vandamme@example.com,Dr,Zoe,Van Damme,+32 499 442230,+32 470 764926,70 Rue Main St,,Antwerp,B-4737,Luxembourg,Y,2024-07-20 00:00:00,customers_20240201.csv
+182,Micros,CUST100182,CR-000182,nora.lecomte@example.com,Dr,Nora,Lecomte,+32 410 909676,+32 489 409727,64 Rue Main St,Apt 3B,Brussels,B-5390,Luxembourg,Y,2024-01-25 00:00:00,customers_20240301.csv
+183,ProtelPMS,CUST100183,CR-000183,louis.willems@example.com,Mr,Louis,Willems,+32 400 423241,+32 484 477400,195 Rue Main St,,Brussels,B-3170,USA,Y,2023-07-11 00:00:00,customers_20240201.csv
+184,Mews,CUST100184,CR-000184,elena.fontaine@example.com,Mr,Elena,Fontaine,+32 403 193972,+32 481 681141,24 Rue Main St,,Antwerp,B-1202,Switzerland,Y,2024-02-28 00:00:00,customers_20240201.csv
+185,Micros,CUST100185,CR-000185,matteo.mertens@example.com,Prof,Matteo,Mertens,+32 421 818605,+32 482 277735,36 Rue Main St,,Ghent,B-5397,Germany,Y,2023-05-30 00:00:00,customers_20240101.csv
+186,Mews,CUST100186,CR-000186,louis.maes@example.com,Dr,Louis,Maes,+32 409 478666,+32 478 358568,185 Rue Main St,,Liège,B-4203,Japan,Y,2023-04-20 00:00:00,customers_20240101.csv
+187,Micros,CUST100187,CR-000187,emma.leclercq@example.com,Dr,Emma,Leclercq,+32 442 561607,+32 480 551533,167 Rue Main St,Floor 2,Ghent,B-6253,USA,N,2024-12-12 00:00:00,customers_20240101.csv
+188,Mews,CUST100188,CR-000188,lea.peeters@example.com,Ms,Lea,Peeters,+32 494 828716,+32 490 614858,148 Rue Main St,Floor 2,Ghent,B-7161,Japan,Y,2024-02-07 00:00:00,customers_20240201.csv
+189,Micros,CUST100189,CR-000189,leon.claes@example.com,Mrs,Leon,Claes,+32 487 904905,+32 487 128223,187 Rue Main St,,Knokke-Heist,B-4434,Luxembourg,Y,2023-10-26 00:00:00,customers_20240301.csv
+190,ProtelPMS,CUST100190,CR-000190,louis.lecomte@example.com,Ms,Louis,Lecomte,+32 430 364955,+32 491 261630,184 Rue Main St,,Antwerp,B-2211,UAE,Y,2024-09-04 00:00:00,customers_20240201.csv
+191,Micros,CUST100191,CR-000191,elena.fontaine@example.com,Mr,Elena,Fontaine,+32 446 835716,+32 498 951755,138 Rue Main St,Apt 3B,Brussels,B-5067,Japan,N,2024-11-11 00:00:00,customers_20240201.csv
+192,Micros,CUST100192,CR-000192,leon.dubois@example.com,Dr,Leon,Dubois,+32 496 447704,+32 495 551365,28 Rue Main St,Apt 3B,Brussels,B-5239,Luxembourg,Y,2024-06-06 00:00:00,customers_20240301.csv
+193,Mews,CUST100193,CR-000193,arthur.willems@example.com,Prof,Arthur,Willems,+32 488 624776,+32 474 461724,7 Rue Main St,,Brussels,B-5840,Japan,Y,2023-03-29 00:00:00,customers_20240101.csv
+194,Mews,CUST100194,CR-000194,hugo.maes@example.com,Mrs,Hugo,Maes,+32 466 606384,+32 481 599292,25 Rue Main St,,Knokke-Heist,B-8412,USA,Y,2023-03-10 00:00:00,customers_20240201.csv
+195,Micros,CUST100195,CR-000195,noah.dubois@example.com,Mr,Noah,Dubois,+32 486 938913,+32 475 876459,63 Rue Main St,Floor 2,Liège,B-3623,USA,Y,2024-07-27 00:00:00,customers_20240201.csv
+196,Micros,CUST100196,CR-000196,sofia.vandamme@example.com,Mrs,Sofia,Van Damme,+32 423 771590,+32 491 553125,102 Rue Main St,Apt 3B,Knokke-Heist,B-4232,Japan,Y,2024-08-29 00:00:00,customers_20240201.csv
+197,ProtelPMS,CUST100197,CR-000197,emma.bogaert@example.com,Ms,Emma,Bogaert,+32 496 837945,+32 495 934674,17 Rue Main St,Apt 3B,Liège,B-4063,Germany,Y,2023-11-30 00:00:00,customers_20240101.csv
+198,Micros,CUST100198,CR-000198,olivia.maes@example.com,Ms,Olivia,Maes,+32 476 507517,+32 489 511612,151 Rue Main St,Apt 3B,Ghent,B-6766,UAE,Y,2024-09-24 00:00:00,customers_20240101.csv
+199,Micros,CUST100199,CR-000199,zoe.renard@example.com,Mrs,Zoe,Renard,+32 440 223586,+32 477 420214,30 Rue Main St,Floor 2,Ghent,B-3316,Netherlands,N,2024-02-02 00:00:00,customers_20240201.csv
+200,ProtelPMS,CUST100200,CR-000200,leon.leclercq@example.com,Dr,Leon,Leclercq,+32 481 663483,+32 492 776604,45 Rue Main St,Floor 2,Antwerp,B-5732,Japan,Y,2023-07-11 00:00:00,customers_20240201.csv
+201,ProtelPMS,CUST100201,CR-000201,zoe.dubois@example.com,Dr,Zoe,Dubois,+32 417 304607,+32 496 502594,144 Rue Main St,,Antwerp,B-9056,USA,Y,2024-12-28 00:00:00,customers_20240201.csv
+202,ProtelPMS,CUST100202,CR-000202,nora.janssen@example.com,Mrs,Nora,Janssen,+32 437 134283,+32 478 335765,138 Rue Main St,,Bruges,B-8492,Luxembourg,N,2024-05-22 00:00:00,customers_20240301.csv
+203,Micros,CUST100203,CR-000203,leon.janssen@example.com,Ms,Leon,Janssen,+32 469 962570,+32 494 143631,195 Rue Main St,,Liège,B-4580,UK,Y,2023-04-15 00:00:00,customers_20240301.csv
+204,Mews,CUST100204,CR-000204,ethan.declercq@example.com,Ms,Ethan,Declercq,+32 444 956401,+32 472 560398,31 Rue du Marché,Floor 2,Bruges,B-6744,Belgium,N,2024-09-16 00:00:00,customers_20240301.csv
+205,ProtelPMS,CUST100205,CR-000205,nora.renard@example.com,Mrs,Nora,Renard,+32 407 697766,+32 481 658136,72 Rue Main St,Floor 2,Ghent,B-5794,France,Y,2024-08-09 00:00:00,customers_20240201.csv
+206,ProtelPMS,CUST100206,CR-000206,james.vandamme@example.com,Ms,James,Van Damme,+32 483 233051,+32 492 239136,64 Rue Main St,Floor 2,Knokke-Heist,B-6277,Japan,Y,2024-11-23 00:00:00,customers_20240201.csv
+207,Micros,CUST100207,CR-000207,nora.renard@example.com,Dr,Nora,Renard,+32 448 573947,+32 472 764406,197 Rue Main St,Apt 3B,Antwerp,B-9447,UK,N,2023-10-12 00:00:00,customers_20240301.csv
+208,Micros,CUST100208,CR-000208,hana.laurent@example.com,Mr,Hana,Laurent,+32 499 988319,+32 493 197666,188 Rue Main St,,Knokke-Heist,B-6869,USA,Y,2024-07-01 00:00:00,customers_20240201.csv
+209,Mews,CUST100209,CR-000209,louis.declercq@example.com,Ms,Louis,Declercq,+32 441 968581,+32 479 454161,141 Rue Main St,Floor 2,Liège,B-8951,Germany,Y,2024-11-29 00:00:00,customers_20240101.csv
+210,ProtelPMS,CUST100210,CR-000210,noah.lecomte@example.com,Mr,Noah,Lecomte,+32 420 562721,+32 484 100708,110 Rue Main St,Floor 2,Knokke-Heist,B-3161,UAE,N,2023-11-06 00:00:00,customers_20240101.csv
+211,Mews,CUST100211,CR-000211,olivia.lecomte@example.com,Mr,Olivia,Lecomte,+32 447 796787,+32 498 780432,43 Rue Main St,Apt 3B,Antwerp,B-6005,USA,N,2024-12-17 00:00:00,customers_20240101.csv
+212,ProtelPMS,CUST100212,CR-000212,olivia.bogaert@example.com,Mrs,Olivia,Bogaert,+32 461 181724,+32 474 722518,58 Rue Main St,,Brussels,B-1132,Netherlands,N,2023-12-18 00:00:00,customers_20240101.csv
+213,ProtelPMS,CUST100213,CR-000213,nora.laurent@example.com,Dr,Nora,Laurent,+32 411 866260,+32 495 207402,27 Rue Main St,,Ghent,B-5902,Netherlands,Y,2024-01-27 00:00:00,customers_20240101.csv
+214,ProtelPMS,CUST100214,CR-000214,noah.fontaine@example.com,Prof,Noah,Fontaine,+32 483 272088,+32 484 468247,185 Rue Main St,Floor 2,Knokke-Heist,B-3480,Luxembourg,Y,2024-09-22 00:00:00,customers_20240301.csv
+215,ProtelPMS,CUST100215,CR-000215,sofia.janssen@example.com,Mr,Sofia,Janssen,+32 475 865470,+32 482 468611,110 Rue Main St,,Bruges,B-5059,Netherlands,Y,2024-10-22 00:00:00,customers_20240101.csv
+216,Micros,CUST100216,CR-000216,matteo.renard@example.com,Prof,Matteo,Renard,+32 436 916808,+32 492 128127,169 Rue Main St,,Bruges,B-9482,Luxembourg,N,2024-06-05 00:00:00,customers_20240101.csv
+217,ProtelPMS,CUST100217,CR-000217,chloe.lecomte@example.com,Dr,Chloe,Lecomte,+32 449 218220,+32 477 623850,164 Rue du Marché,Apt 3B,Liège,B-1197,Belgium,Y,2023-11-21 00:00:00,customers_20240101.csv
+218,Micros,CUST100218,CR-000218,zoe.leclercq@example.com,Mrs,Zoe,Leclercq,+32 497 593894,+32 494 176537,5 Rue Main St,Apt 3B,Brussels,B-5295,USA,Y,2023-02-10 00:00:00,customers_20240101.csv
+219,Mews,CUST100219,CR-000219,elena.maes@example.com,Dr,Elena,Maes,+32 489 521818,+32 472 771652,138 Rue Main St,Floor 2,Ghent,B-2369,Switzerland,Y,2023-03-22 00:00:00,customers_20240301.csv
+220,Mews,CUST100220,CR-000220,james.fontaine@example.com,Prof,James,Fontaine,+32 481 900298,+32 496 781406,175 Rue Main St,Apt 3B,Ghent,B-8167,USA,N,2023-09-02 00:00:00,customers_20240101.csv
+221,ProtelPMS,CUST100221,CR-000221,noah.mertens@example.com,Dr,Noah,Mertens,+32 478 738407,+32 471 424314,171 Rue Main St,Floor 2,Brussels,B-1207,Japan,N,2023-05-21 00:00:00,customers_20240301.csv
+222,Micros,CUST100222,CR-000222,james.laurent@example.com,Prof,James,Laurent,+32 492 371840,+32 475 489933,33 Rue Main St,,Knokke-Heist,B-2934,USA,Y,2023-12-10 00:00:00,customers_20240201.csv
+223,Micros,CUST100223,CR-000223,elena.janssen@example.com,Prof,Elena,Janssen,+32 480 180813,+32 485 577309,131 Rue Main St,,Brussels,B-9185,UK,N,2023-06-20 00:00:00,customers_20240201.csv
+224,Micros,CUST100224,CR-000224,ethan.vandamme@example.com,Mr,Ethan,Van Damme,+32 429 876764,+32 486 102693,12 Rue Main St,Apt 3B,Bruges,B-1753,Netherlands,Y,2024-01-08 00:00:00,customers_20240201.csv
+225,Micros,CUST100225,CR-000225,james.mertens@example.com,Dr,James,Mertens,+32 428 437433,+32 477 536476,185 Rue du Marché,,Ghent,B-2276,Belgium,N,2024-01-17 00:00:00,customers_20240101.csv
+226,ProtelPMS,CUST100226,CR-000226,james.claes@example.com,Dr,James,Claes,+32 408 587686,+32 497 396020,199 Rue Main St,,Ghent,B-2415,Switzerland,N,2024-04-12 00:00:00,customers_20240101.csv
+227,Mews,CUST100227,CR-000227,sofia.maes@example.com,Prof,Sofia,Maes,+32 431 586462,+32 481 720432,127 Rue Main St,Floor 2,Knokke-Heist,B-9954,Luxembourg,Y,2023-06-04 00:00:00,customers_20240101.csv
+228,Mews,CUST100228,CR-000228,emma.claes@example.com,Mr,Emma,Claes,+32 442 101533,+32 494 789233,97 Rue Main St,,Brussels,B-4361,Switzerland,N,2023-09-01 00:00:00,customers_20240201.csv
+229,ProtelPMS,CUST100229,CR-000229,emma.peeters@example.com,Mr,Emma,Peeters,+32 429 986575,+32 486 533121,180 Rue Main St,,Antwerp,B-2391,UK,N,2023-04-08 00:00:00,customers_20240301.csv
+230,Micros,CUST100230,CR-000230,louis.janssen@example.com,Mr,Louis,Janssen,+32 455 794622,+32 474 348273,75 Rue Main St,,Ghent,B-7438,Luxembourg,N,2023-12-01 00:00:00,customers_20240201.csv
+231,ProtelPMS,CUST100231,CR-000231,chloe.claes@example.com,Mrs,Chloe,Claes,+32 499 907557,+32 488 214266,40 Rue Main St,Apt 3B,Bruges,B-8365,Netherlands,Y,2023-11-18 00:00:00,customers_20240201.csv
+232,Mews,CUST100232,CR-000232,matteo.willems@example.com,Ms,Matteo,Willems,+32 459 377880,+32 497 225738,24 Rue Main St,Floor 2,Knokke-Heist,B-5984,Germany,N,2024-12-14 00:00:00,customers_20240301.csv
+233,ProtelPMS,CUST100233,CR-000233,lucas.declercq@example.com,Mr,Lucas,Declercq,+32 491 360276,+32 481 515492,132 Rue Main St,Apt 3B,Knokke-Heist,B-5896,USA,Y,2023-06-28 00:00:00,customers_20240101.csv
+234,ProtelPMS,CUST100234,CR-000234,hana.fontaine@example.com,Mr,Hana,Fontaine,+32 459 206857,+32 495 932369,36 Rue Main St,Apt 3B,Brussels,B-2010,Switzerland,Y,2023-05-14 00:00:00,customers_20240101.csv
+235,Micros,CUST100235,CR-000235,lea.lecomte@example.com,Prof,Lea,Lecomte,+32 433 952227,+32 472 122859,17 Rue Main St,Floor 2,Knokke-Heist,B-8265,Netherlands,Y,2023-04-05 00:00:00,customers_20240201.csv
+236,ProtelPMS,CUST100236,CR-000236,liam.laurent@example.com,Prof,Liam,Laurent,+32 455 961599,+32 493 514186,128 Rue du Marché,Apt 3B,Antwerp,B-7990,Belgium,Y,2023-12-29 00:00:00,customers_20240101.csv
+237,ProtelPMS,CUST100237,CR-000237,ethan.maes@example.com,Mr,Ethan,Maes,+32 478 749253,+32 489 357724,166 Rue Main St,,Antwerp,B-7750,UAE,N,2024-05-05 00:00:00,customers_20240101.csv
+238,Mews,CUST100238,CR-000238,ethan.leclercq@example.com,Mrs,Ethan,Leclercq,+32 482 935922,+32 486 361250,162 Rue Main St,Apt 3B,Antwerp,B-6883,France,Y,2024-07-11 00:00:00,customers_20240201.csv
+239,Mews,CUST100239,CR-000239,zoe.fontaine@example.com,Ms,Zoe,Fontaine,+32 423 127329,+32 480 726121,57 Rue Main St,Apt 3B,Ghent,B-1959,USA,Y,2024-06-26 00:00:00,customers_20240201.csv
+240,Micros,CUST100240,CR-000240,james.janssen@example.com,Mrs,James,Janssen,+32 434 659614,+32 496 929672,189 Rue Main St,Apt 3B,Bruges,B-7363,Germany,Y,2023-06-27 00:00:00,customers_20240101.csv
+241,Micros,CUST100241,CR-000241,leon.willems@example.com,Mr,Leon,Willems,+32 490 834591,+32 481 695225,145 Rue Main St,Floor 2,Liège,B-4084,USA,Y,2024-07-09 00:00:00,customers_20240201.csv
+242,ProtelPMS,CUST100242,CR-000242,arthur.dubois@example.com,Mrs,Arthur,Dubois,+32 477 329437,+32 470 652021,123 Rue Main St,Apt 3B,Ghent,B-4300,Netherlands,Y,2023-12-15 00:00:00,customers_20240301.csv
+243,ProtelPMS,CUST100243,CR-000243,hugo.dubois@example.com,Prof,Hugo,Dubois,+32 490 248533,+32 494 216308,135 Rue du Marché,,Brussels,B-7120,Belgium,N,2024-11-09 00:00:00,customers_20240201.csv
+244,ProtelPMS,CUST100244,CR-000244,hugo.maes@example.com,Mrs,Hugo,Maes,+32 493 558089,+32 495 770318,125 Rue Main St,,Bruges,B-6846,USA,Y,2024-11-12 00:00:00,customers_20240301.csv
+245,ProtelPMS,CUST100245,CR-000245,louis.maes@example.com,Mrs,Louis,Maes,+32 493 101885,+32 492 700660,101 Rue Main St,Apt 3B,Bruges,B-6213,UK,N,2023-08-15 00:00:00,customers_20240301.csv
+246,Micros,CUST100246,CR-000246,arthur.peeters@example.com,Mr,Arthur,Peeters,+32 430 463656,+32 480 276042,163 Rue Main St,Apt 3B,Knokke-Heist,B-6500,USA,Y,2023-01-12 00:00:00,customers_20240201.csv
+247,Mews,CUST100247,CR-000247,lucas.bogaert@example.com,Ms,Lucas,Bogaert,+32 413 855408,+32 470 150486,99 Rue Main St,,Knokke-Heist,B-7875,Netherlands,Y,2024-02-28 00:00:00,customers_20240201.csv
+248,ProtelPMS,CUST100248,CR-000248,lea.fontaine@example.com,Dr,Lea,Fontaine,+32 473 782591,+32 494 820539,58 Rue Main St,Floor 2,Antwerp,B-2207,Japan,Y,2023-10-29 00:00:00,customers_20240101.csv
+249,Mews,CUST100249,CR-000249,chloe.janssen@example.com,Mrs,Chloe,Janssen,+32 448 268720,+32 493 178645,141 Rue Main St,Apt 3B,Ghent,B-8909,Netherlands,N,2023-02-01 00:00:00,customers_20240201.csv
+250,ProtelPMS,CUST100250,CR-000250,leon.mertens@example.com,Mr,Leon,Mertens,+32 412 447177,+32 476 299212,105 Rue Main St,,Knokke-Heist,B-5612,Japan,Y,2023-09-01 00:00:00,customers_20240101.csv
+251,Mews,CUST100251,CR-000251,louis.renard@example.com,Mrs,Louis,Renard,+32 406 478356,+32 470 548377,23 Rue Main St,,Knokke-Heist,B-8869,Switzerland,Y,2023-04-10 00:00:00,customers_20240101.csv
+252,ProtelPMS,CUST100252,CR-000252,james.lecomte@example.com,Dr,James,Lecomte,+32 414 423331,+32 495 516774,121 Rue Main St,,Knokke-Heist,B-5341,UK,Y,2024-10-19 00:00:00,customers_20240301.csv
+253,Mews,CUST100253,CR-000253,nora.willems@example.com,Mrs,Nora,Willems,+32 457 146784,+32 478 561101,120 Rue Main St,,Bruges,B-5400,Japan,N,2023-03-05 00:00:00,customers_20240101.csv
+254,Micros,CUST100254,CR-000254,noah.lecomte@example.com,Dr,Noah,Lecomte,+32 496 718372,+32 477 680493,16 Rue Main St,,Liège,B-7858,USA,N,2024-12-04 00:00:00,customers_20240201.csv
+255,Mews,CUST100255,CR-000255,arthur.maes@example.com,Mr,Arthur,Maes,+32 464 698967,+32 498 641922,147 Rue Main St,Floor 2,Brussels,B-8357,Netherlands,Y,2023-06-21 00:00:00,customers_20240101.csv
+256,ProtelPMS,CUST100256,CR-000256,james.dubois@example.com,Dr,James,Dubois,+32 425 962520,+32 490 255061,153 Rue Main St,,Ghent,B-2097,Japan,Y,2024-02-02 00:00:00,customers_20240301.csv
+257,Micros,CUST100257,CR-000257,elena.willems@example.com,Dr,Elena,Willems,+32 401 924758,+32 492 753323,151 Rue Main St,,Brussels,B-7790,UK,Y,2023-06-01 00:00:00,customers_20240301.csv
+258,Mews,CUST100258,CR-000258,noah.renard@example.com,Prof,Noah,Renard,+32 444 530849,+32 478 501650,168 Rue Main St,,Liège,B-8750,Netherlands,Y,2023-06-26 00:00:00,customers_20240201.csv
+259,Micros,CUST100259,CR-000259,nora.renard@example.com,Dr,Nora,Renard,+32 404 515018,+32 498 447596,177 Rue Main St,Floor 2,Brussels,B-8785,Luxembourg,Y,2024-01-17 00:00:00,customers_20240101.csv
+260,Mews,CUST100260,CR-000260,chloe.maes@example.com,Mr,Chloe,Maes,+32 429 240913,+32 479 879850,114 Rue Main St,,Ghent,B-7828,UK,N,2024-10-23 00:00:00,customers_20240101.csv
+261,Micros,CUST100261,CR-000261,arthur.claes@example.com,Dr,Arthur,Claes,+32 497 641590,+32 497 492073,15 Rue Main St,Floor 2,Brussels,B-6097,Japan,N,2024-06-02 00:00:00,customers_20240201.csv
+262,ProtelPMS,CUST100262,CR-000262,matteo.mertens@example.com,Mrs,Matteo,Mertens,+32 424 973390,+32 476 977633,15 Rue Main St,Floor 2,Brussels,B-8478,Luxembourg,Y,2024-01-05 00:00:00,customers_20240301.csv
+263,Micros,CUST100263,CR-000263,ethan.willems@example.com,Dr,Ethan,Willems,+32 481 229890,+32 491 132047,62 Rue Main St,,Antwerp,B-8308,UAE,Y,2024-04-30 00:00:00,customers_20240301.csv
+264,Micros,CUST100264,CR-000264,lea.peeters@example.com,Mr,Lea,Peeters,+32 436 128783,+32 482 152062,42 Rue Main St,Floor 2,Bruges,B-4688,UK,N,2023-07-31 00:00:00,customers_20240201.csv
+265,Mews,CUST100265,CR-000265,elena.dubois@example.com,Mrs,Elena,Dubois,+32 482 281614,+32 489 939767,3 Rue du Marché,Floor 2,Ghent,B-6004,Belgium,N,2024-12-27 00:00:00,customers_20240301.csv
+266,Mews,CUST100266,CR-000266,mia.mertens@example.com,Dr,Mia,Mertens,+32 432 328808,+32 484 416822,174 Rue Main St,,Liège,B-2676,Japan,Y,2024-06-07 00:00:00,customers_20240301.csv
+267,Micros,CUST100267,CR-000267,elena.lecomte@example.com,Ms,Elena,Lecomte,+32 438 817659,+32 473 605139,17 Rue Main St,,Ghent,B-6327,Luxembourg,Y,2023-09-25 00:00:00,customers_20240301.csv
+268,ProtelPMS,CUST100268,CR-000268,sofia.peeters@example.com,Mr,Sofia,Peeters,+32 476 523727,+32 491 435109,175 Rue Main St,Floor 2,Knokke-Heist,B-1417,Switzerland,N,2024-05-24 00:00:00,customers_20240201.csv
+269,Micros,CUST100269,CR-000269,mia.leclercq@example.com,Mr,Mia,Leclercq,+32 474 842464,+32 488 955653,49 Rue Main St,,Knokke-Heist,B-4643,Japan,N,2024-07-01 00:00:00,customers_20240301.csv
+270,ProtelPMS,CUST100270,CR-000270,lea.fontaine@example.com,Prof,Lea,Fontaine,+32 423 408054,+32 473 593649,33 Rue Main St,,Knokke-Heist,B-3999,UK,N,2023-12-10 00:00:00,customers_20240301.csv
+271,Micros,CUST100271,CR-000271,lucas.willems@example.com,Ms,Lucas,Willems,+32 453 926372,+32 498 447411,96 Rue Main St,,Liège,B-5817,Germany,Y,2023-05-01 00:00:00,customers_20240201.csv
+272,ProtelPMS,CUST100272,CR-000272,leon.renard@example.com,Dr,Leon,Renard,+32 424 624788,+32 473 813763,98 Rue Main St,,Antwerp,B-1885,Luxembourg,Y,2023-05-21 00:00:00,customers_20240101.csv
+273,ProtelPMS,CUST100273,CR-000273,mia.renard@example.com,Ms,Mia,Renard,+32 491 289117,+32 494 184736,125 Rue Main St,,Knokke-Heist,B-3897,UAE,Y,2024-10-11 00:00:00,customers_20240101.csv
+274,ProtelPMS,CUST100274,CR-000274,arthur.maes@example.com,Prof,Arthur,Maes,+32 497 266131,+32 485 923353,196 Rue Main St,Apt 3B,Bruges,B-8105,Germany,N,2024-03-15 00:00:00,customers_20240201.csv
+275,ProtelPMS,CUST100275,CR-000275,hana.leclercq@example.com,Prof,Hana,Leclercq,+32 425 866151,+32 481 114760,83 Rue du Marché,Floor 2,Brussels,B-1067,Belgium,N,2023-09-12 00:00:00,customers_20240101.csv
+276,Mews,CUST100276,CR-000276,chloe.peeters@example.com,Prof,Chloe,Peeters,+32 475 420984,+32 475 168458,12 Rue Main St,,Ghent,B-8469,Netherlands,N,2024-06-16 00:00:00,customers_20240301.csv
+277,Mews,CUST100277,CR-000277,mia.mertens@example.com,Dr,Mia,Mertens,+32 445 886553,+32 476 272892,104 Rue Main St,Apt 3B,Bruges,B-4675,France,N,2023-05-15 00:00:00,customers_20240101.csv
+278,ProtelPMS,CUST100278,CR-000278,leon.fontaine@example.com,Ms,Leon,Fontaine,+32 491 782141,+32 495 139178,97 Rue Main St,,Liège,B-1796,France,N,2023-02-19 00:00:00,customers_20240301.csv
+279,Mews,CUST100279,CR-000279,liam.dubois@example.com,Dr,Liam,Dubois,+32 448 229598,+32 487 365015,122 Rue Main St,Floor 2,Bruges,B-1152,Netherlands,Y,2024-03-06 00:00:00,customers_20240301.csv
+280,Micros,CUST100280,CR-000280,matteo.maes@example.com,Mrs,Matteo,Maes,+32 453 971002,+32 498 210010,131 Rue Main St,Apt 3B,Ghent,B-2867,Luxembourg,Y,2024-05-24 00:00:00,customers_20240101.csv
+281,ProtelPMS,CUST100281,CR-000281,ethan.declercq@example.com,Ms,Ethan,Declercq,+32 490 529660,+32 479 268163,11 Rue Main St,,Bruges,B-8875,Switzerland,Y,2023-08-29 00:00:00,customers_20240101.csv
+282,Micros,CUST100282,CR-000282,noah.mertens@example.com,Dr,Noah,Mertens,+32 419 194458,+32 494 636561,20 Rue Main St,Apt 3B,Ghent,B-4787,Netherlands,Y,2023-10-31 00:00:00,customers_20240201.csv
+283,ProtelPMS,CUST100283,CR-000283,emma.janssen@example.com,Ms,Emma,Janssen,+32 446 940534,+32 491 427897,110 Rue Main St,Apt 3B,Brussels,B-1751,France,Y,2023-05-22 00:00:00,customers_20240301.csv
+284,Micros,CUST100284,CR-000284,hugo.willems@example.com,Ms,Hugo,Willems,+32 493 197466,+32 481 954551,88 Rue Main St,Floor 2,Brussels,B-7566,UAE,Y,2024-04-12 00:00:00,customers_20240201.csv
+285,Micros,CUST100285,CR-000285,hana.vandamme@example.com,Mrs,Hana,Van Damme,+32 414 238948,+32 492 861697,16 Rue Main St,Floor 2,Brussels,B-7816,Japan,N,2024-05-09 00:00:00,customers_20240301.csv
+286,Mews,CUST100286,CR-000286,nora.renard@example.com,Prof,Nora,Renard,+32 403 817712,+32 498 979269,187 Rue Main St,Floor 2,Antwerp,B-8997,Japan,Y,2024-02-26 00:00:00,customers_20240201.csv
+287,ProtelPMS,CUST100287,CR-000287,noah.maes@example.com,Prof,Noah,Maes,+32 498 879746,+32 488 858931,145 Rue Main St,Floor 2,Knokke-Heist,B-6542,USA,N,2024-06-19 00:00:00,customers_20240301.csv
+288,Mews,CUST100288,CR-000288,louis.lecomte@example.com,Ms,Louis,Lecomte,+32 484 809147,+32 490 503572,39 Rue Main St,Apt 3B,Brussels,B-3571,Germany,N,2024-04-25 00:00:00,customers_20240201.csv
+289,Mews,CUST100289,CR-000289,noah.vandamme@example.com,Mrs,Noah,Van Damme,+32 442 391668,+32 471 631553,58 Rue Main St,,Antwerp,B-4850,UAE,Y,2024-04-15 00:00:00,customers_20240201.csv
+290,Mews,CUST100290,CR-000290,olivia.declercq@example.com,Ms,Olivia,Declercq,+32 415 621533,+32 493 785111,5 Rue Main St,Apt 3B,Antwerp,B-7755,UAE,Y,2024-07-24 00:00:00,customers_20240301.csv
+291,Micros,CUST100291,CR-000291,noah.vandamme@example.com,Ms,Noah,Van Damme,+32 465 689648,+32 476 786393,172 Rue Main St,,Ghent,B-6953,Luxembourg,Y,2023-08-17 00:00:00,customers_20240201.csv
+292,Micros,CUST100292,CR-000292,elena.vandamme@example.com,Dr,Elena,Van Damme,+32 491 789089,+32 481 850689,116 Rue Main St,Apt 3B,Brussels,B-4633,Luxembourg,Y,2023-12-16 00:00:00,customers_20240201.csv
+293,Micros,CUST100293,CR-000293,elena.fontaine@example.com,Mr,Elena,Fontaine,+32 405 272129,+32 485 247271,184 Rue Main St,,Brussels,B-5166,USA,N,2023-07-20 00:00:00,customers_20240101.csv
+294,ProtelPMS,CUST100294,CR-000294,louis.claes@example.com,Ms,Louis,Claes,+32 413 893928,+32 483 148759,163 Rue Main St,Apt 3B,Antwerp,B-8493,UAE,N,2024-08-26 00:00:00,customers_20240301.csv
+295,Micros,CUST100295,CR-000295,arthur.dubois@example.com,Mr,Arthur,Dubois,+32 470 553834,+32 496 713543,124 Rue Main St,Floor 2,Knokke-Heist,B-3845,Switzerland,N,2023-05-12 00:00:00,customers_20240101.csv
+296,Micros,CUST100296,CR-000296,zoe.renard@example.com,Dr,Zoe,Renard,+32 453 738576,+32 499 826155,196 Rue Main St,Floor 2,Ghent,B-7518,USA,Y,2023-10-29 00:00:00,customers_20240201.csv
+297,Micros,CUST100297,CR-000297,james.leclercq@example.com,Prof,James,Leclercq,+32 438 984027,+32 492 674416,81 Rue Main St,Floor 2,Bruges,B-4435,Luxembourg,N,2023-10-25 00:00:00,customers_20240301.csv
+298,Micros,CUST100298,CR-000298,nora.bogaert@example.com,Prof,Nora,Bogaert,+32 488 767814,+32 480 844858,30 Rue Main St,,Liège,B-8870,France,N,2024-08-07 00:00:00,customers_20240301.csv
+299,ProtelPMS,CUST100299,CR-000299,elena.maes@example.com,Prof,Elena,Maes,+32 413 126499,+32 482 252386,14 Rue Main St,Apt 3B,Bruges,B-5374,Japan,Y,2023-10-21 00:00:00,customers_20240301.csv
+300,Micros,CUST100300,CR-000300,nora.declercq@example.com,Ms,Nora,Declercq,+32 426 890200,+32 487 133875,92 Rue du Marché,,Brussels,B-4675,Belgium,N,2024-10-24 00:00:00,customers_20240301.csv
+301,Micros,CUST100301,CR-000301,sofia.fontaine@example.com,Mr,Sofia,Fontaine,+32 448 506380,+32 483 926394,176 Rue Main St,,Liège,B-1881,UK,Y,2023-09-15 00:00:00,customers_20240101.csv
+302,Micros,CUST100302,CR-000302,sofia.mertens@example.com,Prof,Sofia,Mertens,+32 494 732697,+32 476 913848,186 Rue Main St,Floor 2,Ghent,B-8353,USA,Y,2024-11-30 00:00:00,customers_20240101.csv
+303,ProtelPMS,CUST100303,CR-000303,james.bogaert@example.com,Dr,James,Bogaert,+32 405 549323,+32 478 683635,68 Rue Main St,Floor 2,Bruges,B-5178,Switzerland,Y,2023-12-05 00:00:00,customers_20240201.csv
+304,Micros,CUST100304,CR-000304,liam.peeters@example.com,Mr,Liam,Peeters,+32 499 755744,+32 489 984096,170 Rue Main St,,Antwerp,B-6866,USA,Y,2024-12-25 00:00:00,customers_20240201.csv
+305,Micros,CUST100305,CR-000305,james.fontaine@example.com,Mrs,James,Fontaine,+32 453 669460,+32 487 523013,24 Rue Main St,,Bruges,B-4495,Netherlands,N,2023-12-06 00:00:00,customers_20240201.csv
+306,Micros,CUST100306,CR-000306,chloe.claes@example.com,Dr,Chloe,Claes,+32 471 963699,+32 494 780840,3 Rue Main St,Apt 3B,Knokke-Heist,B-6668,Luxembourg,Y,2023-09-04 00:00:00,customers_20240301.csv
+307,Mews,CUST100307,CR-000307,liam.lecomte@example.com,Mr,Liam,Lecomte,+32 449 369054,+32 487 859143,73 Rue Main St,Apt 3B,Liège,B-7143,USA,N,2024-06-04 00:00:00,customers_20240201.csv
+308,Mews,CUST100308,CR-000308,emma.maes@example.com,Prof,Emma,Maes,+32 410 200617,+32 475 910883,138 Rue Main St,Apt 3B,Knokke-Heist,B-2072,Germany,Y,2024-11-17 00:00:00,customers_20240301.csv
+309,ProtelPMS,CUST100309,CR-000309,louis.declercq@example.com,Prof,Louis,Declercq,+32 489 877388,+32 494 556379,166 Rue Main St,Apt 3B,Knokke-Heist,B-3519,Netherlands,Y,2024-04-15 00:00:00,customers_20240301.csv
+310,ProtelPMS,CUST100310,CR-000310,emma.janssen@example.com,Mrs,Emma,Janssen,+32 432 685193,+32 472 702891,59 Rue Main St,,Antwerp,B-7357,Netherlands,Y,2024-10-07 00:00:00,customers_20240201.csv
+311,Micros,CUST100311,CR-000311,lea.dubois@example.com,Mr,Lea,Dubois,+32 468 106185,+32 490 855274,159 Rue Main St,Apt 3B,Knokke-Heist,B-1745,Japan,N,2023-03-16 00:00:00,customers_20240201.csv
+312,Micros,CUST100312,CR-000312,ethan.vandamme@example.com,Mr,Ethan,Van Damme,+32 436 902448,+32 499 558936,98 Rue Main St,,Knokke-Heist,B-1504,UK,Y,2023-06-10 00:00:00,customers_20240301.csv
+313,Micros,CUST100313,CR-000313,james.bogaert@example.com,Ms,James,Bogaert,+32 481 251074,+32 479 810189,187 Rue Main St,,Brussels,B-3316,Japan,Y,2023-02-12 00:00:00,customers_20240101.csv
+314,Mews,CUST100314,CR-000314,elena.fontaine@example.com,Mrs,Elena,Fontaine,+32 495 877446,+32 498 861200,89 Rue Main St,Floor 2,Antwerp,B-9397,Netherlands,Y,2023-06-14 00:00:00,customers_20240101.csv
+315,ProtelPMS,CUST100315,CR-000315,leon.declercq@example.com,Mr,Leon,Declercq,+32 423 803571,+32 495 694849,14 Rue Main St,,Knokke-Heist,B-2198,UK,Y,2024-11-18 00:00:00,customers_20240101.csv
+316,Mews,CUST100316,CR-000316,olivia.claes@example.com,Ms,Olivia,Claes,+32 445 234443,+32 491 787313,61 Rue Main St,Apt 3B,Ghent,B-2143,Luxembourg,Y,2023-11-22 00:00:00,customers_20240201.csv
+317,Micros,CUST100317,CR-000317,lea.renard@example.com,Prof,Lea,Renard,+32 419 693024,+32 488 482199,81 Rue Main St,,Bruges,B-1079,UK,Y,2023-09-10 00:00:00,customers_20240101.csv
+318,ProtelPMS,CUST100318,CR-000318,chloe.declercq@example.com,Ms,Chloe,Declercq,+32 461 585331,+32 484 476167,199 Rue Main St,,Antwerp,B-2783,USA,Y,2024-10-23 00:00:00,customers_20240301.csv
+319,Micros,CUST100319,CR-000319,ethan.declercq@example.com,Mrs,Ethan,Declercq,+32 433 869177,+32 498 757057,20 Rue Main St,Apt 3B,Brussels,B-9309,France,N,2023-02-01 00:00:00,customers_20240301.csv
+320,Micros,CUST100320,CR-000320,zoe.claes@example.com,Ms,Zoe,Claes,+32 469 665892,+32 485 785672,199 Rue du Marché,Floor 2,Ghent,B-7430,Belgium,Y,2024-08-26 00:00:00,customers_20240301.csv
+321,Micros,CUST100321,CR-000321,nora.laurent@example.com,Mr,Nora,Laurent,+32 450 481540,+32 486 111106,170 Rue Main St,Floor 2,Liège,B-3717,Switzerland,N,2023-05-24 00:00:00,customers_20240201.csv
+322,Micros,CUST100322,CR-000322,james.renard@example.com,Mrs,James,Renard,+32 494 867562,+32 485 476224,11 Rue Main St,Floor 2,Antwerp,B-4796,Luxembourg,Y,2023-09-28 00:00:00,customers_20240201.csv
+323,Micros,CUST100323,CR-000323,liam.lecomte@example.com,Ms,Liam,Lecomte,+32 449 592489,+32 499 576728,12 Rue Main St,Apt 3B,Knokke-Heist,B-6309,Germany,Y,2024-12-21 00:00:00,customers_20240301.csv
+324,Micros,CUST100324,CR-000324,chloe.renard@example.com,Mrs,Chloe,Renard,+32 448 785428,+32 482 483041,151 Rue Main St,Apt 3B,Liège,B-5121,Switzerland,Y,2023-08-17 00:00:00,customers_20240301.csv
+325,Mews,CUST100325,CR-000325,lea.declercq@example.com,Dr,Lea,Declercq,+32 477 106918,+32 486 245718,113 Rue Main St,Floor 2,Bruges,B-2263,USA,N,2024-10-20 00:00:00,customers_20240201.csv
+326,Mews,CUST100326,CR-000326,james.peeters@example.com,Prof,James,Peeters,+32 491 956639,+32 473 793223,59 Rue Main St,,Ghent,B-2856,France,Y,2024-11-22 00:00:00,customers_20240201.csv
+327,Micros,CUST100327,CR-000327,sofia.renard@example.com,Dr,Sofia,Renard,+32 402 355506,+32 471 234097,147 Rue Main St,Floor 2,Bruges,B-9399,France,Y,2024-08-09 00:00:00,customers_20240101.csv
+328,Micros,CUST100328,CR-000328,james.maes@example.com,Dr,James,Maes,+32 476 690982,+32 490 119524,185 Rue Main St,,Brussels,B-4548,France,Y,2024-09-13 00:00:00,customers_20240201.csv
+329,Micros,CUST100329,CR-000329,nora.claes@example.com,Mrs,Nora,Claes,+32 474 960307,+32 494 290719,160 Rue Main St,,Bruges,B-6614,Japan,Y,2024-09-02 00:00:00,customers_20240301.csv
+330,ProtelPMS,CUST100330,CR-000330,lucas.leclercq@example.com,Mr,Lucas,Leclercq,+32 402 312177,+32 486 628859,176 Rue Main St,,Bruges,B-2577,Japan,Y,2024-05-02 00:00:00,customers_20240301.csv
+331,ProtelPMS,CUST100331,CR-000331,matteo.fontaine@example.com,Dr,Matteo,Fontaine,+32 484 236659,+32 498 732789,139 Rue Main St,Apt 3B,Knokke-Heist,B-8069,Netherlands,N,2024-03-06 00:00:00,customers_20240201.csv
+332,Mews,CUST100332,CR-000332,matteo.leclercq@example.com,Dr,Matteo,Leclercq,+32 444 717661,+32 495 877407,195 Rue Main St,Apt 3B,Antwerp,B-3193,Germany,Y,2024-05-03 00:00:00,customers_20240101.csv
+333,Mews,CUST100333,CR-000333,ethan.renard@example.com,Ms,Ethan,Renard,+32 424 105735,+32 492 879769,2 Rue Main St,Apt 3B,Liège,B-1117,Switzerland,Y,2024-11-01 00:00:00,customers_20240101.csv
+334,ProtelPMS,CUST100334,CR-000334,mia.willems@example.com,Dr,Mia,Willems,+32 483 713805,+32 478 373995,138 Rue Main St,,Liège,B-6990,Netherlands,N,2023-10-10 00:00:00,customers_20240301.csv
+335,Micros,CUST100335,CR-000335,sofia.leclercq@example.com,Dr,Sofia,Leclercq,+32 422 488196,+32 487 681866,124 Rue Main St,,Ghent,B-6641,Switzerland,N,2024-02-12 00:00:00,customers_20240301.csv
+336,Mews,CUST100336,CR-000336,noah.bogaert@example.com,Mrs,Noah,Bogaert,+32 412 324875,+32 486 520018,87 Rue Main St,Apt 3B,Bruges,B-7375,Germany,N,2023-01-06 00:00:00,customers_20240101.csv
+337,Mews,CUST100337,CR-000337,arthur.mertens@example.com,Mr,Arthur,Mertens,+32 408 375871,+32 477 488848,21 Rue Main St,Apt 3B,Knokke-Heist,B-7296,Luxembourg,Y,2024-09-20 00:00:00,customers_20240301.csv
+338,Micros,CUST100338,CR-000338,zoe.dubois@example.com,Dr,Zoe,Dubois,+32 456 111230,+32 476 991884,169 Rue Main St,,Bruges,B-1550,France,N,2024-06-06 00:00:00,customers_20240301.csv
+339,Mews,CUST100339,CR-000339,leon.peeters@example.com,Mrs,Leon,Peeters,+32 483 100301,+32 475 191061,71 Rue du Marché,,Ghent,B-7474,Belgium,Y,2024-08-23 00:00:00,customers_20240101.csv
+340,Micros,CUST100340,CR-000340,noah.mertens@example.com,Ms,Noah,Mertens,+32 492 970071,+32 487 711248,90 Rue Main St,,Ghent,B-4707,Netherlands,N,2023-07-19 00:00:00,customers_20240201.csv
+341,ProtelPMS,CUST100341,CR-000341,zoe.dubois@example.com,Dr,Zoe,Dubois,+32 464 211636,+32 487 175902,129 Rue Main St,,Ghent,B-2917,UK,N,2023-09-21 00:00:00,customers_20240301.csv
+342,Mews,CUST100342,CR-000342,hana.leclercq@example.com,Mrs,Hana,Leclercq,+32 496 456160,+32 494 581137,175 Rue Main St,,Liège,B-1448,Luxembourg,Y,2023-04-30 00:00:00,customers_20240201.csv
+343,Micros,CUST100343,CR-000343,louis.lecomte@example.com,Mrs,Louis,Lecomte,+32 440 532459,+32 481 641593,138 Rue Main St,Apt 3B,Knokke-Heist,B-5314,Germany,Y,2023-10-22 00:00:00,customers_20240101.csv
+344,ProtelPMS,CUST100344,CR-000344,lea.janssen@example.com,Dr,Lea,Janssen,+32 440 470711,+32 476 701581,69 Rue Main St,Floor 2,Knokke-Heist,B-4115,Switzerland,Y,2023-07-24 00:00:00,customers_20240101.csv
+345,ProtelPMS,CUST100345,CR-000345,ethan.claes@example.com,Mrs,Ethan,Claes,+32 479 473321,+32 474 916776,28 Rue Main St,Apt 3B,Brussels,B-9071,Germany,N,2023-01-07 00:00:00,customers_20240301.csv
+346,Mews,CUST100346,CR-000346,arthur.willems@example.com,Dr,Arthur,Willems,+32 473 388078,+32 485 291755,196 Rue Main St,,Antwerp,B-4638,Luxembourg,N,2023-05-12 00:00:00,customers_20240101.csv
+347,Micros,CUST100347,CR-000347,hana.fontaine@example.com,Ms,Hana,Fontaine,+32 450 819678,+32 494 283291,118 Rue du Marché,Apt 3B,Knokke-Heist,B-9490,Belgium,Y,2023-11-20 00:00:00,customers_20240301.csv
+348,Mews,CUST100348,CR-000348,liam.lecomte@example.com,Prof,Liam,Lecomte,+32 412 441244,+32 481 742544,67 Rue Main St,Floor 2,Liège,B-5306,Germany,Y,2023-10-03 00:00:00,customers_20240201.csv
+349,Mews,CUST100349,CR-000349,lea.peeters@example.com,Mrs,Lea,Peeters,+32 453 834750,+32 494 490394,94 Rue Main St,,Ghent,B-8384,UAE,Y,2024-08-08 00:00:00,customers_20240101.csv
+350,ProtelPMS,CUST100350,CR-000350,noah.bogaert@example.com,Prof,Noah,Bogaert,+32 455 997904,+32 482 305587,38 Rue Main St,Floor 2,Antwerp,B-1159,UK,Y,2024-03-07 00:00:00,customers_20240201.csv
+351,Mews,CUST100351,CR-000351,matteo.fontaine@example.com,Ms,Matteo,Fontaine,+32 432 689444,+32 497 695417,13 Rue Main St,,Brussels,B-3676,USA,Y,2023-08-09 00:00:00,customers_20240201.csv
+352,Mews,CUST100352,CR-000352,olivia.laurent@example.com,Ms,Olivia,Laurent,+32 446 687569,+32 487 949363,66 Rue Main St,,Brussels,B-7746,USA,Y,2023-12-26 00:00:00,customers_20240301.csv
+353,ProtelPMS,CUST100353,CR-000353,leon.renard@example.com,Ms,Leon,Renard,+32 445 440881,+32 491 635239,125 Rue Main St,,Brussels,B-7243,Switzerland,N,2023-10-21 00:00:00,customers_20240201.csv
+354,Mews,CUST100354,CR-000354,james.lecomte@example.com,Prof,James,Lecomte,+32 473 524434,+32 497 174809,21 Rue Main St,Floor 2,Ghent,B-4739,USA,Y,2023-11-21 00:00:00,customers_20240301.csv
+355,Mews,CUST100355,CR-000355,chloe.renard@example.com,Dr,Chloe,Renard,+32 499 480805,+32 493 715429,134 Rue Main St,,Antwerp,B-3741,Japan,Y,2023-01-24 00:00:00,customers_20240101.csv
+356,ProtelPMS,CUST100356,CR-000356,ethan.bogaert@example.com,Mrs,Ethan,Bogaert,+32 450 208013,+32 473 166891,122 Rue Main St,Apt 3B,Brussels,B-7504,Netherlands,N,2023-03-27 00:00:00,customers_20240101.csv
+357,Micros,CUST100357,CR-000357,zoe.peeters@example.com,Dr,Zoe,Peeters,+32 439 340497,+32 477 873422,73 Rue Main St,,Knokke-Heist,B-3071,Netherlands,Y,2024-06-23 00:00:00,customers_20240101.csv
+358,Mews,CUST100358,CR-000358,liam.lecomte@example.com,Dr,Liam,Lecomte,+32 459 666843,+32 499 385647,141 Rue Main St,,Bruges,B-9835,USA,Y,2024-08-28 00:00:00,customers_20240301.csv
+359,Micros,CUST100359,CR-000359,zoe.leclercq@example.com,Prof,Zoe,Leclercq,+32 439 464032,+32 485 665883,59 Rue Main St,Apt 3B,Antwerp,B-6044,Switzerland,Y,2024-02-27 00:00:00,customers_20240201.csv
+360,Micros,CUST100360,CR-000360,ethan.dubois@example.com,Mrs,Ethan,Dubois,+32 444 400692,+32 485 661091,3 Rue du Marché,,Antwerp,B-5908,Belgium,Y,2024-03-16 00:00:00,customers_20240201.csv
+361,ProtelPMS,CUST100361,CR-000361,liam.fontaine@example.com,Dr,Liam,Fontaine,+32 471 558339,+32 482 362035,42 Rue Main St,,Antwerp,B-4614,USA,Y,2023-03-23 00:00:00,customers_20240201.csv
+362,Micros,CUST100362,CR-000362,matteo.vandamme@example.com,Ms,Matteo,Van Damme,+32 436 779956,+32 493 657783,69 Rue Main St,,Bruges,B-2121,Luxembourg,Y,2023-05-20 00:00:00,customers_20240201.csv
+363,Mews,CUST100363,CR-000363,arthur.renard@example.com,Prof,Arthur,Renard,+32 462 296911,+32 480 120337,39 Rue Main St,Apt 3B,Liège,B-1362,UAE,Y,2023-04-15 00:00:00,customers_20240201.csv
+364,Micros,CUST100364,CR-000364,nora.bogaert@example.com,Mr,Nora,Bogaert,+32 429 194578,+32 474 115440,127 Rue Main St,Floor 2,Ghent,B-7885,UAE,Y,2024-05-25 00:00:00,customers_20240201.csv
+365,ProtelPMS,CUST100365,CR-000365,emma.willems@example.com,Mr,Emma,Willems,+32 434 913331,+32 482 174852,140 Rue Main St,,Bruges,B-4148,Netherlands,Y,2024-01-26 00:00:00,customers_20240101.csv
+366,ProtelPMS,CUST100366,CR-000366,lucas.leclercq@example.com,Mr,Lucas,Leclercq,+32 425 583220,+32 493 908447,25 Rue Main St,Floor 2,Antwerp,B-7375,UAE,N,2023-11-16 00:00:00,customers_20240201.csv
+367,Micros,CUST100367,CR-000367,liam.bogaert@example.com,Mr,Liam,Bogaert,+32 432 604605,+32 490 413328,51 Rue Main St,,Brussels,B-4568,Switzerland,Y,2023-08-30 00:00:00,customers_20240301.csv
+368,Mews,CUST100368,CR-000368,lea.dubois@example.com,Prof,Lea,Dubois,+32 415 515035,+32 495 354897,3 Rue Main St,Apt 3B,Liège,B-8786,France,N,2024-09-02 00:00:00,customers_20240101.csv
+369,Mews,CUST100369,CR-000369,olivia.claes@example.com,Mr,Olivia,Claes,+32 487 748696,+32 480 896456,161 Rue Main St,Apt 3B,Brussels,B-6824,France,N,2023-06-07 00:00:00,customers_20240301.csv
+370,Mews,CUST100370,CR-000370,james.laurent@example.com,Prof,James,Laurent,+32 482 893454,+32 481 944654,113 Rue Main St,Floor 2,Brussels,B-7189,Germany,Y,2023-05-18 00:00:00,customers_20240201.csv
+371,Micros,CUST100371,CR-000371,arthur.bogaert@example.com,Ms,Arthur,Bogaert,+32 469 830897,+32 485 298994,146 Rue Main St,Floor 2,Liège,B-6696,UAE,Y,2024-04-24 00:00:00,customers_20240201.csv
+372,Mews,CUST100372,CR-000372,noah.fontaine@example.com,Ms,Noah,Fontaine,+32 433 667915,+32 481 576136,1 Rue Main St,,Knokke-Heist,B-4039,France,Y,2024-09-26 00:00:00,customers_20240201.csv
+373,Micros,CUST100373,CR-000373,hugo.bogaert@example.com,Prof,Hugo,Bogaert,+32 449 299092,+32 486 816412,128 Rue Main St,Floor 2,Liège,B-5638,Netherlands,Y,2024-02-24 00:00:00,customers_20240301.csv
+374,Micros,CUST100374,CR-000374,olivia.janssen@example.com,Mr,Olivia,Janssen,+32 405 975763,+32 474 287316,9 Rue Main St,Floor 2,Brussels,B-8952,Switzerland,Y,2023-04-12 00:00:00,customers_20240101.csv
+375,Micros,CUST100375,CR-000375,hana.fontaine@example.com,Prof,Hana,Fontaine,+32 432 151470,+32 481 331444,156 Rue Main St,Apt 3B,Brussels,B-4419,Luxembourg,N,2024-05-18 00:00:00,customers_20240101.csv
+376,Micros,CUST100376,CR-000376,emma.willems@example.com,Dr,Emma,Willems,+32 447 932831,+32 492 161132,158 Rue Main St,,Liège,B-1666,Switzerland,N,2023-03-14 00:00:00,customers_20240201.csv
+377,ProtelPMS,CUST100377,CR-000377,lucas.fontaine@example.com,Mrs,Lucas,Fontaine,+32 468 504048,+32 476 302500,135 Rue Main St,Floor 2,Liège,B-3931,Netherlands,N,2024-07-25 00:00:00,customers_20240201.csv
+378,Micros,CUST100378,CR-000378,leon.willems@example.com,Dr,Leon,Willems,+32 413 274912,+32 495 289159,141 Rue Main St,,Liège,B-6529,UAE,N,2023-06-11 00:00:00,customers_20240301.csv
+379,Micros,CUST100379,CR-000379,lea.mertens@example.com,Ms,Lea,Mertens,+32 447 532373,+32 494 764001,111 Rue Main St,,Liège,B-4943,USA,N,2024-07-12 00:00:00,customers_20240101.csv
+380,Mews,CUST100380,CR-000380,elena.mertens@example.com,Dr,Elena,Mertens,+32 457 516379,+32 470 861594,9 Rue Main St,,Liège,B-1267,UK,N,2023-05-19 00:00:00,customers_20240201.csv
+381,Mews,CUST100381,CR-000381,ethan.claes@example.com,Mr,Ethan,Claes,+32 498 961866,+32 492 962283,71 Rue Main St,Floor 2,Brussels,B-1618,Germany,Y,2023-12-31 00:00:00,customers_20240101.csv
+382,ProtelPMS,CUST100382,CR-000382,ethan.willems@example.com,Mrs,Ethan,Willems,+32 432 950472,+32 479 196369,147 Rue Main St,,Liège,B-4562,Luxembourg,N,2023-03-21 00:00:00,customers_20240301.csv
+383,Micros,CUST100383,CR-000383,hana.peeters@example.com,Prof,Hana,Peeters,+32 412 724145,+32 490 414985,10 Rue Main St,,Brussels,B-1916,UAE,Y,2023-12-23 00:00:00,customers_20240201.csv
+384,Micros,CUST100384,CR-000384,olivia.declercq@example.com,Prof,Olivia,Declercq,+32 401 764678,+32 494 762903,98 Rue Main St,Apt 3B,Ghent,B-9591,Germany,Y,2023-11-23 00:00:00,customers_20240301.csv
+385,ProtelPMS,CUST100385,CR-000385,hugo.fontaine@example.com,Mr,Hugo,Fontaine,+32 486 867115,+32 482 567262,193 Rue Main St,Apt 3B,Bruges,B-8076,Germany,Y,2024-02-08 00:00:00,customers_20240101.csv
+386,Micros,CUST100386,CR-000386,hugo.janssen@example.com,Mr,Hugo,Janssen,+32 470 518582,+32 478 189211,103 Rue Main St,,Knokke-Heist,B-3136,UAE,Y,2024-05-07 00:00:00,customers_20240301.csv
+387,ProtelPMS,CUST100387,CR-000387,arthur.leclercq@example.com,Prof,Arthur,Leclercq,+32 478 871403,+32 486 358207,63 Rue Main St,Apt 3B,Ghent,B-8046,Luxembourg,Y,2024-12-02 00:00:00,customers_20240301.csv
+388,Mews,CUST100388,CR-000388,noah.lecomte@example.com,Ms,Noah,Lecomte,+32 444 299742,+32 480 461260,153 Rue Main St,Apt 3B,Ghent,B-3773,Japan,Y,2024-09-23 00:00:00,customers_20240201.csv
+389,ProtelPMS,CUST100389,CR-000389,arthur.dubois@example.com,Ms,Arthur,Dubois,+32 419 894541,+32 493 994188,22 Rue Main St,Apt 3B,Knokke-Heist,B-1893,Germany,Y,2024-09-27 00:00:00,customers_20240101.csv
+390,Mews,CUST100390,CR-000390,emma.willems@example.com,Dr,Emma,Willems,+32 460 123853,+32 480 319162,190 Rue Main St,Floor 2,Bruges,B-9952,Netherlands,N,2023-09-22 00:00:00,customers_20240301.csv
+391,Micros,CUST100391,CR-000391,zoe.bogaert@example.com,Mr,Zoe,Bogaert,+32 448 711324,+32 498 795759,135 Rue Main St,Apt 3B,Ghent,B-3790,France,Y,2023-10-18 00:00:00,customers_20240101.csv
+392,ProtelPMS,CUST100392,CR-000392,emma.laurent@example.com,Dr,Emma,Laurent,+32 484 384489,+32 491 993473,169 Rue du Marché,,Brussels,B-1312,Belgium,Y,2024-10-26 00:00:00,customers_20240201.csv
+393,Mews,CUST100393,CR-000393,louis.fontaine@example.com,Dr,Louis,Fontaine,+32 476 657381,+32 472 295472,51 Rue Main St,,Liège,B-1352,Netherlands,Y,2023-09-11 00:00:00,customers_20240301.csv
+394,Micros,CUST100394,CR-000394,lea.laurent@example.com,Mrs,Lea,Laurent,+32 402 463625,+32 491 469007,91 Rue Main St,,Bruges,B-9212,Japan,Y,2023-03-05 00:00:00,customers_20240301.csv
+395,Micros,CUST100395,CR-000395,mia.mertens@example.com,Ms,Mia,Mertens,+32 428 259077,+32 480 511929,169 Rue du Marché,Floor 2,Brussels,B-7262,Belgium,N,2024-11-25 00:00:00,customers_20240301.csv
+396,ProtelPMS,CUST100396,CR-000396,louis.claes@example.com,Dr,Louis,Claes,+32 439 734775,+32 480 570988,139 Rue Main St,Floor 2,Bruges,B-3270,Luxembourg,N,2024-07-08 00:00:00,customers_20240301.csv
+397,ProtelPMS,CUST100397,CR-000397,james.maes@example.com,Dr,James,Maes,+32 498 252203,+32 490 692282,41 Rue Main St,,Brussels,B-9732,Switzerland,N,2023-05-02 00:00:00,customers_20240101.csv
+398,Mews,CUST100398,CR-000398,nora.bogaert@example.com,Dr,Nora,Bogaert,+32 452 418083,+32 484 881828,164 Rue du Marché,,Bruges,B-4079,Belgium,Y,2023-05-15 00:00:00,customers_20240101.csv
+399,Micros,CUST100399,CR-000399,leon.renard@example.com,Prof,Leon,Renard,+32 478 342128,+32 489 343461,60 Rue Main St,Apt 3B,Ghent,B-2302,UK,N,2024-05-03 00:00:00,customers_20240101.csv
+400,Mews,CUST100400,CR-000400,lea.peeters@example.com,Dr,Lea,Peeters,+32 417 271742,+32 476 337264,9 Rue Main St,,Brussels,B-5421,Japan,Y,2023-08-16 00:00:00,customers_20240301.csv
+401,Mews,CUST100401,CR-000401,lucas.janssen@example.com,Prof,Lucas,Janssen,+32 462 821276,+32 480 579770,64 Rue Main St,,Antwerp,B-1685,France,N,2024-01-25 00:00:00,customers_20240301.csv
+402,Micros,CUST100402,CR-000402,mia.renard@example.com,Prof,Mia,Renard,+32 467 772550,+32 498 838315,10 Rue Main St,Apt 3B,Antwerp,B-8485,Luxembourg,Y,2023-09-09 00:00:00,customers_20240301.csv
+403,Micros,CUST100403,CR-000403,emma.fontaine@example.com,Mr,Emma,Fontaine,+32 424 405323,+32 484 517375,78 Rue Main St,,Antwerp,B-3727,Japan,Y,2023-10-29 00:00:00,customers_20240301.csv
+404,Mews,CUST100404,CR-000404,matteo.mertens@example.com,Dr,Matteo,Mertens,+32 411 857750,+32 486 218669,47 Rue Main St,Floor 2,Antwerp,B-7775,France,Y,2024-04-06 00:00:00,customers_20240101.csv
+405,Mews,CUST100405,CR-000405,arthur.renard@example.com,Mr,Arthur,Renard,+32 432 439817,+32 492 780081,183 Rue Main St,Floor 2,Knokke-Heist,B-3024,Germany,Y,2023-04-27 00:00:00,customers_20240301.csv
+406,Micros,CUST100406,CR-000406,lea.janssen@example.com,Dr,Lea,Janssen,+32 493 929493,+32 486 741804,41 Rue Main St,,Liège,B-7235,Switzerland,Y,2023-06-24 00:00:00,customers_20240201.csv
+407,ProtelPMS,CUST100407,CR-000407,james.declercq@example.com,Mr,James,Declercq,+32 453 423026,+32 479 865630,197 Rue Main St,,Ghent,B-3960,France,Y,2023-05-15 00:00:00,customers_20240101.csv
+408,ProtelPMS,CUST100408,CR-000408,leon.vandamme@example.com,Dr,Leon,Van Damme,+32 463 996963,+32 485 669902,2 Rue Main St,,Bruges,B-4553,UK,N,2024-11-06 00:00:00,customers_20240201.csv
+409,Micros,CUST100409,CR-000409,mia.laurent@example.com,Prof,Mia,Laurent,+32 400 356600,+32 498 673929,72 Rue Main St,Floor 2,Brussels,B-4028,Netherlands,Y,2023-02-26 00:00:00,customers_20240301.csv
+410,Micros,CUST100410,CR-000410,emma.peeters@example.com,Prof,Emma,Peeters,+32 477 412938,+32 480 191962,13 Rue du Marché,Apt 3B,Antwerp,B-3920,Belgium,Y,2024-11-19 00:00:00,customers_20240201.csv
+411,Mews,CUST100411,CR-000411,arthur.bogaert@example.com,Mr,Arthur,Bogaert,+32 411 905843,+32 479 438503,95 Rue Main St,,Brussels,B-8001,Luxembourg,N,2023-03-08 00:00:00,customers_20240201.csv
+412,Mews,CUST100412,CR-000412,nora.janssen@example.com,Prof,Nora,Janssen,+32 452 650131,+32 476 829630,54 Rue Main St,Apt 3B,Brussels,B-9666,UK,Y,2024-05-10 00:00:00,customers_20240301.csv
+413,Mews,CUST100413,CR-000413,mia.renard@example.com,Prof,Mia,Renard,+32 473 753518,+32 481 236014,158 Rue Main St,,Liège,B-9154,USA,Y,2023-07-04 00:00:00,customers_20240301.csv
+414,ProtelPMS,CUST100414,CR-000414,ethan.claes@example.com,Mr,Ethan,Claes,+32 459 755843,+32 495 223654,189 Rue du Marché,Floor 2,Liège,B-7793,Belgium,Y,2023-02-16 00:00:00,customers_20240201.csv
+415,ProtelPMS,CUST100415,CR-000415,elena.vandamme@example.com,Mrs,Elena,Van Damme,+32 488 395307,+32 478 928580,18 Rue Main St,,Ghent,B-9301,Germany,N,2023-11-28 00:00:00,customers_20240101.csv
+416,Micros,CUST100416,CR-000416,hugo.willems@example.com,Prof,Hugo,Willems,+32 478 130531,+32 496 284160,50 Rue Main St,,Ghent,B-8849,Japan,Y,2023-02-06 00:00:00,customers_20240301.csv
+417,Micros,CUST100417,CR-000417,arthur.peeters@example.com,Ms,Arthur,Peeters,+32 459 922072,+32 496 534061,191 Rue Main St,Apt 3B,Liège,B-5904,UAE,N,2024-11-25 00:00:00,customers_20240201.csv
+418,Mews,CUST100418,CR-000418,lucas.renard@example.com,Mr,Lucas,Renard,+32 419 394083,+32 496 132687,87 Rue Main St,,Knokke-Heist,B-9753,USA,Y,2024-08-07 00:00:00,customers_20240301.csv
+419,Mews,CUST100419,CR-000419,nora.renard@example.com,Ms,Nora,Renard,+32 490 133164,+32 478 533973,23 Rue Main St,,Bruges,B-7088,Netherlands,Y,2023-11-06 00:00:00,customers_20240101.csv
+420,ProtelPMS,CUST100420,CR-000420,nora.janssen@example.com,Mrs,Nora,Janssen,+32 411 565330,+32 486 126146,124 Rue Main St,Floor 2,Bruges,B-6572,USA,Y,2024-06-20 00:00:00,customers_20240201.csv
+421,Micros,CUST100421,CR-000421,nora.vandamme@example.com,Mrs,Nora,Van Damme,+32 426 859767,+32 471 581682,100 Rue Main St,Apt 3B,Brussels,B-6095,Netherlands,Y,2024-12-04 00:00:00,customers_20240301.csv
+422,ProtelPMS,CUST100422,CR-000422,hugo.laurent@example.com,Prof,Hugo,Laurent,+32 498 790995,+32 493 427659,6 Rue du Marché,,Knokke-Heist,B-4438,Belgium,Y,2023-07-25 00:00:00,customers_20240101.csv
+423,Mews,CUST100423,CR-000423,chloe.fontaine@example.com,Mr,Chloe,Fontaine,+32 434 256574,+32 475 386929,30 Rue Main St,Apt 3B,Liège,B-9422,USA,Y,2023-07-31 00:00:00,customers_20240301.csv
+424,ProtelPMS,CUST100424,CR-000424,elena.willems@example.com,Ms,Elena,Willems,+32 473 356717,+32 475 174703,80 Rue Main St,,Liège,B-8268,UK,Y,2023-05-14 00:00:00,customers_20240101.csv
+425,ProtelPMS,CUST100425,CR-000425,emma.janssen@example.com,Mr,Emma,Janssen,+32 454 510954,+32 475 838908,153 Rue Main St,,Liège,B-6826,Japan,Y,2023-12-07 00:00:00,customers_20240101.csv
+426,ProtelPMS,CUST100426,CR-000426,arthur.renard@example.com,Dr,Arthur,Renard,+32 412 577714,+32 479 817727,165 Rue Main St,,Antwerp,B-4796,France,Y,2023-05-28 00:00:00,customers_20240301.csv
+427,Micros,CUST100427,CR-000427,lea.leclercq@example.com,Ms,Lea,Leclercq,+32 441 575301,+32 485 131734,17 Rue Main St,,Brussels,B-6758,France,Y,2024-04-17 00:00:00,customers_20240101.csv
+428,ProtelPMS,CUST100428,CR-000428,lea.renard@example.com,Prof,Lea,Renard,+32 413 525392,+32 496 848969,28 Rue Main St,,Liège,B-2162,Luxembourg,Y,2024-06-29 00:00:00,customers_20240201.csv
+429,Micros,CUST100429,CR-000429,zoe.leclercq@example.com,Mrs,Zoe,Leclercq,+32 470 266744,+32 485 502460,17 Rue Main St,,Bruges,B-8063,Germany,Y,2024-08-03 00:00:00,customers_20240201.csv
+430,Micros,CUST100430,CR-000430,james.lecomte@example.com,Prof,James,Lecomte,+32 462 219876,+32 488 725030,119 Rue Main St,,Liège,B-2599,Netherlands,Y,2023-06-30 00:00:00,customers_20240201.csv
+431,Micros,CUST100431,CR-000431,olivia.renard@example.com,Prof,Olivia,Renard,+32 498 959691,+32 482 443312,127 Rue Main St,Apt 3B,Brussels,B-4565,Netherlands,Y,2024-08-17 00:00:00,customers_20240301.csv
+432,Mews,CUST100432,CR-000432,james.lecomte@example.com,Prof,James,Lecomte,+32 437 508926,+32 489 706005,115 Rue Main St,Floor 2,Bruges,B-6187,France,Y,2024-08-06 00:00:00,customers_20240301.csv
+433,ProtelPMS,CUST100433,CR-000433,mia.bogaert@example.com,Prof,Mia,Bogaert,+32 401 741194,+32 486 523831,33 Rue Main St,,Brussels,B-7049,USA,N,2023-02-24 00:00:00,customers_20240101.csv
+434,ProtelPMS,CUST100434,CR-000434,olivia.declercq@example.com,Mrs,Olivia,Declercq,+32 455 836333,+32 488 513420,161 Rue Main St,,Knokke-Heist,B-7271,UK,Y,2024-01-26 00:00:00,customers_20240201.csv
+435,ProtelPMS,CUST100435,CR-000435,james.laurent@example.com,Prof,James,Laurent,+32 449 984293,+32 499 477789,107 Rue Main St,Floor 2,Ghent,B-3056,France,Y,2023-01-12 00:00:00,customers_20240101.csv
+436,Micros,CUST100436,CR-000436,james.bogaert@example.com,Dr,James,Bogaert,+32 417 188776,+32 474 773440,107 Rue Main St,,Knokke-Heist,B-7974,UAE,N,2023-07-04 00:00:00,customers_20240201.csv
+437,Mews,CUST100437,CR-000437,elena.declercq@example.com,Ms,Elena,Declercq,+32 428 294816,+32 483 733941,2 Rue Main St,,Knokke-Heist,B-4878,UAE,N,2024-05-28 00:00:00,customers_20240201.csv
+438,ProtelPMS,CUST100438,CR-000438,elena.renard@example.com,Mr,Elena,Renard,+32 472 606743,+32 492 486482,29 Rue Main St,,Knokke-Heist,B-2311,USA,Y,2024-06-23 00:00:00,customers_20240201.csv
+439,Micros,CUST100439,CR-000439,elena.janssen@example.com,Mr,Elena,Janssen,+32 431 595401,+32 490 877714,170 Rue Main St,Apt 3B,Knokke-Heist,B-9834,Switzerland,N,2023-11-16 00:00:00,customers_20240301.csv
+440,Mews,CUST100440,CR-000440,hugo.fontaine@example.com,Dr,Hugo,Fontaine,+32 465 592025,+32 488 869460,85 Rue du Marché,,Ghent,B-5827,Belgium,Y,2023-06-21 00:00:00,customers_20240101.csv
+441,Micros,CUST100441,CR-000441,zoe.maes@example.com,Dr,Zoe,Maes,+32 474 277292,+32 488 154127,169 Rue du Marché,,Knokke-Heist,B-1447,Belgium,Y,2024-05-11 00:00:00,customers_20240101.csv
+442,Mews,CUST100442,CR-000442,matteo.janssen@example.com,Mrs,Matteo,Janssen,+32 478 394620,+32 478 999529,66 Rue Main St,Apt 3B,Knokke-Heist,B-2827,UK,N,2023-06-28 00:00:00,customers_20240301.csv
+443,Mews,CUST100443,CR-000443,arthur.willems@example.com,Mrs,Arthur,Willems,+32 462 289592,+32 495 653007,9 Rue Main St,,Brussels,B-3376,France,N,2023-06-07 00:00:00,customers_20240201.csv
+444,Micros,CUST100444,CR-000444,mia.claes@example.com,Mrs,Mia,Claes,+32 426 705822,+32 493 982725,89 Rue Main St,Apt 3B,Knokke-Heist,B-5331,UAE,Y,2023-02-23 00:00:00,customers_20240101.csv
+445,Mews,CUST100445,CR-000445,mia.laurent@example.com,Prof,Mia,Laurent,+32 429 498249,+32 491 839883,100 Rue Main St,,Ghent,B-3378,UK,N,2024-03-21 00:00:00,customers_20240101.csv
+446,Micros,CUST100446,CR-000446,hana.leclercq@example.com,Mr,Hana,Leclercq,+32 412 657101,+32 490 471015,111 Rue Main St,,Ghent,B-5429,USA,Y,2023-04-11 00:00:00,customers_20240201.csv
+447,Micros,CUST100447,CR-000447,hana.vandamme@example.com,Prof,Hana,Van Damme,+32 498 304394,+32 486 453796,174 Rue Main St,Floor 2,Ghent,B-9972,Germany,Y,2024-11-19 00:00:00,customers_20240101.csv
+448,Micros,CUST100448,CR-000448,liam.leclercq@example.com,Mr,Liam,Leclercq,+32 487 567604,+32 481 330074,186 Rue Main St,,Ghent,B-4163,Netherlands,Y,2023-01-25 00:00:00,customers_20240301.csv
+449,Micros,CUST100449,CR-000449,liam.renard@example.com,Mr,Liam,Renard,+32 490 225805,+32 472 998043,155 Rue Main St,Floor 2,Antwerp,B-4027,Germany,Y,2024-12-13 00:00:00,customers_20240101.csv
+450,Micros,CUST100450,CR-000450,chloe.laurent@example.com,Dr,Chloe,Laurent,+32 435 906731,+32 483 825846,171 Rue Main St,,Ghent,B-3653,Netherlands,Y,2023-10-11 00:00:00,customers_20240101.csv
+451,Mews,CUST100451,CR-000451,mia.willems@example.com,Ms,Mia,Willems,+32 422 561976,+32 472 615607,52 Rue du Marché,,Bruges,B-9061,Belgium,Y,2023-05-28 00:00:00,customers_20240301.csv
+452,Mews,CUST100452,CR-000452,sofia.renard@example.com,Ms,Sofia,Renard,+32 413 136554,+32 472 173832,147 Rue Main St,,Antwerp,B-1307,Netherlands,Y,2023-06-02 00:00:00,customers_20240301.csv
+453,Mews,CUST100453,CR-000453,liam.lecomte@example.com,Mrs,Liam,Lecomte,+32 489 445852,+32 498 510339,148 Rue Main St,Apt 3B,Liège,B-9039,Japan,Y,2024-03-22 00:00:00,customers_20240201.csv
+454,Mews,CUST100454,CR-000454,matteo.claes@example.com,Dr,Matteo,Claes,+32 415 694798,+32 487 476353,86 Rue du Marché,,Antwerp,B-1904,Belgium,N,2024-10-24 00:00:00,customers_20240101.csv
+455,ProtelPMS,CUST100455,CR-000455,elena.declercq@example.com,Dr,Elena,Declercq,+32 497 903741,+32 479 779259,52 Rue Main St,Floor 2,Liège,B-1644,USA,Y,2024-11-07 00:00:00,customers_20240101.csv
+456,Micros,CUST100456,CR-000456,mia.mertens@example.com,Ms,Mia,Mertens,+32 462 188984,+32 498 763529,113 Rue Main St,Floor 2,Bruges,B-1584,Netherlands,Y,2023-01-26 00:00:00,customers_20240301.csv
+457,Micros,CUST100457,CR-000457,arthur.leclercq@example.com,Ms,Arthur,Leclercq,+32 463 659876,+32 496 951211,116 Rue Main St,Apt 3B,Brussels,B-6558,Netherlands,Y,2023-12-12 00:00:00,customers_20240301.csv
+458,Micros,CUST100458,CR-000458,louis.janssen@example.com,Prof,Louis,Janssen,+32 458 811016,+32 497 662625,39 Rue Main St,Floor 2,Brussels,B-1604,Germany,N,2023-05-25 00:00:00,customers_20240201.csv
+459,ProtelPMS,CUST100459,CR-000459,arthur.mertens@example.com,Mrs,Arthur,Mertens,+32 489 780301,+32 474 115063,45 Rue Main St,Apt 3B,Ghent,B-2594,Luxembourg,Y,2024-09-17 00:00:00,customers_20240101.csv
+460,Micros,CUST100460,CR-000460,noah.janssen@example.com,Prof,Noah,Janssen,+32 428 166175,+32 495 312484,110 Rue Main St,,Knokke-Heist,B-7586,UAE,Y,2023-05-04 00:00:00,customers_20240301.csv
+461,ProtelPMS,CUST100461,CR-000461,hugo.declercq@example.com,Prof,Hugo,Declercq,+32 422 451801,+32 472 226610,71 Rue Main St,Floor 2,Antwerp,B-3753,Germany,N,2024-01-14 00:00:00,customers_20240301.csv
+462,ProtelPMS,CUST100462,CR-000462,arthur.claes@example.com,Mrs,Arthur,Claes,+32 412 929478,+32 497 762904,157 Rue Main St,,Bruges,B-1256,Luxembourg,Y,2023-03-24 00:00:00,customers_20240101.csv
+463,Micros,CUST100463,CR-000463,james.mertens@example.com,Prof,James,Mertens,+32 436 536440,+32 492 946632,198 Rue Main St,,Knokke-Heist,B-3079,Netherlands,Y,2023-05-27 00:00:00,customers_20240301.csv
+464,ProtelPMS,CUST100464,CR-000464,elena.laurent@example.com,Mrs,Elena,Laurent,+32 478 825272,+32 471 725236,47 Rue Main St,,Liège,B-2442,Japan,N,2023-11-05 00:00:00,customers_20240201.csv
+465,ProtelPMS,CUST100465,CR-000465,emma.fontaine@example.com,Mr,Emma,Fontaine,+32 467 200331,+32 489 479481,195 Rue Main St,Floor 2,Antwerp,B-4409,Germany,Y,2023-02-24 00:00:00,customers_20240101.csv
+466,Mews,CUST100466,CR-000466,james.lecomte@example.com,Mrs,James,Lecomte,+32 420 802695,+32 499 145209,14 Rue Main St,,Ghent,B-4433,UAE,Y,2023-09-15 00:00:00,customers_20240201.csv
+467,Micros,CUST100467,CR-000467,emma.janssen@example.com,Mrs,Emma,Janssen,+32 420 923648,+32 470 608623,132 Rue du Marché,Apt 3B,Brussels,B-4855,Belgium,N,2024-03-31 00:00:00,customers_20240301.csv
+468,ProtelPMS,CUST100468,CR-000468,mia.claes@example.com,Mr,Mia,Claes,+32 441 338846,+32 473 348636,189 Rue Main St,,Bruges,B-7152,USA,Y,2023-03-17 00:00:00,customers_20240201.csv
+469,ProtelPMS,CUST100469,CR-000469,emma.mertens@example.com,Mrs,Emma,Mertens,+32 478 577092,+32 475 506145,96 Rue Main St,Floor 2,Antwerp,B-4181,Japan,N,2024-01-03 00:00:00,customers_20240201.csv
+470,Micros,CUST100470,CR-000470,hugo.peeters@example.com,Prof,Hugo,Peeters,+32 407 394234,+32 474 216506,120 Rue du Marché,,Antwerp,B-3804,Belgium,Y,2023-08-14 00:00:00,customers_20240201.csv
+471,Micros,CUST100471,CR-000471,leon.mertens@example.com,Prof,Leon,Mertens,+32 429 190674,+32 483 998602,134 Rue Main St,,Bruges,B-8757,France,Y,2023-10-13 00:00:00,customers_20240101.csv
+472,Mews,CUST100472,CR-000472,sofia.claes@example.com,Prof,Sofia,Claes,+32 428 720517,+32 474 701568,2 Rue Main St,,Brussels,B-1656,USA,Y,2024-05-31 00:00:00,customers_20240101.csv
+473,Micros,CUST100473,CR-000473,elena.leclercq@example.com,Mr,Elena,Leclercq,+32 457 619344,+32 477 187127,143 Rue Main St,Apt 3B,Knokke-Heist,B-7662,UAE,Y,2023-05-16 00:00:00,customers_20240201.csv
+474,ProtelPMS,CUST100474,CR-000474,sofia.lecomte@example.com,Dr,Sofia,Lecomte,+32 485 419644,+32 475 837468,118 Rue Main St,Apt 3B,Antwerp,B-8598,Netherlands,Y,2024-12-21 00:00:00,customers_20240201.csv
+475,Micros,CUST100475,CR-000475,hugo.lecomte@example.com,Mr,Hugo,Lecomte,+32 480 174132,+32 482 824304,86 Rue Main St,Apt 3B,Ghent,B-7977,UAE,Y,2024-12-15 00:00:00,customers_20240301.csv
+476,Micros,CUST100476,CR-000476,noah.renard@example.com,Mr,Noah,Renard,+32 465 807424,+32 481 154067,29 Rue Main St,,Ghent,B-8624,USA,N,2023-02-11 00:00:00,customers_20240201.csv
+477,Micros,CUST100477,CR-000477,nora.lecomte@example.com,Mr,Nora,Lecomte,+32 471 843793,+32 494 314656,36 Rue Main St,,Bruges,B-9841,Switzerland,Y,2024-10-26 00:00:00,customers_20240201.csv
+478,Mews,CUST100478,CR-000478,lucas.willems@example.com,Prof,Lucas,Willems,+32 487 543473,+32 478 157105,17 Rue Main St,,Ghent,B-8412,USA,Y,2024-05-28 00:00:00,customers_20240301.csv
+479,Micros,CUST100479,CR-000479,arthur.bogaert@example.com,Prof,Arthur,Bogaert,+32 437 573933,+32 489 486028,173 Rue Main St,Apt 3B,Bruges,B-8501,Switzerland,Y,2023-03-24 00:00:00,customers_20240201.csv
+480,ProtelPMS,CUST100480,CR-000480,ethan.janssen@example.com,Ms,Ethan,Janssen,+32 414 830943,+32 474 620438,39 Rue Main St,Floor 2,Liège,B-1371,Netherlands,Y,2024-03-02 00:00:00,customers_20240301.csv
+481,Mews,CUST100481,CR-000481,arthur.willems@example.com,Mr,Arthur,Willems,+32 437 298244,+32 472 123107,60 Rue Main St,,Antwerp,B-6616,Japan,N,2024-10-23 00:00:00,customers_20240201.csv
+482,Micros,CUST100482,CR-000482,zoe.lecomte@example.com,Dr,Zoe,Lecomte,+32 458 418853,+32 488 238364,79 Rue Main St,Floor 2,Ghent,B-4715,Switzerland,Y,2024-01-16 00:00:00,customers_20240201.csv
+483,Mews,CUST100483,CR-000483,james.willems@example.com,Mrs,James,Willems,+32 479 268600,+32 492 661320,74 Rue Main St,Floor 2,Bruges,B-3514,UK,Y,2023-09-01 00:00:00,customers_20240101.csv
+484,Mews,CUST100484,CR-000484,hugo.renard@example.com,Ms,Hugo,Renard,+32 447 293458,+32 476 689810,182 Rue Main St,Apt 3B,Knokke-Heist,B-6192,France,Y,2023-06-01 00:00:00,customers_20240201.csv
+485,Mews,CUST100485,CR-000485,elena.peeters@example.com,Mr,Elena,Peeters,+32 403 524214,+32 499 623676,197 Rue Main St,Floor 2,Antwerp,B-6246,Switzerland,Y,2023-01-05 00:00:00,customers_20240301.csv
+486,Micros,CUST100486,CR-000486,chloe.laurent@example.com,Mrs,Chloe,Laurent,+32 472 863933,+32 499 563581,87 Rue Main St,Apt 3B,Knokke-Heist,B-8847,UK,Y,2023-05-23 00:00:00,customers_20240301.csv
+487,Micros,CUST100487,CR-000487,ethan.dubois@example.com,Mrs,Ethan,Dubois,+32 457 474754,+32 472 442220,15 Rue Main St,Floor 2,Liège,B-9625,Japan,Y,2023-10-12 00:00:00,customers_20240101.csv
+488,Micros,CUST100488,CR-000488,noah.fontaine@example.com,Mr,Noah,Fontaine,+32 465 513583,+32 476 614290,82 Rue Main St,Apt 3B,Knokke-Heist,B-6915,UAE,Y,2023-06-01 00:00:00,customers_20240301.csv
+489,ProtelPMS,CUST100489,CR-000489,lea.leclercq@example.com,Ms,Lea,Leclercq,+32 444 468422,+32 479 567220,144 Rue Main St,Apt 3B,Bruges,B-8278,USA,N,2024-03-01 00:00:00,customers_20240201.csv
+490,Micros,CUST100490,CR-000490,nora.vandamme@example.com,Dr,Nora,Van Damme,+32 417 976097,+32 488 726981,23 Rue Main St,Floor 2,Bruges,B-5968,Japan,Y,2024-06-21 00:00:00,customers_20240201.csv
+491,ProtelPMS,CUST100491,CR-000491,leon.vandamme@example.com,Mr,Leon,Van Damme,+32 452 769836,+32 499 386606,107 Rue Main St,Floor 2,Liège,B-8571,Japan,N,2024-08-04 00:00:00,customers_20240101.csv
+492,Mews,CUST100492,CR-000492,james.declercq@example.com,Prof,James,Declercq,+32 462 144284,+32 496 966384,78 Rue Main St,,Antwerp,B-8593,Japan,Y,2023-01-28 00:00:00,customers_20240101.csv
+493,ProtelPMS,CUST100493,CR-000493,ethan.maes@example.com,Ms,Ethan,Maes,+32 453 288085,+32 485 821255,166 Rue Main St,Floor 2,Brussels,B-2955,UAE,Y,2024-05-19 00:00:00,customers_20240101.csv
+494,Mews,CUST100494,CR-000494,zoe.laurent@example.com,Ms,Zoe,Laurent,+32 480 819231,+32 485 827968,31 Rue Main St,,Liège,B-1287,Luxembourg,Y,2023-06-16 00:00:00,customers_20240301.csv
+495,Micros,CUST100495,CR-000495,james.willems@example.com,Mrs,James,Willems,+32 445 271241,+32 471 385915,93 Rue Main St,,Knokke-Heist,B-6832,UAE,Y,2023-10-24 00:00:00,customers_20240201.csv
+496,ProtelPMS,CUST100496,CR-000496,matteo.claes@example.com,Prof,Matteo,Claes,+32 496 275254,+32 487 438277,81 Rue Main St,,Ghent,B-6939,France,Y,2024-07-01 00:00:00,customers_20240301.csv
+497,Micros,CUST100497,CR-000497,nora.dubois@example.com,Ms,Nora,Dubois,+32 447 916639,+32 485 532007,88 Rue Main St,Floor 2,Brussels,B-4569,France,Y,2024-05-30 00:00:00,customers_20240101.csv
+498,Micros,CUST100498,CR-000498,matteo.renard@example.com,Prof,Matteo,Renard,+32 489 893045,+32 495 219502,107 Rue Main St,,Brussels,B-2909,Switzerland,Y,2023-01-18 00:00:00,customers_20240201.csv
+499,ProtelPMS,CUST100499,CR-000499,chloe.bogaert@example.com,Dr,Chloe,Bogaert,+32 476 648532,+32 494 458660,45 Rue Main St,,Brussels,B-2943,USA,Y,2023-05-12 00:00:00,customers_20240301.csv
+500,ProtelPMS,CUST100500,CR-000500,lucas.maes@example.com,Mrs,Lucas,Maes,+32 410 545440,+32 492 900088,29 Rue Main St,Apt 3B,Brussels,B-8934,France,Y,2023-02-13 00:00:00,customers_20240101.csv
+501,Micros,CUST100501,CR-000501,liam.vandamme@example.com,Mr,Liam,Van Damme,+32 460 224698,+32 499 365302,12 Rue Main St,Apt 3B,Ghent,B-1168,Switzerland,Y,2023-05-07 00:00:00,customers_20240301.csv
+502,ProtelPMS,CUST100502,CR-000502,leon.mertens@example.com,Ms,Leon,Mertens,+32 403 195189,+32 474 986950,192 Rue Main St,,Liège,B-6698,Germany,Y,2023-06-14 00:00:00,customers_20240301.csv
+503,ProtelPMS,CUST100503,CR-000503,matteo.renard@example.com,Prof,Matteo,Renard,+32 497 114663,+32 486 327538,184 Rue Main St,Floor 2,Ghent,B-3814,Netherlands,N,2023-01-05 00:00:00,customers_20240301.csv
+504,Micros,CUST100504,CR-000504,lucas.mertens@example.com,Dr,Lucas,Mertens,+32 446 832045,+32 488 294118,113 Rue Main St,Apt 3B,Bruges,B-6813,Switzerland,Y,2024-03-10 00:00:00,customers_20240101.csv
+505,ProtelPMS,CUST100505,CR-000505,louis.janssen@example.com,Dr,Louis,Janssen,+32 414 644973,+32 474 619900,196 Rue Main St,,Knokke-Heist,B-5723,USA,N,2023-02-11 00:00:00,customers_20240101.csv
+506,Mews,CUST100506,CR-000506,hana.janssen@example.com,Dr,Hana,Janssen,+32 476 871934,+32 479 820420,114 Rue Main St,Floor 2,Liège,B-7672,Japan,Y,2024-03-14 00:00:00,customers_20240101.csv
+507,ProtelPMS,CUST100507,CR-000507,arthur.lecomte@example.com,Mr,Arthur,Lecomte,+32 486 615530,+32 491 210280,102 Rue Main St,,Liège,B-2392,USA,Y,2023-05-27 00:00:00,customers_20240201.csv
+508,ProtelPMS,CUST100508,CR-000508,zoe.janssen@example.com,Ms,Zoe,Janssen,+32 425 455081,+32 476 723861,104 Rue Main St,Apt 3B,Bruges,B-7958,France,N,2024-05-26 00:00:00,customers_20240201.csv
+509,Micros,CUST100509,CR-000509,mia.willems@example.com,Prof,Mia,Willems,+32 451 608069,+32 486 392438,38 Rue Main St,,Brussels,B-3001,UAE,Y,2024-05-16 00:00:00,customers_20240201.csv
+510,Micros,CUST100510,CR-000510,james.dubois@example.com,Mr,James,Dubois,+32 408 622332,+32 491 128048,46 Rue Main St,,Liège,B-6356,Netherlands,Y,2023-11-07 00:00:00,customers_20240301.csv
+511,Mews,CUST100511,CR-000511,noah.lecomte@example.com,Dr,Noah,Lecomte,+32 425 407823,+32 491 622084,126 Rue Main St,,Liège,B-6629,Switzerland,N,2024-07-13 00:00:00,customers_20240101.csv
+512,Mews,CUST100512,CR-000512,louis.mertens@example.com,Dr,Louis,Mertens,+32 440 994303,+32 482 564053,118 Rue Main St,Apt 3B,Brussels,B-3897,Netherlands,N,2024-11-06 00:00:00,customers_20240201.csv
+513,Mews,CUST100513,CR-000513,arthur.leclercq@example.com,Dr,Arthur,Leclercq,+32 462 901123,+32 473 696487,173 Rue Main St,,Knokke-Heist,B-9837,France,N,2024-04-26 00:00:00,customers_20240201.csv
+514,Mews,CUST100514,CR-000514,matteo.dubois@example.com,Dr,Matteo,Dubois,+32 475 496149,+32 489 809348,91 Rue Main St,,Ghent,B-2006,Japan,Y,2024-08-27 00:00:00,customers_20240101.csv
+515,ProtelPMS,CUST100515,CR-000515,hugo.willems@example.com,Ms,Hugo,Willems,+32 448 202078,+32 483 461908,92 Rue Main St,,Ghent,B-1924,Luxembourg,N,2023-09-08 00:00:00,customers_20240101.csv
+516,Micros,CUST100516,CR-000516,ethan.renard@example.com,Mr,Ethan,Renard,+32 439 220031,+32 480 278026,6 Rue Main St,,Brussels,B-8551,Netherlands,N,2024-03-08 00:00:00,customers_20240301.csv
+517,Micros,CUST100517,CR-000517,chloe.dubois@example.com,Mr,Chloe,Dubois,+32 440 496086,+32 488 509260,83 Rue Main St,Apt 3B,Antwerp,B-2639,UAE,N,2024-11-22 00:00:00,customers_20240101.csv
+518,ProtelPMS,CUST100518,CR-000518,hana.fontaine@example.com,Prof,Hana,Fontaine,+32 438 480983,+32 483 311559,128 Rue Main St,Apt 3B,Liège,B-4507,USA,Y,2023-09-29 00:00:00,customers_20240101.csv
+519,Micros,CUST100519,CR-000519,zoe.leclercq@example.com,Mr,Zoe,Leclercq,+32 491 985194,+32 488 199335,152 Rue Main St,,Ghent,B-2102,Germany,N,2024-06-27 00:00:00,customers_20240201.csv
+520,Micros,CUST100520,CR-000520,sofia.willems@example.com,Ms,Sofia,Willems,+32 464 943187,+32 479 553939,170 Rue Main St,,Bruges,B-7788,Netherlands,Y,2023-09-15 00:00:00,customers_20240301.csv
+521,Micros,CUST100521,CR-000521,elena.peeters@example.com,Prof,Elena,Peeters,+32 423 704864,+32 485 323297,170 Rue du Marché,,Ghent,B-9728,Belgium,N,2024-03-20 00:00:00,customers_20240301.csv
+522,Mews,CUST100522,CR-000522,matteo.claes@example.com,Mrs,Matteo,Claes,+32 430 257782,+32 493 818596,196 Rue Main St,,Antwerp,B-7721,USA,Y,2023-03-07 00:00:00,customers_20240301.csv
+523,Micros,CUST100523,CR-000523,louis.maes@example.com,Mrs,Louis,Maes,+32 432 820219,+32 489 347600,104 Rue Main St,Floor 2,Brussels,B-3456,UK,Y,2023-01-29 00:00:00,customers_20240101.csv
+524,Mews,CUST100524,CR-000524,hana.laurent@example.com,Dr,Hana,Laurent,+32 482 138801,+32 476 267099,70 Rue Main St,Floor 2,Brussels,B-5233,Switzerland,Y,2024-11-05 00:00:00,customers_20240301.csv
+525,ProtelPMS,CUST100525,CR-000525,liam.bogaert@example.com,Mr,Liam,Bogaert,+32 410 429153,+32 489 412453,17 Rue Main St,,Ghent,B-2479,UAE,Y,2023-05-24 00:00:00,customers_20240101.csv
+526,ProtelPMS,CUST100526,CR-000526,leon.bogaert@example.com,Prof,Leon,Bogaert,+32 485 969250,+32 488 912767,135 Rue Main St,,Antwerp,B-2478,Switzerland,Y,2024-09-06 00:00:00,customers_20240101.csv
+527,Micros,CUST100527,CR-000527,lea.declercq@example.com,Dr,Lea,Declercq,+32 495 880097,+32 477 543410,56 Rue Main St,Floor 2,Brussels,B-3869,Luxembourg,Y,2023-10-09 00:00:00,customers_20240201.csv
+528,ProtelPMS,CUST100528,CR-000528,chloe.declercq@example.com,Dr,Chloe,Declercq,+32 468 492906,+32 492 218448,82 Rue Main St,,Antwerp,B-5036,Luxembourg,Y,2023-05-29 00:00:00,customers_20240201.csv
+529,ProtelPMS,CUST100529,CR-000529,lea.declercq@example.com,Prof,Lea,Declercq,+32 404 982348,+32 493 794391,14 Rue Main St,Floor 2,Ghent,B-7302,UK,Y,2024-10-16 00:00:00,customers_20240301.csv
+530,Mews,CUST100530,CR-000530,olivia.fontaine@example.com,Dr,Olivia,Fontaine,+32 401 512064,+32 499 367946,78 Rue Main St,Apt 3B,Bruges,B-5872,Germany,Y,2023-06-14 00:00:00,customers_20240201.csv
+531,Mews,CUST100531,CR-000531,mia.vandamme@example.com,Mr,Mia,Van Damme,+32 499 615576,+32 485 872739,106 Rue du Marché,,Knokke-Heist,B-7920,Belgium,Y,2023-06-14 00:00:00,customers_20240301.csv
+532,Mews,CUST100532,CR-000532,elena.janssen@example.com,Prof,Elena,Janssen,+32 493 952941,+32 487 873624,84 Rue Main St,,Knokke-Heist,B-1448,USA,Y,2024-10-18 00:00:00,customers_20240301.csv
+533,ProtelPMS,CUST100533,CR-000533,arthur.vandamme@example.com,Dr,Arthur,Van Damme,+32 425 758816,+32 479 428961,148 Rue Main St,Apt 3B,Brussels,B-3585,France,Y,2024-06-12 00:00:00,customers_20240301.csv
+534,Mews,CUST100534,CR-000534,leon.lecomte@example.com,Dr,Leon,Lecomte,+32 461 870883,+32 474 373342,45 Rue Main St,,Ghent,B-4254,Japan,Y,2024-02-29 00:00:00,customers_20240201.csv
+535,Micros,CUST100535,CR-000535,louis.mertens@example.com,Mrs,Louis,Mertens,+32 402 124085,+32 499 685661,166 Rue Main St,Floor 2,Brussels,B-8576,Japan,Y,2023-09-26 00:00:00,customers_20240301.csv
+536,Mews,CUST100536,CR-000536,liam.leclercq@example.com,Prof,Liam,Leclercq,+32 433 256501,+32 472 485792,44 Rue Main St,Apt 3B,Brussels,B-9615,Luxembourg,Y,2024-04-09 00:00:00,customers_20240301.csv
+537,ProtelPMS,CUST100537,CR-000537,olivia.claes@example.com,Ms,Olivia,Claes,+32 436 882702,+32 485 500633,34 Rue Main St,,Bruges,B-4531,Germany,Y,2024-11-24 00:00:00,customers_20240101.csv
+538,ProtelPMS,CUST100538,CR-000538,nora.leclercq@example.com,Ms,Nora,Leclercq,+32 433 346924,+32 489 572883,64 Rue Main St,,Liège,B-8506,France,Y,2023-01-11 00:00:00,customers_20240201.csv
+539,Micros,CUST100539,CR-000539,hugo.bogaert@example.com,Mrs,Hugo,Bogaert,+32 491 502124,+32 492 543852,189 Rue Main St,,Brussels,B-2561,Japan,N,2023-03-02 00:00:00,customers_20240101.csv
+540,Micros,CUST100540,CR-000540,sofia.laurent@example.com,Prof,Sofia,Laurent,+32 490 884588,+32 495 147722,2 Rue Main St,,Liège,B-7241,USA,Y,2024-02-09 00:00:00,customers_20240301.csv
+541,ProtelPMS,CUST100541,CR-000541,nora.mertens@example.com,Prof,Nora,Mertens,+32 422 372935,+32 475 628216,127 Rue Main St,,Antwerp,B-3161,Switzerland,Y,2023-11-21 00:00:00,customers_20240301.csv
+542,Mews,CUST100542,CR-000542,nora.maes@example.com,Mr,Nora,Maes,+32 416 623460,+32 497 975355,72 Rue Main St,,Antwerp,B-5635,Netherlands,Y,2024-09-19 00:00:00,customers_20240201.csv
+543,Mews,CUST100543,CR-000543,mia.mertens@example.com,Dr,Mia,Mertens,+32 497 258612,+32 487 994470,169 Rue Main St,,Brussels,B-4095,France,Y,2023-02-25 00:00:00,customers_20240101.csv
+544,ProtelPMS,CUST100544,CR-000544,liam.laurent@example.com,Dr,Liam,Laurent,+32 455 221660,+32 498 618951,11 Rue Main St,,Ghent,B-8949,UK,Y,2024-05-19 00:00:00,customers_20240101.csv
+545,ProtelPMS,CUST100545,CR-000545,noah.willems@example.com,Ms,Noah,Willems,+32 423 975512,+32 475 886365,131 Rue Main St,,Liège,B-4479,Netherlands,N,2023-01-05 00:00:00,customers_20240301.csv
+546,ProtelPMS,CUST100546,CR-000546,louis.mertens@example.com,Dr,Louis,Mertens,+32 486 198886,+32 498 444622,7 Rue Main St,,Knokke-Heist,B-2998,Netherlands,Y,2024-01-18 00:00:00,customers_20240301.csv
+547,ProtelPMS,CUST100547,CR-000547,hugo.peeters@example.com,Dr,Hugo,Peeters,+32 490 791577,+32 485 576111,161 Rue du Marché,,Liège,B-1095,Belgium,Y,2023-02-14 00:00:00,customers_20240301.csv
+548,ProtelPMS,CUST100548,CR-000548,lea.bogaert@example.com,Mrs,Lea,Bogaert,+32 406 940494,+32 490 396698,83 Rue Main St,Apt 3B,Knokke-Heist,B-2158,Luxembourg,N,2024-09-08 00:00:00,customers_20240201.csv
+549,ProtelPMS,CUST100549,CR-000549,louis.maes@example.com,Dr,Louis,Maes,+32 411 121508,+32 497 318337,42 Rue Main St,,Antwerp,B-5668,France,N,2024-10-31 00:00:00,customers_20240101.csv
+550,Micros,CUST100550,CR-000550,ethan.laurent@example.com,Ms,Ethan,Laurent,+32 487 732829,+32 474 476485,171 Rue Main St,Apt 3B,Ghent,B-9399,Japan,Y,2024-05-16 00:00:00,customers_20240201.csv
+551,Micros,CUST100551,CR-000551,hana.maes@example.com,Dr,Hana,Maes,+32 411 893237,+32 483 950389,95 Rue Main St,Floor 2,Antwerp,B-7979,Luxembourg,Y,2023-02-11 00:00:00,customers_20240301.csv
+552,Micros,CUST100552,CR-000552,hana.lecomte@example.com,Mrs,Hana,Lecomte,+32 463 652891,+32 490 778665,135 Rue Main St,Apt 3B,Ghent,B-8671,Germany,Y,2023-03-23 00:00:00,customers_20240201.csv
+553,ProtelPMS,CUST100553,CR-000553,nora.peeters@example.com,Prof,Nora,Peeters,+32 454 409834,+32 488 150046,142 Rue Main St,Apt 3B,Brussels,B-9411,UK,Y,2024-06-06 00:00:00,customers_20240201.csv
+554,Mews,CUST100554,CR-000554,olivia.laurent@example.com,Ms,Olivia,Laurent,+32 432 714012,+32 472 905984,129 Rue Main St,Apt 3B,Brussels,B-8583,Luxembourg,Y,2023-07-06 00:00:00,customers_20240201.csv
+555,Mews,CUST100555,CR-000555,noah.leclercq@example.com,Prof,Noah,Leclercq,+32 492 577100,+32 494 802818,116 Rue Main St,,Ghent,B-4066,UK,Y,2023-07-09 00:00:00,customers_20240101.csv
+556,ProtelPMS,CUST100556,CR-000556,olivia.leclercq@example.com,Mr,Olivia,Leclercq,+32 450 222346,+32 470 280077,168 Rue Main St,,Antwerp,B-7637,Switzerland,N,2024-09-08 00:00:00,customers_20240301.csv
+557,Mews,CUST100557,CR-000557,chloe.renard@example.com,Dr,Chloe,Renard,+32 438 191892,+32 474 241677,4 Rue Main St,Floor 2,Brussels,B-1260,Luxembourg,N,2023-07-12 00:00:00,customers_20240101.csv
+558,Micros,CUST100558,CR-000558,arthur.lecomte@example.com,Mrs,Arthur,Lecomte,+32 455 982995,+32 490 999876,138 Rue Main St,Floor 2,Brussels,B-5930,France,Y,2023-06-01 00:00:00,customers_20240201.csv
+559,ProtelPMS,CUST100559,CR-000559,emma.janssen@example.com,Dr,Emma,Janssen,+32 462 594392,+32 470 571351,150 Rue Main St,Floor 2,Bruges,B-5830,France,N,2024-02-06 00:00:00,customers_20240101.csv
+560,Mews,CUST100560,CR-000560,emma.janssen@example.com,Dr,Emma,Janssen,+32 494 706770,+32 489 866591,142 Rue Main St,,Brussels,B-8987,Japan,Y,2024-05-12 00:00:00,customers_20240301.csv
+561,Micros,CUST100561,CR-000561,sofia.bogaert@example.com,Mr,Sofia,Bogaert,+32 454 704402,+32 480 680130,17 Rue du Marché,,Knokke-Heist,B-7834,Belgium,Y,2023-04-30 00:00:00,customers_20240201.csv
+562,ProtelPMS,CUST100562,CR-000562,hana.bogaert@example.com,Mrs,Hana,Bogaert,+32 436 861485,+32 476 592034,89 Rue Main St,,Bruges,B-9317,Japan,Y,2024-08-24 00:00:00,customers_20240301.csv
+563,ProtelPMS,CUST100563,CR-000563,zoe.declercq@example.com,Ms,Zoe,Declercq,+32 492 845941,+32 482 537110,173 Rue Main St,,Antwerp,B-3654,UAE,N,2023-08-01 00:00:00,customers_20240201.csv
+564,ProtelPMS,CUST100564,CR-000564,arthur.peeters@example.com,Mrs,Arthur,Peeters,+32 477 616094,+32 473 932026,107 Rue Main St,,Ghent,B-4845,France,Y,2024-07-24 00:00:00,customers_20240101.csv
+565,Mews,CUST100565,CR-000565,hugo.mertens@example.com,Mrs,Hugo,Mertens,+32 422 968167,+32 497 627935,9 Rue Main St,Apt 3B,Ghent,B-8055,UK,Y,2024-09-24 00:00:00,customers_20240101.csv
+566,Mews,CUST100566,CR-000566,matteo.claes@example.com,Ms,Matteo,Claes,+32 445 906747,+32 471 907503,143 Rue Main St,,Bruges,B-9444,UAE,N,2024-11-16 00:00:00,customers_20240101.csv
+567,ProtelPMS,CUST100567,CR-000567,arthur.vandamme@example.com,Mr,Arthur,Van Damme,+32 478 739270,+32 495 206816,144 Rue Main St,Apt 3B,Liège,B-2727,UAE,Y,2024-10-07 00:00:00,customers_20240101.csv
+568,Micros,CUST100568,CR-000568,hugo.peeters@example.com,Dr,Hugo,Peeters,+32 497 630471,+32 485 868136,26 Rue Main St,Floor 2,Knokke-Heist,B-6959,UK,Y,2023-05-22 00:00:00,customers_20240101.csv
+569,ProtelPMS,CUST100569,CR-000569,arthur.leclercq@example.com,Dr,Arthur,Leclercq,+32 443 400687,+32 486 279581,22 Rue du Marché,,Ghent,B-7799,Belgium,Y,2024-10-06 00:00:00,customers_20240301.csv
+570,Mews,CUST100570,CR-000570,james.vandamme@example.com,Mrs,James,Van Damme,+32 417 940715,+32 483 533491,105 Rue Main St,,Liège,B-6927,Switzerland,Y,2024-03-29 00:00:00,customers_20240101.csv
+571,Mews,CUST100571,CR-000571,matteo.janssen@example.com,Ms,Matteo,Janssen,+32 451 909891,+32 475 555157,16 Rue Main St,,Brussels,B-3473,Netherlands,N,2023-03-01 00:00:00,customers_20240301.csv
+572,Mews,CUST100572,CR-000572,mia.leclercq@example.com,Ms,Mia,Leclercq,+32 444 108286,+32 496 393371,136 Rue Main St,Floor 2,Knokke-Heist,B-7618,Switzerland,Y,2024-10-21 00:00:00,customers_20240101.csv
+573,ProtelPMS,CUST100573,CR-000573,lea.mertens@example.com,Ms,Lea,Mertens,+32 410 138766,+32 487 450741,100 Rue Main St,Floor 2,Liège,B-9860,Japan,Y,2023-08-07 00:00:00,customers_20240101.csv
+574,ProtelPMS,CUST100574,CR-000574,elena.willems@example.com,Mr,Elena,Willems,+32 469 721285,+32 478 353063,199 Rue Main St,,Knokke-Heist,B-7926,France,N,2023-04-24 00:00:00,customers_20240301.csv
+575,Mews,CUST100575,CR-000575,hugo.maes@example.com,Mr,Hugo,Maes,+32 406 893310,+32 490 230809,115 Rue Main St,,Liège,B-1085,Switzerland,Y,2023-12-14 00:00:00,customers_20240101.csv
+576,Micros,CUST100576,CR-000576,hugo.maes@example.com,Prof,Hugo,Maes,+32 486 246770,+32 492 496011,134 Rue Main St,Floor 2,Brussels,B-6371,UK,N,2024-08-19 00:00:00,customers_20240101.csv
+577,Micros,CUST100577,CR-000577,hana.janssen@example.com,Dr,Hana,Janssen,+32 452 185927,+32 472 165214,109 Rue Main St,Floor 2,Antwerp,B-4519,France,Y,2023-03-21 00:00:00,customers_20240201.csv
+578,Mews,CUST100578,CR-000578,zoe.fontaine@example.com,Ms,Zoe,Fontaine,+32 474 623058,+32 490 543990,113 Rue Main St,,Knokke-Heist,B-7830,Switzerland,Y,2023-05-28 00:00:00,customers_20240301.csv
+579,ProtelPMS,CUST100579,CR-000579,arthur.bogaert@example.com,Prof,Arthur,Bogaert,+32 467 223792,+32 492 322971,117 Rue Main St,,Brussels,B-3569,UAE,N,2024-01-14 00:00:00,customers_20240101.csv
+580,Micros,CUST100580,CR-000580,olivia.janssen@example.com,Ms,Olivia,Janssen,+32 405 648171,+32 474 223461,96 Rue Main St,,Ghent,B-5968,USA,Y,2024-05-12 00:00:00,customers_20240101.csv
+581,Mews,CUST100581,CR-000581,james.vandamme@example.com,Mr,James,Van Damme,+32 439 397252,+32 476 291970,190 Rue Main St,,Brussels,B-3004,Luxembourg,N,2023-12-24 00:00:00,customers_20240101.csv
+582,Mews,CUST100582,CR-000582,louis.laurent@example.com,Prof,Louis,Laurent,+32 457 454233,+32 495 495633,122 Rue Main St,Floor 2,Bruges,B-9270,Luxembourg,N,2024-04-16 00:00:00,customers_20240201.csv
+583,ProtelPMS,CUST100583,CR-000583,nora.declercq@example.com,Prof,Nora,Declercq,+32 485 753880,+32 483 506045,60 Rue Main St,,Ghent,B-9863,USA,Y,2024-11-17 00:00:00,customers_20240201.csv
+584,Micros,CUST100584,CR-000584,olivia.declercq@example.com,Mr,Olivia,Declercq,+32 473 760717,+32 495 909076,182 Rue Main St,,Liège,B-3028,France,N,2024-07-26 00:00:00,customers_20240101.csv
+585,ProtelPMS,CUST100585,CR-000585,leon.fontaine@example.com,Prof,Leon,Fontaine,+32 466 298595,+32 494 598949,129 Rue Main St,Apt 3B,Brussels,B-9713,Luxembourg,Y,2023-01-20 00:00:00,customers_20240201.csv
+586,Mews,CUST100586,CR-000586,lucas.declercq@example.com,Mr,Lucas,Declercq,+32 468 736333,+32 480 521315,151 Rue Main St,Apt 3B,Antwerp,B-1381,Luxembourg,Y,2024-03-23 00:00:00,customers_20240101.csv
+587,Mews,CUST100587,CR-000587,emma.declercq@example.com,Dr,Emma,Declercq,+32 432 195446,+32 473 204158,139 Rue Main St,Floor 2,Ghent,B-3359,Switzerland,Y,2023-09-19 00:00:00,customers_20240101.csv
+588,ProtelPMS,CUST100588,CR-000588,ethan.leclercq@example.com,Prof,Ethan,Leclercq,+32 441 290272,+32 470 847949,15 Rue Main St,,Antwerp,B-2617,France,Y,2023-05-26 00:00:00,customers_20240201.csv
+589,ProtelPMS,CUST100589,CR-000589,chloe.leclercq@example.com,Mrs,Chloe,Leclercq,+32 430 888669,+32 489 714496,61 Rue Main St,,Liège,B-9264,Netherlands,Y,2023-04-28 00:00:00,customers_20240201.csv
+590,Mews,CUST100590,CR-000590,hugo.laurent@example.com,Mr,Hugo,Laurent,+32 461 130310,+32 483 764316,60 Rue Main St,Apt 3B,Ghent,B-2663,Switzerland,Y,2024-07-22 00:00:00,customers_20240301.csv
+591,Mews,CUST100591,CR-000591,ethan.renard@example.com,Mr,Ethan,Renard,+32 481 624741,+32 476 920910,37 Rue Main St,,Liège,B-3755,Japan,Y,2024-07-04 00:00:00,customers_20240201.csv
+592,Micros,CUST100592,CR-000592,emma.dubois@example.com,Ms,Emma,Dubois,+32 483 275512,+32 470 163098,124 Rue Main St,,Liège,B-5110,UAE,N,2024-01-25 00:00:00,customers_20240201.csv
+593,Mews,CUST100593,CR-000593,leon.declercq@example.com,Mr,Leon,Declercq,+32 420 875089,+32 487 690433,18 Rue Main St,,Brussels,B-7476,Switzerland,N,2023-05-06 00:00:00,customers_20240101.csv
+594,Micros,CUST100594,CR-000594,mia.claes@example.com,Ms,Mia,Claes,+32 487 459279,+32 490 374056,193 Rue Main St,,Ghent,B-5029,Luxembourg,N,2023-11-26 00:00:00,customers_20240201.csv
+595,ProtelPMS,CUST100595,CR-000595,arthur.renard@example.com,Mrs,Arthur,Renard,+32 482 102146,+32 489 599676,2 Rue Main St,Apt 3B,Knokke-Heist,B-3843,USA,Y,2024-07-23 00:00:00,customers_20240301.csv
+596,Micros,CUST100596,CR-000596,mia.fontaine@example.com,Mr,Mia,Fontaine,+32 468 132450,+32 498 972503,172 Rue Main St,,Knokke-Heist,B-3022,Netherlands,Y,2024-01-21 00:00:00,customers_20240301.csv
+597,ProtelPMS,CUST100597,CR-000597,mia.peeters@example.com,Dr,Mia,Peeters,+32 447 302365,+32 484 109818,57 Rue du Marché,Apt 3B,Ghent,B-6862,Belgium,Y,2023-04-03 00:00:00,customers_20240301.csv
+598,Mews,CUST100598,CR-000598,sofia.claes@example.com,Mr,Sofia,Claes,+32 435 616777,+32 498 838247,181 Rue Main St,Floor 2,Brussels,B-4212,UAE,N,2024-02-10 00:00:00,customers_20240101.csv
+599,ProtelPMS,CUST100599,CR-000599,zoe.fontaine@example.com,Prof,Zoe,Fontaine,+32 424 791890,+32 493 693186,173 Rue Main St,Floor 2,Brussels,B-3101,UAE,N,2023-03-08 00:00:00,customers_20240101.csv
+600,Micros,CUST100600,CR-000600,zoe.declercq@example.com,Ms,Zoe,Declercq,+32 424 988843,+32 491 124240,178 Rue Main St,,Knokke-Heist,B-8437,Germany,Y,2024-03-13 00:00:00,customers_20240301.csv
+601,Mews,CUST100601,CR-000601,hugo.leclercq@example.com,Mr,Hugo,Leclercq,+32 487 643471,+32 484 619647,93 Rue Main St,Apt 3B,Knokke-Heist,B-4678,Japan,Y,2023-10-12 00:00:00,customers_20240201.csv
+602,ProtelPMS,CUST100602,CR-000602,lea.dubois@example.com,Ms,Lea,Dubois,+32 410 699596,+32 495 126604,189 Rue Main St,Floor 2,Knokke-Heist,B-7943,Japan,Y,2023-09-13 00:00:00,customers_20240101.csv
+603,Micros,CUST100603,CR-000603,hugo.maes@example.com,Mr,Hugo,Maes,+32 403 603281,+32 483 947311,7 Rue Main St,,Ghent,B-5049,Netherlands,Y,2024-04-29 00:00:00,customers_20240101.csv
+604,Micros,CUST100604,CR-000604,emma.declercq@example.com,Mrs,Emma,Declercq,+32 409 913432,+32 489 749662,113 Rue Main St,Apt 3B,Knokke-Heist,B-8314,USA,N,2023-05-08 00:00:00,customers_20240101.csv
+605,Micros,CUST100605,CR-000605,liam.leclercq@example.com,Mr,Liam,Leclercq,+32 416 165014,+32 499 941363,114 Rue Main St,Apt 3B,Ghent,B-8075,USA,Y,2023-04-15 00:00:00,customers_20240301.csv
+606,Mews,CUST100606,CR-000606,matteo.dubois@example.com,Dr,Matteo,Dubois,+32 412 747288,+32 494 531077,60 Rue Main St,Apt 3B,Antwerp,B-7290,UK,Y,2024-03-14 00:00:00,customers_20240301.csv
+607,Mews,CUST100607,CR-000607,hugo.lecomte@example.com,Prof,Hugo,Lecomte,+32 442 716366,+32 476 213253,27 Rue du Marché,Apt 3B,Liège,B-2106,Belgium,N,2023-07-18 00:00:00,customers_20240301.csv
+608,Mews,CUST100608,CR-000608,matteo.maes@example.com,Dr,Matteo,Maes,+32 492 751009,+32 484 294954,63 Rue Main St,Floor 2,Brussels,B-1991,USA,Y,2023-11-16 00:00:00,customers_20240301.csv
+609,Mews,CUST100609,CR-000609,elena.lecomte@example.com,Prof,Elena,Lecomte,+32 469 913166,+32 474 254569,121 Rue Main St,,Liège,B-6618,USA,Y,2024-01-13 00:00:00,customers_20240101.csv
+610,Micros,CUST100610,CR-000610,liam.claes@example.com,Mr,Liam,Claes,+32 454 460517,+32 476 310105,164 Rue Main St,Floor 2,Brussels,B-6595,Switzerland,Y,2024-11-14 00:00:00,customers_20240201.csv
+611,Micros,CUST100611,CR-000611,zoe.bogaert@example.com,Prof,Zoe,Bogaert,+32 442 746030,+32 479 539033,85 Rue Main St,Floor 2,Brussels,B-8443,USA,Y,2024-05-22 00:00:00,customers_20240101.csv
+612,Mews,CUST100612,CR-000612,lucas.bogaert@example.com,Prof,Lucas,Bogaert,+32 427 350629,+32 485 870269,197 Rue Main St,,Knokke-Heist,B-7158,Germany,Y,2024-02-14 00:00:00,customers_20240101.csv
+613,Mews,CUST100613,CR-000613,hugo.dubois@example.com,Mr,Hugo,Dubois,+32 471 220784,+32 474 404691,113 Rue Main St,Floor 2,Knokke-Heist,B-6896,Netherlands,Y,2023-01-31 00:00:00,customers_20240101.csv
+614,Mews,CUST100614,CR-000614,ethan.peeters@example.com,Mrs,Ethan,Peeters,+32 443 988704,+32 487 357912,46 Rue Main St,Floor 2,Brussels,B-3884,Germany,Y,2023-04-14 00:00:00,customers_20240101.csv
+615,Mews,CUST100615,CR-000615,louis.lecomte@example.com,Mrs,Louis,Lecomte,+32 439 578364,+32 477 487596,96 Rue Main St,Floor 2,Liège,B-8106,Netherlands,N,2023-03-08 00:00:00,customers_20240101.csv
+616,ProtelPMS,CUST100616,CR-000616,james.vandamme@example.com,Prof,James,Van Damme,+32 448 828082,+32 481 433396,154 Rue Main St,,Knokke-Heist,B-5006,Germany,Y,2024-09-22 00:00:00,customers_20240301.csv
+617,Mews,CUST100617,CR-000617,matteo.maes@example.com,Mrs,Matteo,Maes,+32 406 760035,+32 495 393678,33 Rue Main St,,Bruges,B-2333,France,Y,2024-11-10 00:00:00,customers_20240301.csv
+618,Micros,CUST100618,CR-000618,james.fontaine@example.com,Prof,James,Fontaine,+32 447 622807,+32 486 586819,46 Rue Main St,,Knokke-Heist,B-7125,Japan,N,2024-12-12 00:00:00,customers_20240201.csv
+619,Mews,CUST100619,CR-000619,hana.maes@example.com,Prof,Hana,Maes,+32 483 138382,+32 476 330189,52 Rue Main St,,Bruges,B-7486,Luxembourg,Y,2023-11-10 00:00:00,customers_20240201.csv
+620,Mews,CUST100620,CR-000620,zoe.peeters@example.com,Prof,Zoe,Peeters,+32 410 240855,+32 494 188109,76 Rue Main St,,Liège,B-6760,USA,Y,2024-08-20 00:00:00,customers_20240101.csv
+621,Mews,CUST100621,CR-000621,elena.renard@example.com,Dr,Elena,Renard,+32 459 553515,+32 483 485364,128 Rue Main St,,Ghent,B-7264,USA,Y,2023-07-03 00:00:00,customers_20240201.csv
+622,Mews,CUST100622,CR-000622,ethan.lecomte@example.com,Mr,Ethan,Lecomte,+32 437 983533,+32 486 637700,140 Rue Main St,Apt 3B,Ghent,B-4731,Netherlands,Y,2023-05-02 00:00:00,customers_20240101.csv
+623,Mews,CUST100623,CR-000623,emma.fontaine@example.com,Mrs,Emma,Fontaine,+32 486 445234,+32 478 417420,191 Rue Main St,,Bruges,B-3258,Germany,N,2024-07-10 00:00:00,customers_20240201.csv
+624,Mews,CUST100624,CR-000624,ethan.maes@example.com,Dr,Ethan,Maes,+32 474 894617,+32 490 112468,121 Rue Main St,Floor 2,Antwerp,B-4728,USA,Y,2023-08-03 00:00:00,customers_20240201.csv
+625,Mews,CUST100625,CR-000625,matteo.renard@example.com,Dr,Matteo,Renard,+32 443 930382,+32 472 428282,49 Rue Main St,,Knokke-Heist,B-7843,Switzerland,Y,2024-03-25 00:00:00,customers_20240201.csv
+626,ProtelPMS,CUST100626,CR-000626,hugo.peeters@example.com,Ms,Hugo,Peeters,+32 494 110151,+32 485 949767,169 Rue Main St,,Ghent,B-4694,Luxembourg,Y,2024-03-11 00:00:00,customers_20240301.csv
+627,Micros,CUST100627,CR-000627,elena.maes@example.com,Mr,Elena,Maes,+32 472 923507,+32 471 245893,40 Rue Main St,,Liège,B-7404,USA,Y,2023-07-29 00:00:00,customers_20240201.csv
+628,Mews,CUST100628,CR-000628,matteo.leclercq@example.com,Mr,Matteo,Leclercq,+32 442 697179,+32 484 770043,78 Rue Main St,Apt 3B,Bruges,B-2709,Germany,N,2024-07-20 00:00:00,customers_20240101.csv
+629,ProtelPMS,CUST100629,CR-000629,leon.laurent@example.com,Mrs,Leon,Laurent,+32 408 504639,+32 479 315893,60 Rue du Marché,,Knokke-Heist,B-9591,Belgium,Y,2024-04-10 00:00:00,customers_20240101.csv
+630,Mews,CUST100630,CR-000630,elena.dubois@example.com,Dr,Elena,Dubois,+32 450 264663,+32 473 235410,138 Rue Main St,,Antwerp,B-2126,France,Y,2023-07-31 00:00:00,customers_20240101.csv
+631,ProtelPMS,CUST100631,CR-000631,ethan.leclercq@example.com,Prof,Ethan,Leclercq,+32 473 425387,+32 488 312832,129 Rue Main St,,Ghent,B-4304,UAE,Y,2023-05-27 00:00:00,customers_20240201.csv
+632,Micros,CUST100632,CR-000632,louis.renard@example.com,Ms,Louis,Renard,+32 472 614807,+32 484 585171,148 Rue Main St,Apt 3B,Knokke-Heist,B-2492,Germany,Y,2024-10-23 00:00:00,customers_20240201.csv
+633,ProtelPMS,CUST100633,CR-000633,chloe.leclercq@example.com,Dr,Chloe,Leclercq,+32 431 288301,+32 498 747743,188 Rue Main St,,Antwerp,B-7302,Luxembourg,N,2023-07-07 00:00:00,customers_20240301.csv
+634,ProtelPMS,CUST100634,CR-000634,louis.bogaert@example.com,Mrs,Louis,Bogaert,+32 435 758592,+32 487 406068,171 Rue du Marché,Apt 3B,Knokke-Heist,B-4559,Belgium,Y,2024-02-26 00:00:00,customers_20240301.csv
+635,Micros,CUST100635,CR-000635,hugo.janssen@example.com,Ms,Hugo,Janssen,+32 452 572840,+32 475 365045,54 Rue Main St,Apt 3B,Antwerp,B-1437,Netherlands,Y,2024-10-16 00:00:00,customers_20240301.csv
+636,ProtelPMS,CUST100636,CR-000636,mia.willems@example.com,Dr,Mia,Willems,+32 404 111258,+32 478 220253,182 Rue Main St,Floor 2,Ghent,B-8606,Japan,Y,2024-04-17 00:00:00,customers_20240101.csv
+637,Micros,CUST100637,CR-000637,matteo.lecomte@example.com,Dr,Matteo,Lecomte,+32 417 593656,+32 496 392701,42 Rue Main St,Floor 2,Brussels,B-2646,Germany,Y,2023-10-29 00:00:00,customers_20240101.csv
+638,Micros,CUST100638,CR-000638,nora.janssen@example.com,Ms,Nora,Janssen,+32 419 562063,+32 481 286583,56 Rue du Marché,Apt 3B,Knokke-Heist,B-9721,Belgium,Y,2024-03-28 00:00:00,customers_20240301.csv
+639,Mews,CUST100639,CR-000639,matteo.lecomte@example.com,Ms,Matteo,Lecomte,+32 456 154961,+32 489 104892,13 Rue Main St,,Bruges,B-5091,Netherlands,Y,2023-09-02 00:00:00,customers_20240101.csv
+640,ProtelPMS,CUST100640,CR-000640,liam.leclercq@example.com,Ms,Liam,Leclercq,+32 424 812989,+32 491 166240,57 Rue du Marché,Apt 3B,Knokke-Heist,B-3750,Belgium,N,2023-06-21 00:00:00,customers_20240101.csv
+641,Mews,CUST100641,CR-000641,elena.janssen@example.com,Prof,Elena,Janssen,+32 480 298754,+32 489 317180,139 Rue Main St,,Antwerp,B-2979,USA,Y,2023-08-07 00:00:00,customers_20240101.csv
+642,Mews,CUST100642,CR-000642,lea.peeters@example.com,Ms,Lea,Peeters,+32 401 508091,+32 476 581061,57 Rue du Marché,Apt 3B,Knokke-Heist,B-5562,Belgium,N,2024-09-30 00:00:00,customers_20240201.csv
+643,Mews,CUST100643,CR-000643,noah.mertens@example.com,Ms,Noah,Mertens,+32 498 727959,+32 485 206759,183 Rue Main St,Floor 2,Ghent,B-2552,Germany,N,2023-11-29 00:00:00,customers_20240301.csv
+644,Micros,CUST100644,CR-000644,nora.willems@example.com,Ms,Nora,Willems,+32 485 605550,+32 472 451383,5 Rue Main St,,Antwerp,B-9372,France,N,2023-08-27 00:00:00,customers_20240301.csv
+645,ProtelPMS,CUST100645,CR-000645,lucas.dubois@example.com,Ms,Lucas,Dubois,+32 430 873758,+32 483 894029,63 Rue Main St,Apt 3B,Brussels,B-3253,Luxembourg,Y,2024-05-25 00:00:00,customers_20240201.csv
+646,Micros,CUST100646,CR-000646,james.leclercq@example.com,Mr,James,Leclercq,+32 430 860541,+32 489 565280,190 Rue Main St,,Bruges,B-5556,Germany,Y,2024-10-21 00:00:00,customers_20240101.csv
+647,ProtelPMS,CUST100647,CR-000647,chloe.vandamme@example.com,Ms,Chloe,Van Damme,+32 443 354016,+32 476 665509,14 Rue du Marché,Floor 2,Knokke-Heist,B-4644,Belgium,N,2024-01-26 00:00:00,customers_20240301.csv
+648,ProtelPMS,CUST100648,CR-000648,nora.laurent@example.com,Dr,Nora,Laurent,+32 408 301814,+32 471 765181,37 Rue du Marché,Floor 2,Bruges,B-2503,Belgium,Y,2024-08-29 00:00:00,customers_20240301.csv
+649,Mews,CUST100649,CR-000649,lucas.fontaine@example.com,Dr,Lucas,Fontaine,+32 439 272132,+32 493 307131,63 Rue Main St,,Bruges,B-5079,Netherlands,Y,2023-10-20 00:00:00,customers_20240301.csv
+650,ProtelPMS,CUST100650,CR-000650,sofia.maes@example.com,Ms,Sofia,Maes,+32 450 496065,+32 475 593578,113 Rue Main St,,Liège,B-8101,UAE,Y,2024-05-08 00:00:00,customers_20240101.csv
+651,Mews,CUST100651,CR-000651,mia.declercq@example.com,Prof,Mia,Declercq,+32 468 260221,+32 487 861945,45 Rue Main St,,Antwerp,B-8596,Netherlands,Y,2024-04-09 00:00:00,customers_20240201.csv
+652,ProtelPMS,CUST100652,CR-000652,elena.renard@example.com,Ms,Elena,Renard,+32 417 849588,+32 485 305222,40 Rue Main St,Floor 2,Brussels,B-1210,UAE,N,2024-01-19 00:00:00,customers_20240201.csv
+653,Mews,CUST100653,CR-000653,mia.leclercq@example.com,Dr,Mia,Leclercq,+32 439 772188,+32 488 174694,105 Rue Main St,Apt 3B,Brussels,B-7304,USA,N,2023-06-16 00:00:00,customers_20240101.csv
+654,Micros,CUST100654,CR-000654,chloe.vandamme@example.com,Dr,Chloe,Van Damme,+32 481 821933,+32 481 830286,15 Rue Main St,,Antwerp,B-5043,USA,Y,2024-05-04 00:00:00,customers_20240101.csv
+655,Mews,CUST100655,CR-000655,emma.bogaert@example.com,Prof,Emma,Bogaert,+32 458 814149,+32 474 366640,64 Rue Main St,Floor 2,Brussels,B-2912,France,Y,2024-10-21 00:00:00,customers_20240301.csv
+656,ProtelPMS,CUST100656,CR-000656,mia.bogaert@example.com,Prof,Mia,Bogaert,+32 424 543489,+32 475 970055,110 Rue Main St,,Knokke-Heist,B-5951,Luxembourg,N,2024-06-29 00:00:00,customers_20240301.csv
+657,Micros,CUST100657,CR-000657,zoe.maes@example.com,Mr,Zoe,Maes,+32 413 767083,+32 488 914419,89 Rue Main St,Floor 2,Ghent,B-4432,Japan,N,2024-02-12 00:00:00,customers_20240301.csv
+658,ProtelPMS,CUST100658,CR-000658,emma.peeters@example.com,Mr,Emma,Peeters,+32 408 911329,+32 492 538136,135 Rue Main St,,Knokke-Heist,B-5724,UAE,N,2024-03-17 00:00:00,customers_20240101.csv
+659,ProtelPMS,CUST100659,CR-000659,hugo.peeters@example.com,Dr,Hugo,Peeters,+32 423 627028,+32 473 572552,146 Rue Main St,Floor 2,Bruges,B-4292,France,Y,2023-07-07 00:00:00,customers_20240101.csv
+660,ProtelPMS,CUST100660,CR-000660,mia.laurent@example.com,Mrs,Mia,Laurent,+32 410 407364,+32 472 496077,32 Rue Main St,,Brussels,B-6605,Luxembourg,Y,2024-08-22 00:00:00,customers_20240101.csv
+661,ProtelPMS,CUST100661,CR-000661,hana.lecomte@example.com,Mr,Hana,Lecomte,+32 434 888318,+32 470 797640,150 Rue Main St,Apt 3B,Brussels,B-4458,Netherlands,N,2023-01-08 00:00:00,customers_20240201.csv
+662,Micros,CUST100662,CR-000662,hana.laurent@example.com,Dr,Hana,Laurent,+32 443 488796,+32 491 459742,81 Rue Main St,Floor 2,Ghent,B-7528,USA,Y,2024-09-17 00:00:00,customers_20240101.csv
+663,ProtelPMS,CUST100663,CR-000663,lea.vandamme@example.com,Dr,Lea,Van Damme,+32 489 521326,+32 493 976002,36 Rue Main St,Apt 3B,Liège,B-3013,Netherlands,N,2023-10-14 00:00:00,customers_20240301.csv
+664,Micros,CUST100664,CR-000664,hugo.laurent@example.com,Dr,Hugo,Laurent,+32 465 533194,+32 491 297064,1 Rue Main St,,Brussels,B-6901,Luxembourg,Y,2023-11-30 00:00:00,customers_20240301.csv
+665,Mews,CUST100665,CR-000665,sofia.renard@example.com,Prof,Sofia,Renard,+32 410 465254,+32 483 599250,169 Rue Main St,Apt 3B,Knokke-Heist,B-7305,UAE,Y,2024-09-13 00:00:00,customers_20240101.csv
+666,Micros,CUST100666,CR-000666,matteo.mertens@example.com,Prof,Matteo,Mertens,+32 404 234072,+32 485 935527,23 Rue Main St,,Knokke-Heist,B-9990,Luxembourg,Y,2023-06-22 00:00:00,customers_20240201.csv
+667,ProtelPMS,CUST100667,CR-000667,arthur.lecomte@example.com,Mrs,Arthur,Lecomte,+32 427 278711,+32 494 791792,180 Rue Main St,Apt 3B,Brussels,B-8125,Switzerland,N,2023-01-30 00:00:00,customers_20240101.csv
+668,ProtelPMS,CUST100668,CR-000668,mia.vandamme@example.com,Ms,Mia,Van Damme,+32 485 599439,+32 498 803176,32 Rue Main St,Floor 2,Liège,B-9060,UK,Y,2024-12-09 00:00:00,customers_20240201.csv
+669,ProtelPMS,CUST100669,CR-000669,leon.vandamme@example.com,Ms,Leon,Van Damme,+32 448 852293,+32 493 871754,186 Rue Main St,,Knokke-Heist,B-8159,Luxembourg,Y,2023-08-17 00:00:00,customers_20240201.csv
+670,ProtelPMS,CUST100670,CR-000670,ethan.janssen@example.com,Ms,Ethan,Janssen,+32 494 720967,+32 499 297296,191 Rue Main St,Apt 3B,Liège,B-7025,Netherlands,Y,2023-11-17 00:00:00,customers_20240201.csv
+671,Micros,CUST100671,CR-000671,ethan.dubois@example.com,Mrs,Ethan,Dubois,+32 449 544280,+32 480 908746,94 Rue Main St,Floor 2,Liège,B-4639,Luxembourg,Y,2024-02-09 00:00:00,customers_20240101.csv
+672,ProtelPMS,CUST100672,CR-000672,lea.peeters@example.com,Dr,Lea,Peeters,+32 487 577924,+32 474 730682,73 Rue Main St,Floor 2,Knokke-Heist,B-1562,UK,N,2023-11-24 00:00:00,customers_20240201.csv
+673,Mews,CUST100673,CR-000673,ethan.declercq@example.com,Mrs,Ethan,Declercq,+32 463 405654,+32 492 495007,16 Rue Main St,,Bruges,B-4450,Luxembourg,N,2023-08-19 00:00:00,customers_20240301.csv
+674,Micros,CUST100674,CR-000674,james.declercq@example.com,Dr,James,Declercq,+32 438 954602,+32 491 989735,41 Rue Main St,Apt 3B,Liège,B-7427,UAE,Y,2024-03-08 00:00:00,customers_20240301.csv
+675,Mews,CUST100675,CR-000675,lea.vandamme@example.com,Mr,Lea,Van Damme,+32 467 862057,+32 479 396080,179 Rue Main St,Floor 2,Knokke-Heist,B-9978,Japan,Y,2023-04-10 00:00:00,customers_20240101.csv
+676,Micros,CUST100676,CR-000676,zoe.declercq@example.com,Ms,Zoe,Declercq,+32 458 786433,+32 475 705193,36 Rue du Marché,,Knokke-Heist,B-8904,Belgium,Y,2023-05-29 00:00:00,customers_20240101.csv
+677,Mews,CUST100677,CR-000677,lucas.bogaert@example.com,Prof,Lucas,Bogaert,+32 413 811267,+32 495 254775,97 Rue du Marché,,Knokke-Heist,B-3756,Belgium,Y,2023-04-09 00:00:00,customers_20240201.csv
+678,Micros,CUST100678,CR-000678,nora.dubois@example.com,Ms,Nora,Dubois,+32 475 554894,+32 474 757428,185 Rue Main St,,Bruges,B-1556,Netherlands,Y,2023-09-04 00:00:00,customers_20240201.csv
+679,ProtelPMS,CUST100679,CR-000679,chloe.bogaert@example.com,Dr,Chloe,Bogaert,+32 499 825399,+32 495 803317,169 Rue Main St,Apt 3B,Antwerp,B-7260,Luxembourg,Y,2024-10-09 00:00:00,customers_20240301.csv
+680,ProtelPMS,CUST100680,CR-000680,lea.dubois@example.com,Mr,Lea,Dubois,+32 415 612982,+32 490 801279,131 Rue Main St,Floor 2,Brussels,B-8856,Netherlands,Y,2024-12-11 00:00:00,customers_20240301.csv
+681,Mews,CUST100681,CR-000681,leon.peeters@example.com,Dr,Leon,Peeters,+32 438 699180,+32 474 204271,84 Rue Main St,Apt 3B,Knokke-Heist,B-9806,Japan,Y,2024-02-20 00:00:00,customers_20240301.csv
+682,Micros,CUST100682,CR-000682,louis.fontaine@example.com,Dr,Louis,Fontaine,+32 408 644107,+32 496 713124,138 Rue Main St,Apt 3B,Bruges,B-2922,Switzerland,Y,2024-09-05 00:00:00,customers_20240301.csv
+683,Mews,CUST100683,CR-000683,liam.fontaine@example.com,Mr,Liam,Fontaine,+32 405 235073,+32 488 316247,168 Rue Main St,Floor 2,Brussels,B-5206,UAE,Y,2023-03-28 00:00:00,customers_20240101.csv
+684,Mews,CUST100684,CR-000684,lea.fontaine@example.com,Mr,Lea,Fontaine,+32 431 415201,+32 471 644675,76 Rue Main St,,Bruges,B-9035,France,N,2023-11-17 00:00:00,customers_20240301.csv
+685,ProtelPMS,CUST100685,CR-000685,zoe.fontaine@example.com,Mr,Zoe,Fontaine,+32 484 959584,+32 471 348617,10 Rue Main St,Floor 2,Bruges,B-5910,Switzerland,Y,2023-05-18 00:00:00,customers_20240301.csv
+686,ProtelPMS,CUST100686,CR-000686,leon.willems@example.com,Prof,Leon,Willems,+32 454 177971,+32 487 367352,67 Rue Main St,,Knokke-Heist,B-3675,UK,Y,2024-04-12 00:00:00,customers_20240101.csv
+687,Micros,CUST100687,CR-000687,mia.bogaert@example.com,Mrs,Mia,Bogaert,+32 409 760150,+32 493 382486,163 Rue Main St,Floor 2,Knokke-Heist,B-7097,France,N,2024-11-04 00:00:00,customers_20240301.csv
+688,Mews,CUST100688,CR-000688,louis.declercq@example.com,Dr,Louis,Declercq,+32 448 127168,+32 489 359520,20 Rue Main St,,Brussels,B-9707,France,Y,2024-12-01 00:00:00,customers_20240301.csv
+689,Mews,CUST100689,CR-000689,olivia.willems@example.com,Ms,Olivia,Willems,+32 499 386526,+32 474 936865,58 Rue Main St,,Brussels,B-2604,Netherlands,Y,2023-08-16 00:00:00,customers_20240201.csv
+690,Micros,CUST100690,CR-000690,noah.peeters@example.com,Ms,Noah,Peeters,+32 475 961240,+32 495 613402,25 Rue Main St,,Knokke-Heist,B-5620,Switzerland,N,2023-10-05 00:00:00,customers_20240301.csv
+691,Mews,CUST100691,CR-000691,liam.peeters@example.com,Mrs,Liam,Peeters,+32 444 945241,+32 493 810737,137 Rue Main St,,Antwerp,B-3090,USA,Y,2023-01-10 00:00:00,customers_20240301.csv
+692,Micros,CUST100692,CR-000692,james.peeters@example.com,Ms,James,Peeters,+32 406 860657,+32 490 488131,182 Rue Main St,Floor 2,Knokke-Heist,B-7852,Japan,N,2024-04-13 00:00:00,customers_20240101.csv
+693,Micros,CUST100693,CR-000693,lea.vandamme@example.com,Ms,Lea,Van Damme,+32 435 548544,+32 486 853367,59 Rue Main St,,Knokke-Heist,B-2424,UAE,Y,2024-02-21 00:00:00,customers_20240201.csv
+694,ProtelPMS,CUST100694,CR-000694,noah.janssen@example.com,Mrs,Noah,Janssen,+32 473 160200,+32 472 879521,74 Rue Main St,,Brussels,B-7946,Germany,N,2024-06-04 00:00:00,customers_20240301.csv
+695,Micros,CUST100695,CR-000695,arthur.laurent@example.com,Prof,Arthur,Laurent,+32 489 230748,+32 482 114575,158 Rue Main St,Floor 2,Knokke-Heist,B-1119,Switzerland,N,2024-03-11 00:00:00,customers_20240301.csv
+696,Micros,CUST100696,CR-000696,sofia.bogaert@example.com,Prof,Sofia,Bogaert,+32 405 736877,+32 484 276718,173 Rue Main St,Floor 2,Bruges,B-2230,Switzerland,Y,2023-05-17 00:00:00,customers_20240301.csv
+697,Mews,CUST100697,CR-000697,emma.leclercq@example.com,Mrs,Emma,Leclercq,+32 447 218733,+32 480 812049,64 Rue Main St,Apt 3B,Ghent,B-5901,UAE,Y,2023-10-28 00:00:00,customers_20240201.csv
+698,Mews,CUST100698,CR-000698,liam.bogaert@example.com,Mrs,Liam,Bogaert,+32 439 774206,+32 486 965837,10 Rue Main St,,Liège,B-8999,Luxembourg,Y,2023-12-31 00:00:00,customers_20240101.csv
+699,ProtelPMS,CUST100699,CR-000699,lea.maes@example.com,Mr,Lea,Maes,+32 444 857526,+32 475 521598,91 Rue Main St,Apt 3B,Brussels,B-8058,USA,Y,2023-07-22 00:00:00,customers_20240101.csv
+700,ProtelPMS,CUST100700,CR-000700,louis.janssen@example.com,Mrs,Louis,Janssen,+32 498 788530,+32 478 337078,121 Rue Main St,,Ghent,B-5903,UAE,Y,2024-03-14 00:00:00,customers_20240101.csv

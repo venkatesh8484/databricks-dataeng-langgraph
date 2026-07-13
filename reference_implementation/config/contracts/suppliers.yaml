@@ -2,8 +2,8 @@ table: suppliers
 source_file: raw_suppliers.csv
 business_key: [external_supplier_id]
 description: >
-  Supplier master data (contracted restaurants, transfer companies, etc). Small,
-  low-change reference table (~6 rows) — SCD Type 1 in gold.
+  Subcontractor master data (propulsion, electronics, steel, deck machinery, coatings,
+  navigation suppliers). Small, low-change reference table (~6 rows) — SCD Type 1 in gold.
 
 schema:
   required_columns:
@@ -38,13 +38,13 @@ rules:
     severity: soft
     max_fail_rate: 0.0
     checks:
-      payment_method: ["Invoice", "Card", "SWIFT", "SEPA"]
+      payment_method: ["Invoice", "SWIFT", "SEPA", "Letter of Credit"]
 
   regex:
     severity: soft
     max_fail_rate: 0.0
     checks:
-      abta_code: '^ABTA-\d{5}$'
+      abta_code: '^IACS-\d{5}$'
 
   referential_integrity: []
 

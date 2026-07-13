@@ -1,0 +1,7 @@
+raw_supplier_id,source_system,external_supplier_id,supplier_ref,abta_code,name,email,telephone,title,forename,surname,address1,address2,city,postcode,country,payment_method,load_ts,source_file
+1,Mews,SUP5001,SP-0001,ABTA-85660,Brussels Hospitality BV,contracts@brussels-hospitality.be,+32 33471111,Mr,Arthur,Mertens,28 Grand Place,,Bruges,B-1271,Belgium,Invoice,2022-07-11 00:00:00,suppliers_master.csv
+2,Mews,SUP5002,SP-0002,ABTA-13746,Antwerp Luxury Stays,contracts@antwerp-luxury-stays.be,+32 99906779,Mr,Arthur,Willems,68 Grand Place,,Liège,B-2377,Belgium,Card,2023-03-18 00:00:00,suppliers_master.csv
+3,ProtelPMS,SUP5003,SP-0003,ABTA-29742,Bruges Heritage Hotels,contracts@bruges-heritage-hote.be,+32 89425356,Mr,Louis,Fontaine,86 Grand Place,,Antwerp,B-5466,Belgium,Card,2022-04-11 00:00:00,suppliers_master.csv
+4,ProtelPMS,SUP5004,SP-0004,ABTA-95016,Ghent Grand Suites,contracts@ghent-grand-suites.be,+32 88089856,Mr,Lucas,Maes,49 Veldstraat,,Bruges,B-5520,Belgium,Invoice,2023-06-16 00:00:00,suppliers_master.csv
+5,Mews,SUP5005,SP-0005,ABTA-24311,Liège Palace Group,contracts@liège-palace-group.be,+32 25176591,Mr,Noah,Claes,30 Grand Place,,Brussels,B-5361,Belgium,SWIFT,2022-03-09 00:00:00,suppliers_master.csv
+6,Micros,SUP5006,SP-0006,ABTA-23242,Knokke Prestige Resorts,contracts@knokke-prestige-reso.be,+32 64799452,Mr,Leon,Bogaert,184 Veldstraat,,Antwerp,B-7437,Belgium,SEPA,2022-08-14 00:00:00,suppliers_master.csv

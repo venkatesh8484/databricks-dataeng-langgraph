@@ -2,7 +2,7 @@ table: customers
 source_file: raw_customers.csv
 business_key: [external_customer_id]
 description: >
-  Customer master data from 3 source PMS/POS systems (ProtelPMS, Mews, Micros).
+  Customer master data (buyer / fleet-operator contacts) from 3 source systems (SAP-ERP, Teamcenter, IFS-Apps).
 
 schema:
   required_columns:
@@ -41,7 +41,7 @@ rules:
     max_fail_rate: 0.02
     checks:
       marketing_optin: ["Y", "N"]
-      title: ["Mr", "Mrs", "Ms", "Dr", "Prof"]
+      title: ["Mr", "Mrs", "Ms", "Capt", "Cdr"]
 
   regex:
     severity: soft

@@ -39,6 +39,57 @@ from dbricks_lang_agent.orchestrator.state import AgentState
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## 0b. (Optional) One-time seed — pin known-good code for this dataset
+# MAGIC Set the **`seed_reference_code`** widget to `True` and run this cell ONCE to store the
+# MAGIC hand-written reference bronze/silver/gold scripts in the Unity Catalog codebase cache,
+# MAGIC keyed by this dataset's schema fingerprint. Every later run reuses that code (cache hit)
+# MAGIC and the orchestrator can patch on top of it. Leave the widget `False` for normal runs so
+# MAGIC your seeded/patched code is never overwritten. Placed AFTER the imports above on purpose,
+# MAGIC so it uses the freshly-reloaded repo package (not a stale installed copy).
+
+# COMMAND ----------
+
+dbutils.widgets.dropdown("seed_reference_code", "False", ["True", "False"], "Seed Reference Code (one-time)")
+
+if dbutils.widgets.get("seed_reference_code") == "True":
+    import dbricks_lang_agent
+    from dbricks_lang_agent.orchestrator import memory as _seed_memory
+    from dbricks_lang_agent.orchestrator.agents import get_schema_fingerprint as _seed_fp
+    from dbricks_lang_agent.data_platform.spark_utils import get_spark as _seed_spark
+
+    _sp = _seed_spark()
+    _repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(dbricks_lang_agent.__file__))))
+    _ref_dir = os.path.join(_repo_root, "reference_implementation", "src", "data_platform")
+    _drivers = {
+        "bronze_code": "\n\ningest_all()\n",
+        "silver_code": ("\n\nimport json as _j\n_s = transform_all()\n"
+                        "with open('/tmp/silver_summary.json','w') as _f: _j.dump(_s, _f, default=str)\n"
+                        "if _s.get('halted_at'): raise RuntimeError('Promotion blocked at ' + str(_s['halted_at']))\n"),
+        "gold_code":   ("\n\nimport json as _j\n_r = build_all()\n"
+                        "with open('/tmp/gold_summary.json','w') as _f: _j.dump(_r, _f, default=str)\n"),
+    }
+    _files = {"bronze_code": "bronze.py", "silver_code": "silver.py", "gold_code": "gold.py"}
+    _fp = _seed_fp(_sp)
+    _seed_memory.init_codebase_memory_table(_sp)
+    _seeded = {}
+    for _k, _fn in _files.items():
+        with open(os.path.join(_ref_dir, _fn)) as _rf:
+            _code = _rf.read() + _drivers[_k]
+        _seeded[_k] = _code
+        _seed_memory.log_script_code(_sp, _fp, _k, _code)
+        print("[seed] stored", _k)
+    _seed_memory.init_stage_review_table(_sp)
+    _seed_memory.log_stage_review(_sp, pipeline_run_id="seed_reference_code", stage_key="engineering",
+        agent_name="ManualSeed", decision="approved",
+        reviewer_comments="Seeded reference bronze/silver/gold code", output=_seeded, dataset_fingerprint=_fp)
+    print(f"[seed] DONE. fingerprint = {_fp}")
+    print("[seed] Now set the seed_reference_code widget back to False, then run the pipeline below.")
+else:
+    print("[seed] skipped (seed_reference_code widget is False) — normal run, existing cache is used.")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 1. Setup Databricks Notebook Widgets
 # MAGIC We use widgets to handle approvals/rejections and capture review comments.
 

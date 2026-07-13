@@ -90,6 +90,29 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## 0c. (Optional) Reset the data lake — drop stale bronze/silver/gold DATA tables
+# MAGIC Set the **`reset_lake_data`** widget to `True` and run this cell ONCE to drop the
+# MAGIC bronze/silver/gold/quarantine DATA tables left over from earlier runs, so the pipeline
+# MAGIC rebuilds them cleanly. This is needed because `scd2_merge` in gold takes an *incremental*
+# MAGIC path against any pre-existing dimension table, and a leftover table with an incompatible
+# MAGIC schema breaks the merge (e.g. `_load_ts` unresolved). It PRESERVES all `agent_*` cache /
+# MAGIC memory tables, so your seeded code and approvals are kept. Leave `False` for normal runs.
+
+# COMMAND ----------
+
+dbutils.widgets.dropdown("reset_lake_data", "False", ["True", "False"], "Reset Lake Data (drop bronze/silver/gold)")
+
+if dbutils.widgets.get("reset_lake_data") == "True":
+    from dbricks_lang_agent.data_platform.spark_utils import reset_lake as _reset_lake
+    _reset_lake()
+    print("[reset_lake] Dropped bronze/silver/gold/quarantine DATA tables. agent_* caches (incl. the seed) preserved.")
+    print("[reset_lake] Now set the reset_lake_data widget back to False, then run the pipeline below.")
+else:
+    print("[reset_lake] skipped (reset_lake_data widget is False).")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## 1. Setup Databricks Notebook Widgets
 # MAGIC We use widgets to handle approvals/rejections and capture review comments.
 

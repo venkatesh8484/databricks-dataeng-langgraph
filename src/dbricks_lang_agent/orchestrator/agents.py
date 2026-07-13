@@ -1184,6 +1184,77 @@ def _validate_gold_against_ddl(gold_code: str, ddl: str) -> tuple:
     return True, ""
 
 
+def _autocorrect_column_refs(code: str, valid_columns: set) -> tuple:
+    """Deterministic 'did-you-mean' fix for hallucinated column names in
+    generated PySpark. Spark itself already knows the answer — an
+    UNRESOLVED_COLUMN error prints the closest real column — but that only
+    surfaces at runtime. This does the same correction BEFORE execution.
+
+    For every `col("X")` / `F.col('X')` reference whose name X is NOT a real
+    column, it checks whether normalizing X (stripping leading underscores +
+    lowercasing) yields exactly ONE real column, and if so rewrites X to that
+    column. This fixes the common LLM slips — `_load_ts` → `load_ts`,
+    `Load_Ts` → `load_ts` — with near-zero false-positive risk: a genuinely
+    computed helper column (e.g. `_running_total`) normalizes to something that
+    ISN'T a real column, so it's left untouched. Ambiguous matches (normalized
+    form maps to >1 real column) are also left for the LLM/self-heal to resolve.
+
+    `valid_columns` is the set of every legitimate column name (source columns
+    from profiling + Gold DDL columns + platform-generated columns). Returns
+    (corrected_code, [(from, to), ...])."""
+    import re
+    if not valid_columns:
+        return code, []
+    valid = set(valid_columns)
+
+    def _norm(s):
+        return s.lstrip("_").lower()
+
+    norm_map = {}
+    for v in valid:
+        norm_map.setdefault(_norm(v), set()).add(v)
+
+    changes = []
+
+    def _repl(m):
+        head, quote, name, tail = m.group(1), m.group(2), m.group(3), m.group(4)
+        if name in valid:
+            return m.group(0)
+        cands = norm_map.get(_norm(name))
+        if cands and len(cands) == 1:
+            target = next(iter(cands))
+            if target != name:
+                changes.append((name, target))
+                return f"{head}{quote}{target}{quote}{tail}"
+        return m.group(0)
+
+    pattern = re.compile(r"""((?:F\.)?col\(\s*)(['"])(\w+)\2(\s*\))""")
+    code = pattern.sub(_repl, code)
+    return code, changes
+
+
+def _valid_columns_from_state(state, ddl_str: str) -> set:
+    """Assemble the set of legitimate column names for a run: every source
+    column the profiler saw across all tables, every column declared in the
+    Gold DDL, plus the platform-generated metadata columns. Used by
+    _autocorrect_column_refs to fix hallucinated column names deterministically."""
+    cols = set(_GOLD_GENERATED_COLS) | {
+        "_ingestion_ts", "_batch_id", "_source_layer", "_silver_load_ts",
+    }
+    try:
+        tables_profile = (state.get("profiling_report", {}) or {}).get("tables", {}) or {}
+        for _t, _tp in tables_profile.items():
+            cols |= set((_tp.get("columns", {}) or {}).keys())
+    except Exception:
+        pass
+    try:
+        for _cset in _parse_ddl_columns(ddl_str or "").values():
+            cols |= _cset
+    except Exception:
+        pass
+    return cols
+
+
 def _sanitize_and_heal_code(code: str) -> str:
     """Auto-inject missing PySpark imports and heal line-continuation/indent issues."""
     if not code:
@@ -1920,7 +1991,21 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
         "silver_code": silver,
         "gold_code": gold
     }
-    
+
+    # Deterministic 'did-you-mean' column auto-correct. compile() can't see a
+    # hallucinated column name (e.g. gold.py referencing `_load_ts` when the real
+    # column is `load_ts`) — it only blows up at runtime as UNRESOLVED_COLUMN and
+    # halts the pipeline. Fix it here against the real schema (source columns +
+    # Gold DDL) BEFORE verification, so it never reaches execution. Safe: only
+    # rewrites a reference whose normalized form matches exactly one real column.
+    _valid_cols = _valid_columns_from_state(state, ddl_str)
+    for _k in ("bronze_code", "silver_code", "gold_code"):
+        _fixed, _col_changes = _autocorrect_column_refs(current_codes[_k], _valid_cols)
+        if _col_changes:
+            current_codes[_k] = _fixed
+            _pretty = ", ".join(f"{a}->{b}" for a, b in dict(_col_changes).items())
+            print(f"[Compiler Loop] Auto-corrected hallucinated column name(s) in {_k}: {_pretty}")
+
     # Verification mode (config: engineering.verify_mode):
     #   "compile" (default) — syntax-only check. No lake reset, no execution of
     #       LLM-generated code here; execution_node performs the ONE real run,

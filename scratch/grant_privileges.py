@@ -39,11 +39,26 @@ def main():
     
     statements = [
         f"GRANT USE CATALOG ON CATALOG {catalog} TO `{app_client_id}`",
+        # CREATE SCHEMA IF NOT EXISTS checks the CREATE SCHEMA privilege on the parent
+        # CATALOG even when the schema already exists. Without this, every
+        # write_full_overwrite()/merge_upsert() call (spark_utils.py) logs a caught
+        # PERMISSION_DENIED warning, and reset_lake()'s gold-schema branch aborts before
+        # its SHOW TABLES/DROP TABLE cleanup loop runs, leaving stale gold tables behind.
+        f"GRANT CREATE SCHEMA ON CATALOG {catalog} TO `{app_client_id}`",
         f"GRANT USE SCHEMA, ALL PRIVILEGES ON SCHEMA {catalog}.raw TO `{app_client_id}`",
-        f"GRANT USE SCHEMA, ALL PRIVILEGES ON SCHEMA {catalog}.bronze TO `{app_client_id}`",
-        f"GRANT USE SCHEMA, ALL PRIVILEGES ON SCHEMA {catalog}.silver TO `{app_client_id}`",
-        f"GRANT USE SCHEMA, ALL PRIVILEGES ON SCHEMA {catalog}.gold TO `{app_client_id}`",
-        f"GRANT ALL PRIVILEGES ON VOLUME {catalog}.raw.source_volume TO `{app_client_id}`"
+        # bronze/silver/gold/quarantine all need MANAGE in addition to ALL PRIVILEGES:
+        # reset_lake() (data_platform/spark_utils.py) runs DROP SCHEMA ... CASCADE on
+        # bronze/silver/quarantine before every Data Model Agent compile/verify pass,
+        # and DROP SCHEMA requires the schema owner or MANAGE privilege -- ALL PRIVILEGES
+        # alone does not cover it.
+        f"GRANT USE SCHEMA, ALL PRIVILEGES, MANAGE ON SCHEMA {catalog}.bronze TO `{app_client_id}`",
+        f"GRANT USE SCHEMA, ALL PRIVILEGES, MANAGE ON SCHEMA {catalog}.silver TO `{app_client_id}`",
+        f"GRANT USE SCHEMA, ALL PRIVILEGES, MANAGE ON SCHEMA {catalog}.gold TO `{app_client_id}`",
+        f"GRANT ALL PRIVILEGES ON VOLUME {catalog}.raw.source_volume TO `{app_client_id}`",
+        # quarantine is only referenced inside reset_lake()'s default schema list -- it's
+        # never created elsewhere, so create it here before granting on it.
+        f"CREATE SCHEMA IF NOT EXISTS {catalog}.quarantine",
+        f"GRANT USE SCHEMA, ALL PRIVILEGES, MANAGE ON SCHEMA {catalog}.quarantine TO `{app_client_id}`",
     ]
     
     # Let's execute using the Workspace Statement Execution API

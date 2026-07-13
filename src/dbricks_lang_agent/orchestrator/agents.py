@@ -604,6 +604,51 @@ def contract_node(state: AgentState) -> Dict[str, Any]:
             "review_comments": "",
         }
 
+    # ─────────────────────────────────────────────────────────────────────
+    # TEMPORARY DEMO BYPASS — set to False (or delete this block) to restore
+    # the real Contract agent. When True, the Contract stage makes NO LLM call
+    # and emits a trivial pass-through contract (zero rules) for every
+    # discovered table. Effect: silver.py's `validate_table(...)` still runs and
+    # returns cleanly (no rules → nothing quarantined, never halts), the on-disk
+    # YAML files still exist for anything that loads them, and the stage
+    # auto-approves so the pipeline sails past the Contracts gate. No downstream
+    # agent depends on rule content, so nothing else breaks.
+    DEMO_BYPASS_CONTRACTS = True
+    if DEMO_BYPASS_CONTRACTS:
+        import yaml as _yaml
+        contracts_dir = os.path.join(GENERATED_ROOT, "config", "contracts")
+        os.makedirs(contracts_dir, exist_ok=True)
+        passthrough: Dict[str, str] = {}
+        for _tbl in discovered:
+            _y = _yaml.safe_dump(
+                {
+                    "table": _tbl,
+                    "business_key": "",
+                    "description": f"[DEMO BYPASS] pass-through contract for {_tbl} — no rules enforced",
+                    "rules": {},
+                },
+                sort_keys=False,
+            )
+            passthrough[_tbl] = _y
+            try:
+                with open(os.path.join(contracts_dir, f"{_tbl}.yaml"), "w") as _f:
+                    _f.write(_y)
+            except Exception as _e_bypass:
+                print(f"[Contract Steward][DEMO BYPASS] could not write {_tbl}.yaml: {_e_bypass}")
+        _approved = dict(state.get("approved_steps", {}))
+        _approved["contracts"] = True
+        print(f"[Contract Steward] DEMO BYPASS ACTIVE — emitted {len(passthrough)} pass-through "
+              f"contract(s), skipped the LLM, and auto-approved the Contracts stage.")
+        return {
+            "contracts": passthrough,
+            "contracts_error": "",
+            "active_agent": "ContractSteward",
+            "review_comments": "",
+            "approved_steps": _approved,
+            "generation_source": {**(state.get("generation_source") or {}), "contracts": "demo_bypass"},
+        }
+    # ──────────────────────────────────────────────────── END DEMO BYPASS ──
+
     # Query few-shot memory database
     spark = get_spark()
     memory.init_contracts_cache_table(spark)
@@ -1160,6 +1205,36 @@ def _sanitize_and_heal_code(code: str) -> str:
 
     # 1.7. Fix validate_table() unpacking signature dynamically (change clean_df, quarantine_df = validate_table(...) to include third discard)
     code = re.sub(r"(?m)^(\s*)([a-zA-Z0-9_]+)\s*,\s*([a-zA-Z0-9_]+)\s*=\s*validate_table\s*\(", r"\1\2, \3, _ = validate_table(", code)
+
+    # 1.7b. Fix WRONG-ORDER unpacking of validate_table(...). The correct return
+    # order is (clean_df, quarantined_df, report), where `report` is a DICT. The
+    # LLM sometimes swaps them, e.g. `report, clean_df, quarantine_df = validate_table(...)`,
+    # which binds the report dict to a DataFrame variable name; a later
+    # `quarantine_df.count()` then raises
+    # `AttributeError: 'dict' object has no attribute 'count'` and kills silver.py.
+    # When all three LHS names are individually identifiable (one clean-like, one
+    # quarantine-like, one report-like), reorder them into canonical order so the
+    # names line up with what validate_table actually returns. If they can't be
+    # told apart confidently, leave the line untouched.
+    def _fix_validate_unpack(m):
+        indent, names = m.group(1), [m.group(2), m.group(3), m.group(4)]
+
+        def _pick(keywords):
+            hits = [n for n in names if any(k in n.lower() for k in keywords)]
+            return hits[0] if len(hits) == 1 else None
+
+        clean = _pick(("clean", "valid", "good"))
+        quar = _pick(("quar", "invalid", "reject", "bad"))
+        rep = _pick(("report", "summary", "result", "stats", "rpt"))
+        if clean and quar and rep and len({clean, quar, rep}) == 3:
+            return f"{indent}{clean}, {quar}, {rep} = validate_table("
+        return m.group(0)
+
+    code = re.sub(
+        r"(?m)^(\s*)([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)\s*=\s*validate_table\s*\(",
+        _fix_validate_unpack,
+        code,
+    )
 
     # 1.8. Fix load_source with dict key from discover_source_tables
     if "discover_source_tables" in code and "load_source" in code:

@@ -17,31 +17,31 @@ from pyspark.sql import Window
 from dbricks_lang_agent.data_platform.spark_utils import get_spark, read_table, write_full_overwrite
 from dbricks_lang_agent.data_platform.contracts import load_all_contracts, validate_table, summarize_reports
 
-PROCESS_ORDER = ["customers", "suppliers", "accommodations", "availability", "bookings", "booking_components"]
+PROCESS_ORDER = ["buyers", "subcontractors", "vessels", "build_slots", "orders", "order_lines"]
 
 BUSINESS_KEYS = {
-    "customers": "external_customer_id",
-    "suppliers": "external_supplier_id",
-    "accommodations": "external_accommodation_id",
-    "availability": None,  # composite key (handled manually)
-    "bookings": "external_booking_id",
-    "booking_components": "component_reference",
+    "buyers": "external_buyer_id",
+    "subcontractors": "external_subcontractor_id",
+    "vessels": "external_vessel_id",
+    "build_slots": None,  # composite key (handled manually)
+    "orders": "external_order_id",
+    "order_lines": "line_reference",
 }
 
 YN_COLUMNS = {
-    "customers": ["marketing_optin"],
-    "accommodations": ["has_pool", "pets_allowed"],
-    "availability": ["is_closed"],
-    "bookings": ["is_owner_booking"],
+    "buyers": ["marketing_optin"],
+    "vessels": ["has_helideck", "ice_class"],
+    "build_slots": ["is_closed"],
+    "orders": ["is_owner_order"],
 }
 
 DROP_ALWAYS_NULL_COLS = {
-    "customers": [],
-    "suppliers": ["address2"],
-    "accommodations": ["address2", "address3"],
-    "availability": [],
-    "bookings": [],
-    "booking_components": [],
+    "buyers": [],
+    "subcontractors": ["address2"],
+    "vessels": ["address2", "address3"],
+    "build_slots": [],
+    "orders": [],
+    "order_lines": [],
 }
 
 
@@ -91,8 +91,8 @@ def transform_all(fail_fast_on_hard_breach: bool = True) -> Dict[str, Any]:
             df = df.drop(*drop_cols)
 
         # Deduplicate keys
-        if table == "availability":
-            w = Window.partitionBy("external_accommodation_id", "availability_date").orderBy(F.col("_ingestion_ts").desc())
+        if table == "build_slots":
+            w = Window.partitionBy("external_vessel_id", "slot_date").orderBy(F.col("_ingestion_ts").desc())
             df = df.withColumn("_rn", F.row_number().over(w)).filter(F.col("_rn") == 1).drop("_rn")
         else:
             df = _dedupe_latest(df, BUSINESS_KEYS[table])

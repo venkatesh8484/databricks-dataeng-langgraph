@@ -1,6 +1,6 @@
-table: booking_components
-source_file: raw_booking_components.csv
-business_key: [component_reference]
+table: order_lines
+source_file: raw_order_lines.csv
+business_key: [line_reference]
 description: >
   Order line items (Hull, Propulsion, Electronics, Deck Equipment, Outfitting, Trials,
   Transfer). Finer grain than orders. Multi-currency price with fx_rate to EUR;
@@ -8,12 +8,12 @@ description: >
 
 schema:
   required_columns:
-    - raw_component_id
-    - raw_booking_id
-    - external_booking_id
-    - component_type
-    - component_reference
-    - external_supplier_id
+    - raw_line_id
+    - raw_order_id
+    - external_order_id
+    - line_type
+    - line_reference
+    - external_subcontractor_id
     - start_date
     - end_date
     - duration_days
@@ -27,7 +27,7 @@ schema:
     - load_ts
     - source_file
   types:
-    raw_component_id: int
+    raw_line_id: int
     price: double
     cost: double
     price_fx_rate: double
@@ -38,26 +38,26 @@ rules:
   not_null:
     severity: hard
     max_fail_rate: 0.0
-    columns: [raw_component_id, external_booking_id, component_type, component_reference, external_supplier_id, price, cost, price_currency, cost_currency, price_fx_rate, cost_fx_rate, status]
+    columns: [raw_line_id, external_order_id, line_type, line_reference, external_subcontractor_id, price, cost, price_currency, cost_currency, price_fx_rate, cost_fx_rate, status]
 
   not_null_conditional:
     severity: soft
     max_fail_rate: 0.0
-    # external_accommodation_id (vessel FK) is only required on the primary 'Hull' line
+    # external_vessel_id (vessel FK) is only required on the primary 'Hull' line
     checks:
-      - column: external_accommodation_id
-        when: "component_type = 'Hull'"
+      - column: external_vessel_id
+        when: "line_type = 'Hull'"
 
   unique:
     severity: hard
     max_fail_rate: 0.0
-    columns: [raw_component_id, component_reference]
+    columns: [raw_line_id, line_reference]
 
   allowed_values:
     severity: soft
     max_fail_rate: 0.01
     checks:
-      component_type: ["Hull", "Propulsion", "Electronics", "Deck Equipment", "Outfitting", "Trials", "Transfer"]
+      line_type: ["Hull", "Propulsion", "Electronics", "Deck Equipment", "Outfitting", "Trials", "Transfer"]
       status: ["Ordered", "In Production", "Delivered", "Cancelled"]
       price_currency: ["EUR", "GBP", "USD"]
       cost_currency: ["EUR"]
@@ -85,16 +85,16 @@ rules:
     severity: hard
     max_fail_rate: 0.0
     checks:
-      - column: external_booking_id
-        parent_table: bookings
-        parent_column: external_booking_id
-      - column: external_supplier_id
-        parent_table: suppliers
-        parent_column: external_supplier_id
-      - column: external_accommodation_id
-        parent_table: accommodations
-        parent_column: external_accommodation_id
-        nullable: true   # non-accommodation component types legitimately have no accommodation link
+      - column: external_order_id
+        parent_table: orders
+        parent_column: external_order_id
+      - column: external_subcontractor_id
+        parent_table: subcontractors
+        parent_column: external_subcontractor_id
+      - column: external_vessel_id
+        parent_table: vessels
+        parent_column: external_vessel_id
+        nullable: true   # non-vessel line types legitimately have no vessel link
 
   freshness:
     severity: soft

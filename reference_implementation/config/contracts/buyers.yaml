@@ -1,15 +1,15 @@
-table: customers
-source_file: raw_customers.csv
-business_key: [external_customer_id]
+table: buyers
+source_file: raw_buyers.csv
+business_key: [external_buyer_id]
 description: >
-  Customer master data (buyer / fleet-operator contacts) from 3 source systems (SAP-ERP, Teamcenter, IFS-Apps).
+  Buyer master data (fleet-operator / procurement contacts) from 3 source systems (SAP-ERP, Teamcenter, IFS-Apps).
 
 schema:
   required_columns:
-    - raw_customer_id
+    - raw_buyer_id
     - source_system
-    - external_customer_id
-    - customer_ref
+    - external_buyer_id
+    - buyer_ref
     - email
     - title
     - forename
@@ -19,8 +19,8 @@ schema:
     - load_ts
     - source_file
   types:
-    raw_customer_id: int
-    external_customer_id: string
+    raw_buyer_id: int
+    external_buyer_id: string
     email: string
     marketing_optin: string
     load_ts: timestamp
@@ -29,12 +29,12 @@ rules:
   not_null:
     severity: hard   # hard = quarantine + halt promotion if breach rate exceeds threshold
     max_fail_rate: 0.0
-    columns: [raw_customer_id, external_customer_id, email, forename, surname, country]
+    columns: [raw_buyer_id, external_buyer_id, email, forename, surname, country]
 
   unique:
     severity: hard
     max_fail_rate: 0.0
-    columns: [raw_customer_id, external_customer_id]
+    columns: [raw_buyer_id, external_buyer_id]
 
   allowed_values:
     severity: soft   # soft = quarantine offending rows, promotion continues
@@ -49,7 +49,7 @@ rules:
     checks:
       email: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
 
-  referential_integrity: []   # customers is a root entity, no parent FK to check
+  referential_integrity: []   # buyers is a root entity, no parent FK to check
 
   freshness:
     severity: soft

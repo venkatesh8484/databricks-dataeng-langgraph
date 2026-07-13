@@ -47,3 +47,4 @@ generated/
 # (the real source of truth is Unity Catalog's agent_script_codebase_memory /
 # agent_stage_review_log tables, and the LLM regenerates these every run)
 /sample codebase/
+/Source_hotel_backup/

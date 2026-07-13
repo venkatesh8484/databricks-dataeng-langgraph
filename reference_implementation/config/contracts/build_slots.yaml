@@ -1,15 +1,15 @@
-table: availability
-source_file: raw_availability.csv
-business_key: [external_accommodation_id, availability_date]
+table: build_slots
+source_file: raw_build_slots.csv
+business_key: [external_vessel_id, slot_date]
 description: >
-  Daily build-slot / berth availability snapshot per vessel. Only a subset of vessels
+  Daily build-slot / berth build_slots snapshot per vessel. Only a subset of vessels
   are present in any given extract — expected (rolling feed), not a completeness defect.
 
 schema:
   required_columns:
-    - raw_availability_id
-    - external_accommodation_id
-    - availability_date
+    - raw_slot_id
+    - external_vessel_id
+    - slot_date
     - is_closed
     - allocation
     - actual_available
@@ -17,9 +17,9 @@ schema:
     - load_ts
     - source_file
   types:
-    raw_availability_id: int
-    external_accommodation_id: string
-    availability_date: timestamp
+    raw_slot_id: int
+    external_vessel_id: string
+    slot_date: timestamp
     allocation: int
     actual_available: int
     potential_available: int
@@ -28,17 +28,17 @@ rules:
   not_null:
     severity: hard
     max_fail_rate: 0.0
-    columns: [raw_availability_id, external_accommodation_id, availability_date, allocation, actual_available, potential_available]
+    columns: [raw_slot_id, external_vessel_id, slot_date, allocation, actual_available, potential_available]
 
   unique:
     severity: hard
     max_fail_rate: 0.0
-    columns: [raw_availability_id]
+    columns: [raw_slot_id]
   unique_composite:
     severity: hard
     max_fail_rate: 0.0
     column_sets:
-      - [external_accommodation_id, availability_date]
+      - [external_vessel_id, slot_date]
 
   allowed_values:
     severity: soft
@@ -67,9 +67,9 @@ rules:
     severity: soft
     max_fail_rate: 0.01
     checks:
-      - column: external_accommodation_id
-        parent_table: accommodations
-        parent_column: external_accommodation_id
+      - column: external_vessel_id
+        parent_table: vessels
+        parent_column: external_vessel_id
 
   freshness:
     severity: soft

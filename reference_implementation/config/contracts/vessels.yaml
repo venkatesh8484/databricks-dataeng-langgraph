@@ -1,0 +1,80 @@
+table: vessels
+source_file: raw_vessels.csv
+business_key: [external_vessel_id]
+description: >
+  Vessel master. 60 vessels across 3 product families (brands). Attributes (value_tier,
+  margin_rate, rating, contract_type) change over time -> SCD Type 2 in gold.
+
+schema:
+  required_columns:
+    - raw_vessel_id
+    - source_system
+    - external_vessel_id
+    - vessel_class
+    - brand
+    - name
+    - city
+    - country
+    - margin_rate
+    - value_tier
+    - has_helideck
+    - ice_class
+    - deck_count
+    - complement
+    - rating
+    - contract_type
+    - date_created
+    - date_live
+    - load_ts
+    - source_file
+  types:
+    raw_vessel_id: int
+    external_vessel_id: string
+    margin_rate: double
+    rating: double
+    deck_count: int
+    complement: int
+    load_ts: timestamp
+
+rules:
+  not_null:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_vessel_id, external_vessel_id, vessel_class, brand, margin_rate, value_tier, deck_count, complement, rating]
+
+  unique:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_vessel_id, external_vessel_id]
+
+  allowed_values:
+    severity: soft
+    max_fail_rate: 0.02
+    checks:
+      has_helideck: ["Y", "N"]
+      ice_class: ["Y", "N"]
+      value_tier: ["Workboat", "Standard", "Premium", "Naval", "Flagship"]
+      contract_type: ["Fixed Price", "Cost Plus", "Build-to-Print", "Lease"]
+
+  range:
+    severity: soft
+    max_fail_rate: 0.02
+    checks:
+      margin_rate: {min: 0, max: 50}
+      rating: {min: 0, max: 5}
+      deck_count: {min: 1, max: 20}
+      complement: {min: 1, max: 40}
+      miles_from_sea: {min: 0, max: 500}
+
+  referential_integrity: []
+
+  freshness:
+    severity: soft
+    column: load_ts
+    max_age_days: 1095
+
+notes:
+  - "address2/address3 are 100% null in source — dropped in silver."
+  - "withdrawn_date is null for ~97% of rows (in-service vessels) — null is the expected/majority state, not a defect; a populated value marks a decommissioned/withdrawn hull."
+  - "date_created/date_live/withdrawn_date drive SCD2 change tracking on value_tier, margin_rate, rating, contract_type in gold."
+  - "brand = product family (SeaGuard Defence / PortMaster Workboats / OceanBuild Offshore); vessel_class = vessel class; margin_rate = build margin %; deck_count/complement = deck count / complement; monetary figures elsewhere are EUR thousands."

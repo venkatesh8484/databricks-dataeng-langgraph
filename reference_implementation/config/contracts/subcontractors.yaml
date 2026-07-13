@@ -1,0 +1,57 @@
+table: subcontractors
+source_file: raw_subcontractors.csv
+business_key: [external_subcontractor_id]
+description: >
+  Subcontractor master data (propulsion, electronics, steel, deck machinery, coatings,
+  navigation subcontractors). Small, low-change reference table (~6 rows) — SCD Type 1 in gold.
+
+schema:
+  required_columns:
+    - raw_subcontractor_id
+    - source_system
+    - external_subcontractor_id
+    - subcontractor_ref
+    - class_society_code
+    - name
+    - email
+    - country
+    - payment_method
+    - load_ts
+    - source_file
+  types:
+    raw_subcontractor_id: int
+    external_subcontractor_id: string
+    load_ts: timestamp
+
+rules:
+  not_null:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_subcontractor_id, external_subcontractor_id, name, class_society_code, country, payment_method]
+
+  unique:
+    severity: hard
+    max_fail_rate: 0.0
+    columns: [raw_subcontractor_id, external_subcontractor_id, class_society_code]
+
+  allowed_values:
+    severity: soft
+    max_fail_rate: 0.0
+    checks:
+      payment_method: ["Invoice", "SWIFT", "SEPA", "Letter of Credit"]
+
+  regex:
+    severity: soft
+    max_fail_rate: 0.0
+    checks:
+      class_society_code: '^IACS-\d{5}$'
+
+  referential_integrity: []
+
+  freshness:
+    severity: soft
+    column: load_ts
+    max_age_days: 1095   # subcontractors change rarely; wide freshness window
+
+notes:
+  - "address2 is 100% null in source for subcontractors — dropped in silver as a structurally empty column."

@@ -29,27 +29,27 @@ def build_dim_date_table() -> str:
 
 
 def build_dim_channel_table() -> str:
-    bookings = read_table("silver", "bookings")
-    combos = bookings.select("booking_channel", "channel_group").distinct()
-    w = Window.orderBy("booking_channel", "channel_group")
+    orders = read_table("silver", "orders")
+    combos = orders.select("sales_channel", "channel_group").distinct()
+    w = Window.orderBy("sales_channel", "channel_group")
     dim = combos.withColumn("channel_sk", F.row_number().over(w).cast("long"))
-    dim = dim.select("channel_sk", "booking_channel", "channel_group")
+    dim = dim.select("channel_sk", "sales_channel", "channel_group")
     return write_full_overwrite(dim, "gold", "dim_channel")
 
 
-def build_dim_supplier_table() -> str:
+def build_dim_subcontractor_table() -> str:
     """SCD Type 1 - Overwrite dimension table with current data."""
-    suppliers = read_table("silver", "suppliers")
-    w = Window.orderBy("external_supplier_id")
+    subcontractors = read_table("silver", "subcontractors")
+    w = Window.orderBy("external_subcontractor_id")
     dim = (
-        suppliers.withColumn("supplier_sk", F.row_number().over(w).cast("long"))
+        subcontractors.withColumn("subcontractor_sk", F.row_number().over(w).cast("long"))
         .select(
-            "supplier_sk",
-            F.col("external_supplier_id").alias("supplier_id"),
-            "supplier_ref",
+            "subcontractor_sk",
+            F.col("external_subcontractor_id").alias("subcontractor_id"),
+            "subcontractor_ref",
             "source_system",
-            "abta_code",
-            F.col("name").alias("supplier_name"),
+            "class_society_code",
+            F.col("name").alias("subcontractor_name"),
             "email",
             "telephone",
             F.col("title").alias("contact_title"),
@@ -63,61 +63,61 @@ def build_dim_supplier_table() -> str:
             F.col("_silver_load_ts").alias("last_updated_ts"),
         )
     )
-    return write_full_overwrite(dim, "gold", "dim_supplier")
+    return write_full_overwrite(dim, "gold", "dim_subcontractor")
 
 
-def build_dim_customer_table() -> str:
-    """SCD Type 2 Customer dimension loaded via spark_utils.scd2_merge."""
-    customers = read_table("silver", "customers")
+def build_dim_buyer_table() -> str:
+    """SCD Type 2 Buyer dimension loaded via spark_utils.scd2_merge."""
+    buyers = read_table("silver", "buyers")
     tracked_cols = [
-        "customer_ref", "source_system", "email", "title", "forename", "surname",
+        "buyer_ref", "source_system", "email", "title", "forename", "surname",
         "telephone", "mobile", "address1", "address2", "city", "postcode", "country",
         "marketing_optin",
     ]
     incoming = (
-        customers.withColumn("full_name", F.concat_ws(" ", F.col("forename"), F.col("surname")))
-        .withColumnRenamed("external_customer_id", "customer_id")
+        buyers.withColumn("full_name", F.concat_ws(" ", F.col("forename"), F.col("surname")))
+        .withColumnRenamed("external_buyer_id", "buyer_id")
         .withColumn("_load_ts", F.col("_silver_load_ts"))
     )
     return scd2_merge(
         incoming,
         schema="gold",
-        table="dim_customer",
-        business_key="customer_id",
+        table="dim_buyer",
+        business_key="buyer_id",
         tracked_cols=tracked_cols + ["full_name"],
-        surrogate_key_col="customer_sk",
+        surrogate_key_col="buyer_sk",
     )
 
 
-def build_dim_accommodation_table() -> str:
-    """SCD Type 2 Accommodation dimension loaded via spark_utils.scd2_merge."""
-    acc = read_table("silver", "accommodations")
+def build_dim_vessel_table() -> str:
+    """SCD Type 2 Vessel dimension loaded via spark_utils.scd2_merge."""
+    acc = read_table("silver", "vessels")
     tracked_cols = [
-        "accommodation_ref", "source_system", "accommodation_type", "brand", "name",
+        "vessel_ref", "source_system", "vessel_class", "brand", "name",
         "address1", "city", "postcode", "resort", "area", "region", "country",
-        "miles_from_sea", "commission_rate", "price_band", "price_band_start",
-        "has_pool", "pets_allowed", "bedrooms", "max_occupancy", "rating",
+        "miles_from_sea", "margin_rate", "value_tier", "value_tier_start",
+        "has_helideck", "ice_class", "deck_count", "complement", "rating",
         "contract_type", "withdrawn_date",
     ]
     incoming = (
-        acc.withColumnRenamed("external_accommodation_id", "accommodation_id")
-        .withColumnRenamed("name", "accommodation_name")
-        .withColumn("price_band_start_date", F.to_date("price_band_start"))
+        acc.withColumnRenamed("external_vessel_id", "vessel_id")
+        .withColumnRenamed("name", "vessel_name")
+        .withColumn("value_tier_start_date", F.to_date("value_tier_start"))
         .withColumn("is_withdrawn", F.col("withdrawn_date").isNotNull())
         .withColumn("date_created", F.to_date("date_created"))
         .withColumn("date_live", F.to_date("date_live"))
         .withColumn("withdrawn_date", F.to_date("withdrawn_date"))
         .withColumn("_load_ts", F.col("_silver_load_ts"))
     )
-    tracked_final = [c if c != "name" else "accommodation_name" for c in tracked_cols]
-    tracked_final = [c if c != "price_band_start" else "price_band_start_date" for c in tracked_final]
+    tracked_final = [c if c != "name" else "vessel_name" for c in tracked_cols]
+    tracked_final = [c if c != "value_tier_start" else "value_tier_start_date" for c in tracked_final]
     return scd2_merge(
         incoming,
         schema="gold",
-        table="dim_accommodation",
-        business_key="accommodation_id",
+        table="dim_vessel",
+        business_key="vessel_id",
         tracked_cols=tracked_final,
-        surrogate_key_col="accommodation_sk",
+        surrogate_key_col="vessel_sk",
     )
 
 
@@ -146,74 +146,74 @@ def _scd2_asof_join(
     return joined
 
 
-def build_fact_bookings_table() -> str:
-    bookings = read_table("silver", "bookings")
+def build_fact_orders_table() -> str:
+    orders = read_table("silver", "orders")
     channel_dim = read_table("gold", "dim_channel")
 
-    b = bookings.withColumn("created_ts", F.to_timestamp("created_ts"))
-    b = _scd2_asof_join(b, "created_ts", "dim_customer", "external_customer_id", "customer_id", "customer_sk")
-    b = _scd2_asof_join(b, "created_ts", "dim_accommodation", "external_accommodation_id", "accommodation_id", "accommodation_sk")
+    b = orders.withColumn("created_ts", F.to_timestamp("created_ts"))
+    b = _scd2_asof_join(b, "created_ts", "dim_buyer", "external_buyer_id", "buyer_id", "buyer_sk")
+    b = _scd2_asof_join(b, "created_ts", "dim_vessel", "external_vessel_id", "vessel_id", "vessel_sk")
 
-    b = b.join(channel_dim, on=["booking_channel", "channel_group"], how="left")
+    b = b.join(channel_dim, on=["sales_channel", "channel_group"], how="left")
 
-    w = Window.orderBy("external_booking_id")
+    w = Window.orderBy("external_order_id")
     fact = (
-        b.withColumn("booking_sk", F.row_number().over(w).cast("long"))
+        b.withColumn("order_sk", F.row_number().over(w).cast("long"))
         .withColumn("date_created_sk", _date_sk("created_ts"))
         .withColumn("date_confirmed_sk", _date_sk("confirmed_ts"))
         .withColumn("date_cancelled_sk", _date_sk("cancelled_ts"))
-        .withColumn("accommodation_start_date_sk", _date_sk("accommodation_start"))
-        .withColumn("accommodation_end_date_sk", _date_sk("accommodation_end"))
+        .withColumn("build_start_date_sk", _date_sk("build_start"))
+        .withColumn("build_end_date_sk", _date_sk("build_end"))
         .withColumn("is_cancelled", F.col("cancelled_ts").isNotNull())
-        .withColumn("nights", F.datediff(F.to_date("accommodation_end"), F.to_date("accommodation_start")))
+        .withColumn("build_days", F.datediff(F.to_date("build_end"), F.to_date("build_start")))
         .withColumn("margin_eur", F.round(F.col("total_price") - F.col("total_cost"), 2))
         .select(
-            "booking_sk",
-            F.col("external_booking_id").alias("booking_id"),
-            "booking_reference",
-            "customer_sk",
-            "accommodation_sk",
+            "order_sk",
+            F.col("external_order_id").alias("order_id"),
+            "order_reference",
+            "buyer_sk",
+            "vessel_sk",
             "channel_sk",
             "date_created_sk",
             "date_confirmed_sk",
             "date_cancelled_sk",
-            "accommodation_start_date_sk",
-            "accommodation_end_date_sk",
+            "build_start_date_sk",
+            "build_end_date_sk",
             "source_system",
             "brand",
-            "brochure",
-            "is_owner_booking",
+            "spec_package",
+            "is_owner_order",
             "is_cancelled",
             "cancellation_reason",
-            "nights",
-            "adults",
-            "children",
-            "infants",
+            "build_days",
+            "crew_officers",
+            "crew_ratings",
+            "crew_cadets",
             F.round(F.col("total_price"), 2).alias("total_price_eur"),
             F.round(F.col("total_cost"), 2).alias("total_cost_eur"),
             "margin_eur",
-            F.round(F.col("credit_card_fee"), 2).alias("credit_card_fee_eur"),
-            F.round(F.col("booking_fee"), 2).alias("booking_fee_eur"),
+            F.round(F.col("finance_fee"), 2).alias("finance_fee_eur"),
+            F.round(F.col("order_fee"), 2).alias("order_fee_eur"),
             F.round(F.col("cancellation_fee"), 2).alias("cancellation_fee_eur"),
             F.current_timestamp().alias("load_ts"),
         )
     )
-    return write_full_overwrite(fact, "gold", "fact_bookings", partition_by=["date_created_sk"])
+    return write_full_overwrite(fact, "gold", "fact_orders", partition_by=["date_created_sk"])
 
 
-def build_fact_booking_components_table() -> str:
-    comps = read_table("silver", "booking_components")
-    supplier_dim = read_table("gold", "dim_supplier").select(
-        F.col("supplier_id").alias("external_supplier_id"), "supplier_sk"
+def build_fact_order_lines_table() -> str:
+    comps = read_table("silver", "order_lines")
+    subcontractor_dim = read_table("gold", "dim_subcontractor").select(
+        F.col("subcontractor_id").alias("external_subcontractor_id"), "subcontractor_sk"
     )
 
     c = comps.withColumn("created_ts", F.to_timestamp("created_ts"))
-    c = c.join(supplier_dim, on="external_supplier_id", how="left")
-    c = _scd2_asof_join(c, "created_ts", "dim_accommodation", "external_accommodation_id", "accommodation_id", "accommodation_sk")
+    c = c.join(subcontractor_dim, on="external_subcontractor_id", how="left")
+    c = _scd2_asof_join(c, "created_ts", "dim_vessel", "external_vessel_id", "vessel_id", "vessel_sk")
 
-    w = Window.orderBy("component_reference")
+    w = Window.orderBy("line_reference")
     fact = (
-        c.withColumn("component_sk", F.row_number().over(w).cast("long"))
+        c.withColumn("line_sk", F.row_number().over(w).cast("long"))
         .withColumn("start_date_sk", _date_sk("start_date"))
         .withColumn("end_date_sk", _date_sk("end_date"))
         .withColumn("date_created_sk", _date_sk("created_ts"))
@@ -223,13 +223,13 @@ def build_fact_booking_components_table() -> str:
         .withColumn("cost_eur", F.round(F.col("cost") * F.col("cost_fx_rate"), 2))
         .withColumn("margin_eur", F.round(F.col("price_eur") - F.col("cost_eur"), 2))
         .select(
-            "component_sk",
-            "component_reference",
-            F.col("external_booking_id").alias("booking_id"),
-            "supplier_sk",
-            "accommodation_sk",
-            "component_type",
-            "component_name",
+            "line_sk",
+            "line_reference",
+            F.col("external_order_id").alias("order_id"),
+            "subcontractor_sk",
+            "vessel_sk",
+            "line_type",
+            "line_name",
             "status",
             "is_cancelled",
             "start_date_sk",
@@ -247,52 +247,52 @@ def build_fact_booking_components_table() -> str:
             "cost_fx_rate",
             "cost_eur",
             "margin_eur",
-            "adults",
-            "children",
-            "infants",
+            "crew_officers",
+            "crew_ratings",
+            "crew_cadets",
             F.current_timestamp().alias("load_ts"),
         )
     )
-    return write_full_overwrite(fact, "gold", "fact_booking_components", partition_by=["component_type"])
+    return write_full_overwrite(fact, "gold", "fact_order_lines", partition_by=["line_type"])
 
 
-def build_fact_availability_table() -> str:
-    av = read_table("silver", "availability")
-    av = av.withColumn("availability_date", F.to_timestamp("availability_date"))
-    av = _scd2_asof_join(av, "availability_date", "dim_accommodation", "external_accommodation_id", "accommodation_id", "accommodation_sk")
+def build_fact_build_slots_table() -> str:
+    av = read_table("silver", "build_slots")
+    av = av.withColumn("slot_date", F.to_timestamp("slot_date"))
+    av = _scd2_asof_join(av, "slot_date", "dim_vessel", "external_vessel_id", "vessel_id", "vessel_sk")
 
     fact = (
-        av.withColumn("date_sk", _date_sk("availability_date"))
+        av.withColumn("date_sk", _date_sk("slot_date"))
         .withColumn(
-            "occupancy_rate",
+            "utilization_rate",
             F.when(F.col("allocation") > 0, F.round((F.col("allocation") - F.col("actual_available")) / F.col("allocation"), 4)),
         )
         .select(
-            "accommodation_sk",
+            "vessel_sk",
             "date_sk",
             "is_closed",
             "allocation",
-            "booked_by_customer",
-            "booked_by_owner",
+            "booked_by_buyer",
+            "booked_by_yard",
             "actual_available",
             "potential_available",
-            "occupancy_rate",
+            "utilization_rate",
             F.current_timestamp().alias("load_ts"),
         )
     )
-    return write_full_overwrite(fact, "gold", "fact_availability", partition_by=["date_sk"])
+    return write_full_overwrite(fact, "gold", "fact_build_slots", partition_by=["date_sk"])
 
 
 def build_all() -> Dict[str, Any]:
     results = {}
     results["dim_date"] = build_dim_date_table()
     results["dim_channel"] = build_dim_channel_table()
-    results["dim_supplier"] = build_dim_supplier_table()
-    results["dim_customer"] = build_dim_customer_table()
-    results["dim_accommodation"] = build_dim_accommodation_table()
-    results["fact_bookings"] = build_fact_bookings_table()
-    results["fact_booking_components"] = build_fact_booking_components_table()
-    results["fact_availability"] = build_fact_availability_table()
+    results["dim_subcontractor"] = build_dim_subcontractor_table()
+    results["dim_buyer"] = build_dim_buyer_table()
+    results["dim_vessel"] = build_dim_vessel_table()
+    results["fact_orders"] = build_fact_orders_table()
+    results["fact_order_lines"] = build_fact_order_lines_table()
+    results["fact_build_slots"] = build_fact_build_slots_table()
 
     counts = {}
     for t in results:

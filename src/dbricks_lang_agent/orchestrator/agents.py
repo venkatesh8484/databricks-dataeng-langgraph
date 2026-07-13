@@ -1835,7 +1835,17 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     engineering_explicitly_rejected = state.get("approved_steps", {}).get("engineering") is False
 
     cached: Dict[str, str] = {}
-    if not reset_requested and not engineering_explicitly_rejected:
+    # Always prefer a proven-good / seeded cache entry, EVEN when the notebook's
+    # reset_pipeline widget is set. That widget only means "wipe the LangGraph
+    # checkpoint and re-run the graph" — it must NOT force the Data Engineer to
+    # throw away cached code and regenerate via the LLM, or a seeded known-good
+    # codebase (see scripts/seed_reference_code.py) would be ignored on every
+    # reset. To genuinely force fresh LLM generation, clear the codebase cache
+    # (dashboard "Reset pipeline / start fresh" → memory.reset_agent_caches, or
+    # reject the Engineering stage) — those are the correct tools; a checkpoint
+    # reset is not. `reset_requested` is still honored elsewhere (it drives the
+    # fresh-draft messaging and the dq/contracts/modeling cache-skip).
+    if not engineering_explicitly_rejected:
         cached = memory.get_stored_codebase(spark, fingerprint)
         if cached:
             # Self-repair the cache on read: run the FULL sanitizer/healer on

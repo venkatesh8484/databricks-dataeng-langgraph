@@ -2000,6 +2000,10 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
     # rewrites a reference whose normalized form matches exactly one real column.
     _valid_cols = _valid_columns_from_state(state, ddl_str)
     for _k in ("bronze_code", "silver_code", "gold_code"):
+        # Don't second-guess trusted code recalled from cache (e.g. seeded
+        # known-good reference scripts) — only auto-correct fresh/patched LLM code.
+        if code_source.get(_k) == "cache_recalled":
+            continue
         _fixed, _col_changes = _autocorrect_column_refs(current_codes[_k], _valid_cols)
         if _col_changes:
             current_codes[_k] = _fixed
@@ -2063,7 +2067,7 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             # gold code against the Gold DDL HERE turns those into a normal
             # verification failure that the loop below auto-repairs via the LLM,
             # with no human in the loop.
-            if res["exit_code"] == 0 and script_name == "gold.py":
+            if res["exit_code"] == 0 and script_name == "gold.py" and code_source.get("gold_code") != "cache_recalled":
                 _ddl_ok, _ddl_reason = _validate_gold_against_ddl(current_code, ddl_str)
                 if not _ddl_ok:
                     print(f"[Compiler Loop] {script_name} failed schema validation against the Gold DDL.")

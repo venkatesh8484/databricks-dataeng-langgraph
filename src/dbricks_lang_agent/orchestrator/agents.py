@@ -1471,15 +1471,40 @@ def _sanitize_and_heal_code(code: str) -> str:
     import re
     needed = []
     for func in common_funcs:
-        if re.search(r"\b" + func + r"\s*\(", code):
+        # Only count BARE calls like `when(...)`. A negative lookbehind for `.`
+        # or a word char means `F.when(...)` / `obj.col(...)` (attribute access,
+        # already qualified) does NOT trigger a redundant/incorrect import — the
+        # old `\b` pattern matched `F.when(` and injected pointless imports.
+        if re.search(r"(?<![.\w])" + func + r"\s*\(", code):
             is_imported = bool(re.search(r"\bimport\s+[^#\n]*\b" + func + r"\b", code)) or \
-                          bool(re.search(r"\b" + func + r"\s*=\s*", code))
+                          bool(re.search(r"(?<![.\w])" + func + r"\s*=\s*[^=]", code))
             if not is_imported:
                 needed.append(func)
 
     if needed:
-        import_line = f"from pyspark.sql.functions import {', '.join(needed)}\n"
-        code = import_line + code
+        import_line = f"from pyspark.sql.functions import {', '.join(needed)}"
+        # Insert the import AFTER the module docstring and any `from __future__`
+        # imports — never at line 1. Prepending before `from __future__ import
+        # annotations` produces `SyntaxError: from __future__ imports must occur
+        # at the beginning of the file`, which silently invalidated otherwise-good
+        # code (e.g. the seeded reference scripts) and forced an LLM regeneration.
+        insert_line = 0  # 0-based index of the line to insert BEFORE
+        import ast
+        try:
+            _tree = ast.parse(code)
+            for _node in _tree.body:
+                if isinstance(_node, ast.Expr) and isinstance(getattr(_node, "value", None), ast.Constant) \
+                        and isinstance(_node.value.value, str):
+                    insert_line = _node.end_lineno       # past module docstring
+                    continue
+                if isinstance(_node, ast.ImportFrom) and _node.module == "__future__":
+                    insert_line = _node.end_lineno       # past __future__ imports
+                    continue
+                break
+        except SyntaxError:
+            insert_line = 0
+        _lines = code.split("\n")
+        code = "\n".join(_lines[:insert_line] + [import_line] + _lines[insert_line:])
 
     # 3. Self-healing compiler loop (resolves line continuation and indentation errors)
     for attempt in range(15):
@@ -1861,15 +1886,28 @@ def engineering_node(state: AgentState) -> Dict[str, Any]:
             # the runtime ImportError.
             repaired: Dict[str, str] = {}
             for k, v in cached.items():
-                fixed = _sanitize_and_heal_code(v or "")
+                v = v or ""
+                # TRUST cached code that is ALREADY a structurally-valid script:
+                # do NOT run the sanitizer/healer on it. The healer exists to
+                # repair POISONED LLM cache; running it on known-good code (e.g.
+                # the seeded reference scripts) risks corrupting it — that is
+                # exactly what happened before (an injected import placed above
+                # `from __future__` turned valid code into a SyntaxError, so it
+                # was discarded and the LLM regenerated buggy code). Only heal an
+                # entry that fails validation as-is; a residual runtime bug in a
+                # trusted entry is caught later by the execution self-heal loop.
+                ok_asis, _ = _validate_script_structure(v, k)
+                if ok_asis:
+                    repaired[k] = v
+                    continue
+                fixed = _sanitize_and_heal_code(v)
                 ok, reason = _validate_script_structure(fixed, k)
                 if ok:
-                    if fixed != v:
-                        print(f"[Codebase Memory] Repaired cached {k} (sanitized/healed cached code) — re-persisting the clean version.")
-                        try:
-                            memory.log_script_code(spark, fingerprint, k, fixed)
-                        except Exception as e_fix:
-                            print(f"[Codebase Memory] WARNING: failed to persist repaired {k}: {e_fix}")
+                    print(f"[Codebase Memory] Repaired cached {k} (healed an invalid cached entry) — re-persisting the clean version.")
+                    try:
+                        memory.log_script_code(spark, fingerprint, k, fixed)
+                    except Exception as e_fix:
+                        print(f"[Codebase Memory] WARNING: failed to persist repaired {k}: {e_fix}")
                     repaired[k] = fixed
                 else:
                     print(f"[Codebase Memory] DISCARDING cached {k} — failed validation ({reason}). It will be regenerated fresh.")

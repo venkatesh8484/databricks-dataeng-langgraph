@@ -1,0 +1,31 @@
+vessel_id,model,category,length_m,beam_m,draft_m,max_speed_knots,bollard_pull_tonnes,range_nm,complement,propulsion,primary_application
+V001,ASD Tug 2312,Harbour & Terminal Tug,23.7,12.4,5.9,13.4,80,,4,Twin ASD azimuth thrusters,Ship handling and terminal escort
+V002,ASD Tug 2811,Harbour & Terminal Tug,28.7,11.3,5.5,14.0,60,,6,Twin ASD azimuth thrusters,Harbour towing and escort
+V003,ASD Tug 3212,Escort Tug,32.7,12.8,6.2,14.5,85,,6,Twin ASD azimuth thrusters,Terminal escort and firefighting
+V004,RSD Tug 2513,Reverse Stern Drive Tug,24.7,13.2,6.0,13.0,70,,5,Twin reverse stern drive,Compact harbour towage
+V005,Stan Tug 1606,Utility Tug,15.8,6.2,2.6,10.5,18,,4,Twin fixed-pitch propellers,Inland and coastal towing
+V006,Stan Patrol 1605,Coastal Patrol Vessel,16.6,4.9,1.4,25.0,,600,6,Twin diesel waterjets,Coast guard patrol and interception
+V007,Stan Patrol 2606,Offshore Patrol Vessel,26.7,5.9,1.7,26.0,,1500,10,Twin diesel propellers,Border and fisheries patrol
+V008,Stan Patrol 4207,Patrol Vessel,42.8,7.1,2.5,26.0,,4000,20,Triple diesel propellers,EEZ and search-and-rescue patrol
+V009,OPV 1800,Offshore Patrol Vessel,83.0,13.3,4.0,22.0,,5000,42,CODAD diesel,Naval constabulary and maritime security
+V010,OPV 2400,Offshore Patrol Vessel,103.0,15.2,4.3,24.0,,6000,60,CODAD diesel,Extended offshore patrol
+V011,SIGMA 10514,Guided-Missile Frigate,105.0,14.0,3.8,28.0,,5000,120,CODAD diesel,Naval surface combat
+V012,SIGMA 9113,Corvette,91.0,13.0,3.7,28.0,,4000,90,CODAD diesel,Anti-surface and air defence
+V013,Fast Crew Supplier 2710,Crew Transfer Vessel,27.0,10.3,2.0,25.0,,2000,10,Quadruple diesel waterjets,Offshore crew and cargo transfer
+V014,Fast Crew Supplier 5009,Fast Supply Intervention,50.4,9.2,2.6,28.0,,2500,24,Quadruple diesel propellers,Offshore supply and intervention
+V015,Platform Supply Vessel 3300,Offshore Supply Vessel,80.0,16.6,6.1,14.0,,8000,40,Diesel-electric,Offshore platform supply
+V016,Anchor Handling Tug Supply 200,Anchor Handling Tug,59.3,14.7,5.8,16.0,150,9000,30,Diesel-mechanical,Anchor handling and towing
+V017,Cutter Suction Dredger 500,Cutter Suction Dredger,55.0,11.2,1.9,,,,12,Diesel with dredge pumps,Capital and maintenance dredging
+V018,Trailing Suction Hopper Dredger 1500,Hopper Dredger,79.0,15.0,5.2,12.0,,,16,Diesel-electric,Port and channel dredging
+V019,Multi Cat 2611,Workboat,26.7,10.8,2.1,10.0,15,,6,Twin propellers with tunnel,Multipurpose offshore support
+V020,Shoalbuster 2711,Support Vessel,26.9,10.4,3.9,11.5,26,,8,Twin fixed-pitch propellers,Towing dredging and anchor work
+V021,Ferry 4212,RoPax Ferry,42.0,12.0,2.4,12.5,,600,8,Twin azimuth thrusters,Coastal passenger and vehicle transport
+V022,Ferry 8117,Double-Ended Ferry,81.0,17.5,3.0,13.0,,800,14,Diesel-electric azimuth,River and estuary crossing
+V023,Road Ferry 3009,Passenger Ferry,30.0,9.5,1.8,10.0,,300,5,Twin diesel propellers,Inland passenger service
+V024,Fast Ferry 4010,High-Speed Ferry,40.0,10.5,1.6,32.0,,400,8,Quadruple waterjets,High-speed passenger transport
+V025,Landing Ship Transport 100,Amphibious Support Ship,124.0,16.4,3.6,18.0,,8000,90,CODAD diesel,Amphibious logistics and transport
+V026,Combat Support Ship 200,Naval Replenishment Ship,180.0,26.0,8.0,18.0,,10000,160,Diesel-electric,Fleet replenishment and support
+V027,Yard Tug 1204,Inland Pusher Tug,12.5,4.2,1.9,9.0,10,,3,Twin propellers,Pushing barges on inland waterways
+V028,Emergency Response 2015,Search and Rescue Vessel,20.0,6.4,1.5,30.0,,800,7,Twin diesel waterjets,Rescue and emergency response
+V029,Survey Vessel 2610,Hydrographic Survey Vessel,26.0,7.5,2.2,13.0,,3000,12,Diesel-electric,Coastal and offshore survey
+V030,Well-Boat 4512,Aquaculture Support Vessel,45.0,12.0,4.5,12.0,,3000,10,Diesel-electric,Live fish transport and aquaculture
